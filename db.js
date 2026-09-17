@@ -65,4 +65,10 @@ CREATE TABLE IF NOT EXISTS telas (
 CREATE INDEX IF NOT EXISTS idx_telas_user ON telas(user_id, ordem);
 `);
 
+// Coluna de administrador (adicionada depois; ALTER seguro para bancos antigos)
+const colunas = db.prepare('PRAGMA table_info(usuarios)').all().map((c) => c.name);
+if (colunas.indexOf('admin') === -1) {
+  db.exec('ALTER TABLE usuarios ADD COLUMN admin INTEGER NOT NULL DEFAULT 0');
+}
+
 module.exports = db;

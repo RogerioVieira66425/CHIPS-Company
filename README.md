@@ -72,6 +72,19 @@ Quando quiser guardar os dados de verdade, troque no `render.yaml` para `plan: s
 (~US$ 7/mês) e descomente o bloco `disk` + a variável `DB_PATH` que já estão no arquivo:
 o banco passa a viver em `/var/data/investimentos.db` e sobrevive aos deploys.
 
+### Conta de administrador
+O sistema cria sozinho, no primeiro boot, a conta de administrador:
+
+- **login:** `admin`  **senha:** `admin`
+
+O admin ganha o menu **⚙️ Admin**, que lista todas as contas (com quantos ativos, lançamentos,
+telas e se há sessão ativa), permite **definir nova senha** para quem esqueceu e **excluir contas**
+com todos os dados. Ele não vê a carteira dos outros pela interface, mas tem poder sobre as contas.
+
+> **Troque essa senha antes de divulgar o site.** No Render: *Environment → Add Environment Variable*
+> → `ADMIN_SENHA` = uma senha forte → *Save* (o serviço reinicia e a senha do admin é atualizada).
+> Para mudar também o nome do login, use `ADMIN_LOGIN`.
+
 ### Segurança em produção
 - Senhas com `scrypt` + salt aleatório; nunca em texto puro.
 - Cookie de sessão `HttpOnly`, `SameSite=Lax` e `Secure` quando `NODE_ENV=production`.

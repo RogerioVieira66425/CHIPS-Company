@@ -21,7 +21,7 @@
     </div>
 
     <form id="form-entrar" class="form">
-      <label>E-mail<input type="email" name="email" autocomplete="username" required></label>
+      <label>E-mail ou usuário<input type="text" name="email" autocomplete="username" required></label>
       <label>Senha<input type="password" name="senha" autocomplete="current-password" required></label>
       <button class="botao primario" type="submit">Entrar</button>
     </form>
@@ -160,6 +160,44 @@
       <button id="btn-editar-tela" class="botao">Editar no Laboratório</button>
     </div>
     <div id="tela-blocos" class="telas-grade"></div>
+  </main>
+
+  <!-- ---------- ADMINISTRAÇÃO ---------- -->
+  <main id="vista-admin" class="conteudo oculto">
+    <div class="cabecalho-tela">
+      <div>
+        <h1>Administração</h1>
+        <p class="sub">Contas cadastradas no sistema. Visível apenas para o administrador.</p>
+      </div>
+      <button id="admin-atualizar" class="botao">Atualizar</button>
+    </div>
+
+    <section class="kpis">
+      <article class="kpi"><h3>Usuários</h3><strong id="admin-total-usuarios">0</strong></article>
+      <article class="kpi"><h3>Ativos cadastrados</h3><strong id="admin-total-ativos">0</strong></article>
+      <article class="kpi"><h3>Lançamentos</h3><strong id="admin-total-lancamentos">0</strong></article>
+      <article class="kpi"><h3>Telas criadas</h3><strong id="admin-total-telas">0</strong></article>
+    </section>
+
+    <section class="painel">
+      <h2>Contas</h2>
+      <div class="rolagem">
+        <table class="tabela">
+          <thead>
+            <tr>
+              <th>#</th><th>Nome</th><th>Login</th><th>Criada em</th>
+              <th class="dir">Ativos</th><th class="dir">Lanç.</th><th class="dir">Telas</th>
+              <th class="dir">Sessões</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="tbody-admin"></tbody>
+        </table>
+      </div>
+      <p class="dica" style="margin-top:14px">
+        A senha do administrador vem da variável de ambiente <code>ADMIN_SENHA</code>.
+        Enquanto ela não for definida, o login é <b>admin</b> e a senha é <b>admin</b> — qualquer pessoa pode adivinhar.
+      </p>
+    </section>
   </main>
 
   <!-- ---------- LABORATÓRIO ---------- -->

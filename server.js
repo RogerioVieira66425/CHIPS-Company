@@ -46,6 +46,29 @@ function senhaConfere(senha, hash, salt) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+/* ---------- conta de administrador ----------
+   Criada no primeiro boot. Troque a senha definindo ADMIN_SENHA nas variaveis
+   de ambiente (no Render: Environment -> Add Environment Variable). */
+const ADMIN_LOGIN = String(process.env.ADMIN_LOGIN || 'admin').toLowerCase().trim();
+const ADMIN_SENHA = String(process.env.ADMIN_SENHA || 'admin');
+
+function garantirAdmin() {
+  const existente = db.prepare('SELECT id, admin FROM usuarios WHERE email = ?').get(ADMIN_LOGIN);
+  if (existente) {
+    if (!existente.admin) db.prepare('UPDATE usuarios SET admin = 1 WHERE id = ?').run(existente.id);
+    if (process.env.ADMIN_SENHA) {
+      const { hash, salt } = hashSenha(ADMIN_SENHA);
+      db.prepare('UPDATE usuarios SET senha_hash = ?, salt = ? WHERE id = ?').run(hash, salt, existente.id);
+    }
+    return;
+  }
+  const { hash, salt } = hashSenha(ADMIN_SENHA);
+  db.prepare('INSERT INTO usuarios (email, nome, senha_hash, salt, criado_em, admin) VALUES (?,?,?,?,?,1)')
+    .run(ADMIN_LOGIN, 'Administrador', hash, salt, new Date().toISOString());
+  console.log('  Conta de administrador criada: login "' + ADMIN_LOGIN + '"' +
+    (process.env.ADMIN_SENHA ? '' : ' / senha "admin" (defina ADMIN_SENHA para trocar)'));
+}
+
 /* ---------- sessoes ---------- */
 function criarSessao(userId) {
   const token = crypto.randomBytes(32).toString('hex');
@@ -63,8 +86,8 @@ function usuarioDaRequisicao(req) {
     db.prepare('DELETE FROM sessoes WHERE token = ?').run(m[1]);
     return null;
   }
-  const u = db.prepare('SELECT id, email, nome FROM usuarios WHERE id = ?').get(s.user_id);
-  return u ? { id: u.id, email: u.email, nome: u.nome, token: m[1] } : null;
+  const u = db.prepare('SELECT id, email, nome, admin FROM usuarios WHERE id = ?').get(s.user_id);
+  return u ? { id: u.id, email: u.email, nome: u.nome, admin: !!u.admin, token: m[1] } : null;
 }
 
 /* ---------- calculo da carteira ---------- */
@@ -238,7 +261,7 @@ async function api(req, res, rota) {
       .run(mail, String(nome).trim(), hash, salt, new Date().toISOString());
     const token = criarSessao(Number(info.lastInsertRowid));
     res.setHeader('Set-Cookie', cookieSessao(token));
-    return json(res, 201, { nome, email: mail });
+    return json(res, 201, { nome, email: mail, admin: false });
   }
 
   if (rota === '/api/login' && metodo === 'POST') {
@@ -256,7 +279,7 @@ async function api(req, res, rota) {
     tentativas.delete(chave);
     const token = criarSessao(u.id);
     res.setHeader('Set-Cookie', cookieSessao(token));
-    return json(res, 200, { nome: u.nome, email: u.email });
+    return json(res, 200, { nome: u.nome, email: u.email, admin: !!u.admin });
   }
 
   const usuario = usuarioDaRequisicao(req);
@@ -270,7 +293,7 @@ async function api(req, res, rota) {
   if (!usuario) return json(res, 401, { erro: 'Nao autenticado.' });
 
   if (rota === '/api/eu' && metodo === 'GET') {
-    return json(res, 200, { nome: usuario.nome, email: usuario.email });
+    return json(res, 200, { nome: usuario.nome, email: usuario.email, admin: usuario.admin });
   }
 
   if (rota === '/api/carteira' && metodo === 'GET') {
@@ -426,6 +449,50 @@ async function api(req, res, rota) {
     return json(res, 200, { ok: true });
   }
 
+  /* ----- area do administrador ----- */
+  if (rota.indexOf('/api/admin/') === 0) {
+    if (!usuario.admin) return json(res, 403, { erro: 'Acesso restrito ao administrador.' });
+
+    if (rota === '/api/admin/usuarios' && metodo === 'GET') {
+      const linhas = db.prepare(
+        'SELECT u.id, u.nome, u.email, u.admin, u.criado_em, ' +
+        '  (SELECT COUNT(*) FROM ativos a WHERE a.user_id = u.id) AS ativos, ' +
+        '  (SELECT COUNT(*) FROM transacoes t WHERE t.user_id = u.id) AS lancamentos, ' +
+        '  (SELECT COUNT(*) FROM telas te WHERE te.user_id = u.id) AS telas, ' +
+        '  (SELECT COUNT(*) FROM sessoes s WHERE s.user_id = u.id AND s.expira_em > ?) AS sessoes ' +
+        'FROM usuarios u ORDER BY u.id'
+      ).all(Date.now());
+      return json(res, 200, linhas.map((l) => Object.assign(l, { admin: !!l.admin })));
+    }
+
+    let ad = rota.match(/^\/api\/admin\/usuarios\/(\d+)$/);
+    if (ad && metodo === 'DELETE') {
+      const id = Number(ad[1]);
+      if (id === usuario.id) return json(res, 400, { erro: 'Voce nao pode excluir a propria conta.' });
+      const alvo = db.prepare('SELECT id FROM usuarios WHERE id = ?').get(id);
+      if (!alvo) return json(res, 404, { erro: 'Usuario nao encontrado.' });
+      db.prepare('DELETE FROM transacoes WHERE user_id = ?').run(id);
+      db.prepare('DELETE FROM ativos WHERE user_id = ?').run(id);
+      db.prepare('DELETE FROM telas WHERE user_id = ?').run(id);
+      db.prepare('DELETE FROM sessoes WHERE user_id = ?').run(id);
+      db.prepare('DELETE FROM usuarios WHERE id = ?').run(id);
+      return json(res, 200, { ok: true });
+    }
+
+    ad = rota.match(/^\/api\/admin\/usuarios\/(\d+)\/senha$/);
+    if (ad && metodo === 'POST') {
+      const { senha } = await lerCorpo(req);
+      if (String(senha || '').length < 8) return json(res, 400, { erro: 'A nova senha precisa ter ao menos 8 caracteres.' });
+      const id = Number(ad[1]);
+      const alvo = db.prepare('SELECT id FROM usuarios WHERE id = ?').get(id);
+      if (!alvo) return json(res, 404, { erro: 'Usuario nao encontrado.' });
+      const { hash, salt } = hashSenha(String(senha));
+      db.prepare('UPDATE usuarios SET senha_hash = ?, salt = ? WHERE id = ?').run(hash, salt, id);
+      db.prepare('DELETE FROM sessoes WHERE user_id = ?').run(id);
+      return json(res, 200, { ok: true });
+    }
+  }
+
   return json(res, 404, { erro: 'Rota nao encontrada.' });
 }
 
@@ -458,6 +525,8 @@ const servidor = http.createServer((req, res) => {
     res.end(conteudo);
   });
 });
+
+garantirAdmin();
 
 servidor.listen(PORTA, ENDERECO, () => {
   console.log('\n  Meus Investimentos rodando em  http://localhost:' + PORTA + '\n  (Ctrl+C para parar)\n');

@@ -11,6 +11,7 @@ const App = (function () {
   let carteira = { posicoes: [], totais: { patrimonio: 0, investido: 0, lucro: 0, realizado: 0, proventos: 0, rentabilidade: 0 }, alocacao: [] };
   let transacoes = [];
   let vistaAtual = { tipo: 'painel', id: null };
+  let usuarioAtual = null;
 
   /* ---------- utilitarios ---------- */
   let temporizadorToast;
@@ -79,9 +80,10 @@ const App = (function () {
   });
 
   async function abrirApp(usuario) {
+    usuarioAtual = usuario;
     $('#tela-login').classList.add('oculto');
     $('#app').classList.remove('oculto');
-    $('#ola').textContent = usuario.nome;
+    $('#ola').textContent = usuario.nome + (usuario.admin ? ' (admin)' : '');
     $('#ola').title = usuario.email;
     await carregar();
     Lab.iniciar(renderMenu);
@@ -107,6 +109,7 @@ const App = (function () {
     menu.appendChild(botao('Painel', { tipo: 'painel' }));
     Lab.oficiais().forEach((t) => menu.appendChild(botao(t.nome, { tipo: 'tela', id: t.id })));
     menu.appendChild(botao('🧪 Laboratório', { tipo: 'lab' }));
+    if (usuarioAtual && usuarioAtual.admin) menu.appendChild(botao('⚙️ Admin', { tipo: 'admin' }));
   }
 
   function mostrar(vista) {
@@ -114,6 +117,7 @@ const App = (function () {
     $('#vista-painel').classList.toggle('oculto', vista.tipo !== 'painel');
     $('#vista-tela').classList.toggle('oculto', vista.tipo !== 'tela');
     $('#vista-lab').classList.toggle('oculto', vista.tipo !== 'lab');
+    $('#vista-admin').classList.toggle('oculto', vista.tipo !== 'admin');
 
     if (vista.tipo === 'tela') {
       const tela = Lab.lista().find((t) => t.id === vista.id);
@@ -124,6 +128,7 @@ const App = (function () {
       Blocos.renderizarTela(tela, dados(), $('#tela-blocos'));
     }
     if (vista.tipo === 'lab') Lab.render();
+    if (vista.tipo === 'admin') carregarAdmin().catch((e) => toast(e.message, true));
 
     renderMenu();
     window.scrollTo({ top: 0 });
@@ -350,6 +355,81 @@ const App = (function () {
       carregar();
     } catch (err) { toast(err.message, true); }
   });
+
+  /* ---------- administracao ---------- */
+  async function carregarAdmin() {
+    const usuarios = await pedir('/api/admin/usuarios');
+    const soma = (campo) => usuarios.reduce((t, u) => t + u[campo], 0);
+    $('#admin-total-usuarios').textContent = usuarios.length;
+    $('#admin-total-ativos').textContent = soma('ativos');
+    $('#admin-total-lancamentos').textContent = soma('lancamentos');
+    $('#admin-total-telas').textContent = soma('telas');
+
+    const tb = $('#tbody-admin');
+    tb.innerHTML = '';
+    usuarios.forEach((u) => {
+      const tr = document.createElement('tr');
+      tr.appendChild(celula('#' + u.id));
+
+      const tdNome = document.createElement('td');
+      tdNome.textContent = u.nome;
+      if (u.admin) {
+        const et = document.createElement('span');
+        et.className = 'etiqueta oficial';
+        et.textContent = 'admin';
+        et.style.marginLeft = '6px';
+        tdNome.appendChild(et);
+      }
+      tr.appendChild(tdNome);
+
+      tr.appendChild(celula(u.email));
+      tr.appendChild(celula(u.criado_em.slice(0, 10).split('-').reverse().join('/')));
+      tr.appendChild(celula(String(u.ativos), 'dir'));
+      tr.appendChild(celula(String(u.lancamentos), 'dir'));
+      tr.appendChild(celula(String(u.telas), 'dir'));
+      tr.appendChild(celula(u.sessoes > 0 ? 'ativa' : '\u2014', 'dir ' + (u.sessoes > 0 ? 'positivo' : 'neutro')));
+
+      const tdAcoes = document.createElement('td');
+      tdAcoes.className = 'dir';
+
+      const btnSenha = document.createElement('button');
+      btnSenha.className = 'mini';
+      btnSenha.textContent = '\u{1F511}';
+      btnSenha.title = 'Definir nova senha';
+      btnSenha.addEventListener('click', async () => {
+        const senha = prompt('Nova senha para ' + u.nome + ' (m\u00ednimo 8 caracteres):');
+        if (!senha) return;
+        try {
+          await pedir('/api/admin/usuarios/' + u.id + '/senha', { method: 'POST', body: { senha } });
+          toast('Senha de ' + u.nome + ' redefinida. As sess\u00f5es dele foram encerradas.');
+          if (u.id === usuarioAtual.id) location.reload();
+          else carregarAdmin();
+        } catch (err) { toast(err.message, true); }
+      });
+      tdAcoes.appendChild(btnSenha);
+
+      if (u.id !== usuarioAtual.id) {
+        const btnExcluir = document.createElement('button');
+        btnExcluir.className = 'mini';
+        btnExcluir.textContent = '\u{1F5D1}';
+        btnExcluir.title = 'Excluir conta e todos os dados dela';
+        btnExcluir.addEventListener('click', async () => {
+          if (!confirm('Excluir a conta de ' + u.nome + ' com a carteira, os lan\u00e7amentos e as telas? Isso n\u00e3o pode ser desfeito.')) return;
+          try {
+            await pedir('/api/admin/usuarios/' + u.id, { method: 'DELETE' });
+            toast('Conta exclu\u00edda.');
+            carregarAdmin();
+          } catch (err) { toast(err.message, true); }
+        });
+        tdAcoes.appendChild(btnExcluir);
+      }
+
+      tr.appendChild(tdAcoes);
+      tb.appendChild(tr);
+    });
+  }
+
+  $('#admin-atualizar').addEventListener('click', () => carregarAdmin().catch((e) => toast(e.message, true)));
 
   /* ---------- inicio ---------- */
   (async function iniciar() {
