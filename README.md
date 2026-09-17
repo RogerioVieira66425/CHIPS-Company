@@ -1,43 +1,91 @@
 # Meus Investimentos
 
-Sistema local (roda no seu computador) para acompanhar a sua carteira de investimentos,
-com login e senha. Nada sai da sua máquina: os dados ficam no arquivo `investimentos.db`
-dentro desta pasta.
+Sistema com login e senha para acompanhar a carteira de investimentos — e um **Laboratório**
+onde cada pessoa monta as próprias telas de análise e publica quando estiver pronta.
 
-## Como usar
+Sem bibliotecas externas: só Node.js (SQLite já vem embutido no Node 22.5+).
 
-1. Dê dois cliques em **INICIAR.bat** (ou rode `node server.js` no terminal).
-2. O navegador abre em http://localhost:3000
-3. Na primeira vez, clique em **Criar conta** (nome, e-mail e senha de 8+ caracteres).
-4. Para encerrar, feche a janela preta do terminal (ou Ctrl+C).
+## Rodar no seu computador
 
-Requisito: Node.js 22 ou superior (você já tem o 24 instalado). Não precisa instalar bibliotecas.
+1. Dê dois cliques em **INICIAR.bat** (ou rode `node server.js`).
+2. Abra http://localhost:3000 e clique em **Criar conta**.
+3. Para encerrar, feche a janela do terminal (ou Ctrl+C).
 
-## O que dá para fazer
+## O que o sistema faz
 
-- **Adicionar ativo**: ticker, classe (Ações, FIIs, Renda Fixa, ETF, BDR, Cripto, Exterior, Outros) e preço atual.
-- **Lançamentos**: compra, venda e provento (dividendo/JCP), com quantidade, preço, taxas e data.
-- **Preço médio automático**: calculado a partir das compras (incluindo taxas); vendas reduzem a posição pelo preço médio e geram lucro/prejuízo realizado.
-- **Painel**: patrimônio atual, total investido, lucro/prejuízo não realizado, rentabilidade %, resultado realizado e proventos recebidos.
-- **Alocação por classe**: gráfico de rosca com o percentual de cada classe.
-- **Atualizar cotação**: edite o campo "Preço atual" direto na tabela e pressione Enter.
+### Painel
+- Cadastro de ativos (ticker, classe, preço atual) e lançamentos de **compra**, **venda** e **provento**.
+- **Preço médio automático** a partir das compras (taxas incluídas). Vendas baixam a posição pelo preço médio e geram lucro/prejuízo realizado.
+- Indicadores: patrimônio, total investido, lucro/prejuízo, rentabilidade %, realizado e proventos.
+- Alocação por classe e atualização de cotação direto na tabela (digite e pressione Enter).
+
+### Laboratório de telas
+Menu **🧪 Laboratório** → *Nova tela* → adicione blocos → veja a **pré-visualização ao vivo** →
+**Publicar como tela oficial** (ela passa a aparecer no menu do topo; dá para marcar uma como
+*tela inicial*, que abre ao entrar).
+
+Blocos disponíveis:
+
+| Bloco | Para quê |
+|---|---|
+| Indicador (KPI) | Um número grande, com filtro por classe |
+| Gráfico de rosca | Participação por classe ou por ativo |
+| Gráfico de barras | Comparar ativos/classes por valor, custo, lucro ou rentabilidade |
+| Tabela da carteira | Posições com as colunas, ordem e filtro que você escolher |
+| Lista de lançamentos | Histórico filtrado por tipo e classe |
+| Metas de alocação | Meta x real, mostrando quanto falta ou sobra em cada classe |
+| Texto / anotação | Regras, lembretes, tese da carteira |
+| **Código livre** | HTML + CSS + JavaScript seus, com os dados da carteira na mão |
+
+No bloco de código livre você recebe:
+
+```js
+dados.carteira.posicoes  // cada ativo: ticker, classe, quantidade, preco_medio, valor_atual, lucro...
+dados.carteira.totais    // patrimonio, investido, lucro, rentabilidade, realizado, proventos
+dados.transacoes         // histórico de lançamentos
+dinheiro(valor)          // formata em R$
+```
+
+Cada tela é privada: só quem criou enxerga e edita. O código livre roda dentro de um
+`iframe` com `sandbox`, isolado do resto do sistema.
+
+## Publicar na web (Render)
+
+O projeto já vem com `render.yaml`, `package.json` e suporte a disco persistente.
+
+1. Suba o código para um repositório no GitHub (o `git` local já está iniciado com o primeiro commit):
+   ```
+   git remote add origin https://github.com/SEU-USUARIO/meus-investimentos.git
+   git push -u origin main
+   ```
+2. No Render: **New → Blueprint**, aponte para o repositório. Ele lê o `render.yaml` sozinho.
+3. Confirme e aguarde o deploy. A URL fica parecida com `https://meus-investimentos.onrender.com`.
+4. Cada amigo entra nessa URL e cria a própria conta.
+
+### Sobre planos e dados
+- O `render.yaml` usa o plano **starter** porque **o plano free do Render não tem disco persistente**:
+  no free, o arquivo `investimentos.db` é apagado a cada deploy ou reinício (e o serviço dorme após 15 min sem uso).
+- Com o disco montado em `/var/data`, o banco fica em `DB_PATH=/var/data/investimentos.db` e sobrevive aos deploys.
+- Faça backup baixando esse arquivo de tempos em tempos.
+
+### Segurança em produção
+- Senhas com `scrypt` + salt aleatório; nunca em texto puro.
+- Cookie de sessão `HttpOnly`, `SameSite=Lax` e `Secure` quando `NODE_ENV=production`.
+- Máximo de 8 tentativas de login erradas por e-mail/IP a cada 15 minutos.
+- Cada usuário só acessa os próprios ativos, lançamentos e telas (verificado em toda rota).
+- Não há recuperação de senha por e-mail: se alguém esquecer, é preciso criar outra conta.
 
 ## Estrutura
 
 | Arquivo | Função |
 |---|---|
 | `server.js` | Servidor HTTP, autenticação e API |
-| `db.js` | Banco SQLite e criação das tabelas |
-| `public/index.html` | Telas de login e do painel |
-| `public/app.js` | Lógica da interface |
+| `db.js` | Banco SQLite e tabelas |
+| `public/index.html` | Telas de login, painel, telas publicadas e laboratório |
+| `public/app.js` | Painel, navegação e chamadas à API |
+| `public/blocos.js` | Motor que transforma blocos em gráficos e tabelas |
+| `public/lab.js` | Editor do laboratório |
 | `public/estilo.css` | Visual |
-| `investimentos.db` | Seus dados (faça backup deste arquivo) |
+| `render.yaml` | Configuração de deploy no Render |
 
-## Segurança
-
-- Senhas guardadas com `scrypt` + salt aleatório (nunca em texto puro).
-- Sessão por cookie `HttpOnly`, válida por 7 dias.
-- O servidor escuta só em `127.0.0.1`, ou seja, não fica exposto na rede.
-- Se esquecer a senha, não há recuperação por e-mail: basta criar outra conta ou apagar o `investimentos.db` para começar do zero.
-
-Esta ferramenta é para organização e acompanhamento pessoal — não é recomendação de investimento.
+Ferramenta de organização e acompanhamento pessoal — não é recomendação de investimento.
