@@ -63,10 +63,14 @@ O projeto já vem com `render.yaml`, `package.json` e suporte a disco persistent
 4. Cada amigo entra nessa URL e cria a própria conta.
 
 ### Sobre planos e dados
-- O `render.yaml` usa o plano **starter** porque **o plano free do Render não tem disco persistente**:
-  no free, o arquivo `investimentos.db` é apagado a cada deploy ou reinício (e o serviço dorme após 15 min sem uso).
-- Com o disco montado em `/var/data`, o banco fica em `DB_PATH=/var/data/investimentos.db` e sobrevive aos deploys.
-- Faça backup baixando esse arquivo de tempos em tempos.
+O `render.yaml` está no plano **free**, para testar com os amigos sem custo. Nele:
+
+- **os dados são apagados a cada deploy ou reinício** (contas, carteiras e telas) — o free não tem disco persistente;
+- o serviço **dorme após 15 minutos** sem acesso e leva ~30s para acordar no primeiro acesso.
+
+Quando quiser guardar os dados de verdade, troque no `render.yaml` para `plan: starter`
+(~US$ 7/mês) e descomente o bloco `disk` + a variável `DB_PATH` que já estão no arquivo:
+o banco passa a viver em `/var/data/investimentos.db` e sobrevive aos deploys.
 
 ### Segurança em produção
 - Senhas com `scrypt` + salt aleatório; nunca em texto puro.
