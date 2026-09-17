@@ -1,0 +1,6 @@
+node_modules/
+investimentos.db
+investimentos.db-shm
+investimentos.db-wal
+*.log
+.DS_Store

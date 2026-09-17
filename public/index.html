@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meus Investimentos</title>
+<link rel="stylesheet" href="/estilo.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
+</head>
+<body>
+
+<!-- ============ TELA DE LOGIN ============ -->
+<section id="tela-login" class="tela-login oculto">
+  <div class="cartao-login">
+    <div class="marca"><span>📈</span> Meus Investimentos</div>
+    <p class="sub">Acompanhe sua carteira e monte as suas próprias telas de análise.</p>
+
+    <div class="abas">
+      <button class="aba ativa" data-aba="entrar">Entrar</button>
+      <button class="aba" data-aba="criar">Criar conta</button>
+    </div>
+
+    <form id="form-entrar" class="form">
+      <label>E-mail<input type="email" name="email" autocomplete="username" required></label>
+      <label>Senha<input type="password" name="senha" autocomplete="current-password" required></label>
+      <button class="botao primario" type="submit">Entrar</button>
+    </form>
+
+    <form id="form-criar" class="form oculto">
+      <label>Nome<input type="text" name="nome" autocomplete="name" required></label>
+      <label>E-mail<input type="email" name="email" autocomplete="username" required></label>
+      <label>Senha <small>(mínimo 8 caracteres)</small><input type="password" name="senha" autocomplete="new-password" minlength="8" required></label>
+      <button class="botao primario" type="submit">Criar conta</button>
+    </form>
+
+    <p id="aviso-login" class="aviso oculto"></p>
+  </div>
+</section>
+
+<!-- ============ APLICAÇÃO ============ -->
+<div id="app" class="oculto">
+  <header class="topo">
+    <div class="marca pequena"><span>📈</span> Meus Investimentos</div>
+    <nav id="menu" class="menu"></nav>
+    <div class="topo-dir">
+      <span id="ola" class="ola"></span>
+      <button id="btn-sair" class="botao fantasma">Sair</button>
+    </div>
+  </header>
+
+  <!-- ---------- PAINEL PADRÃO ---------- -->
+  <main id="vista-painel" class="conteudo">
+    <section class="kpis">
+      <article class="kpi"><h3>Patrimônio atual</h3><strong id="kpi-patrimonio">R$ 0,00</strong></article>
+      <article class="kpi"><h3>Total investido</h3><strong id="kpi-investido">R$ 0,00</strong></article>
+      <article class="kpi"><h3>Lucro / prejuízo</h3><strong id="kpi-lucro">R$ 0,00</strong><span id="kpi-rent" class="variacao"></span></article>
+      <article class="kpi"><h3>Realizado + proventos</h3><strong id="kpi-realizado">R$ 0,00</strong><span id="kpi-proventos" class="variacao neutro"></span></article>
+    </section>
+
+    <div class="grade">
+      <section class="painel">
+        <h2>Alocação por classe</h2>
+        <div class="alocacao">
+          <svg id="rosca" viewBox="0 0 42 42" class="rosca" aria-hidden="true"></svg>
+          <ul id="legenda" class="legenda"></ul>
+        </div>
+      </section>
+
+      <section class="painel">
+        <h2>Adicionar ativo</h2>
+        <form id="form-ativo" class="form compacto">
+          <div class="linha">
+            <label>Ticker<input name="ticker" placeholder="PETR4" required></label>
+            <label>Classe
+              <select name="classe">
+                <option>Ações</option>
+                <option>FIIs</option>
+                <option>Renda Fixa</option>
+                <option>ETF</option>
+                <option>BDR</option>
+                <option>Cripto</option>
+                <option>Exterior</option>
+                <option>Outros</option>
+              </select>
+            </label>
+          </div>
+          <div class="linha">
+            <label>Nome (opcional)<input name="nome" placeholder="Petrobras PN"></label>
+            <label>Preço atual<input name="preco_atual" inputmode="decimal" placeholder="0,00"></label>
+          </div>
+          <button class="botao primario" type="submit">Adicionar à carteira</button>
+        </form>
+      </section>
+    </div>
+
+    <section class="painel">
+      <h2>Minha carteira</h2>
+      <div class="rolagem">
+        <table class="tabela">
+          <thead>
+            <tr>
+              <th>Ativo</th><th>Classe</th><th class="dir">Qtd.</th><th class="dir">Preço médio</th>
+              <th class="dir">Preço atual</th><th class="dir">Investido</th><th class="dir">Valor atual</th>
+              <th class="dir">Lucro/prej.</th><th class="dir">Rent.</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="tbody-carteira"></tbody>
+        </table>
+      </div>
+      <p id="vazio-carteira" class="vazio">Nenhum ativo ainda. Adicione o primeiro acima.</p>
+    </section>
+
+    <div class="grade">
+      <section class="painel">
+        <h2>Novo lançamento</h2>
+        <form id="form-tx" class="form compacto">
+          <div class="linha">
+            <label>Ativo<select name="ativo_id" id="select-ativo" required></select></label>
+            <label>Tipo
+              <select name="tipo" id="select-tipo">
+                <option value="compra">Compra</option>
+                <option value="venda">Venda</option>
+                <option value="provento">Provento (dividendo/JCP)</option>
+              </select>
+            </label>
+          </div>
+          <div class="linha">
+            <label id="campo-qtd">Quantidade<input name="quantidade" inputmode="decimal" placeholder="100"></label>
+            <label id="campo-preco">Preço unitário<input name="preco" inputmode="decimal" placeholder="0,00" required></label>
+          </div>
+          <div class="linha">
+            <label>Taxas<input name="taxas" inputmode="decimal" placeholder="0,00"></label>
+            <label>Data<input name="data" type="date"></label>
+          </div>
+          <label>Observação<input name="obs" placeholder="opcional"></label>
+          <button class="botao primario" type="submit">Lançar</button>
+        </form>
+      </section>
+
+      <section class="painel">
+        <h2>Histórico</h2>
+        <div class="rolagem alta">
+          <table class="tabela">
+            <thead><tr><th>Data</th><th>Ativo</th><th>Tipo</th><th class="dir">Qtd.</th><th class="dir">Valor</th><th></th></tr></thead>
+            <tbody id="tbody-tx"></tbody>
+          </table>
+        </div>
+        <p id="vazio-tx" class="vazio">Sem lançamentos registrados.</p>
+      </section>
+    </div>
+  </main>
+
+  <!-- ---------- TELA CRIADA POR VOCÊ ---------- -->
+  <main id="vista-tela" class="conteudo oculto">
+    <div class="cabecalho-tela">
+      <div>
+        <h1 id="tela-nome"></h1>
+        <p id="tela-descricao" class="sub"></p>
+      </div>
+      <button id="btn-editar-tela" class="botao">Editar no Laboratório</button>
+    </div>
+    <div id="tela-blocos" class="telas-grade"></div>
+  </main>
+
+  <!-- ---------- LABORATÓRIO ---------- -->
+  <main id="vista-lab" class="conteudo oculto">
+    <div class="cabecalho-tela">
+      <div>
+        <h1>Laboratório de telas</h1>
+        <p class="sub">Monte a tela do seu jeito, veja o resultado ao vivo e publique quando estiver pronta.</p>
+      </div>
+      <button id="lab-nova" class="botao primario">+ Nova tela</button>
+    </div>
+
+    <div class="lab-layout">
+      <aside class="painel lab-lateral">
+        <h2>Minhas telas</h2>
+        <ul id="lab-telas" class="telas-lista"></ul>
+        <h2 class="espaco">Adicionar bloco</h2>
+        <div id="lab-paleta" class="paleta"></div>
+      </aside>
+
+      <div class="lab-principal">
+        <p id="lab-sem-tela" class="painel vazio">Escolha uma tela à esquerda ou crie uma nova para começar.</p>
+
+        <div id="lab-editor" class="oculto">
+          <section class="painel">
+            <div class="linha">
+              <label>Nome da tela<input id="lab-nome"></label>
+              <label>Descrição<input id="lab-descricao" placeholder="Para que serve esta tela"></label>
+            </div>
+            <div class="barra-acoes">
+              <span id="lab-status" class="etiqueta"></span>
+              <span class="espacador"></span>
+              <button id="lab-salvar" class="botao">Salvar alterações</button>
+              <button id="lab-publicar" class="botao primario">Publicar como tela oficial</button>
+              <button id="lab-inicial" class="botao fantasma oculto">☆ Definir como tela inicial</button>
+              <button id="lab-duplicar" class="botao fantasma">Duplicar</button>
+              <button id="lab-excluir" class="botao fantasma perigo">Excluir</button>
+            </div>
+          </section>
+
+          <section class="painel">
+            <h2>Blocos desta tela</h2>
+            <ul id="lab-blocos" class="blocos-lista"></ul>
+          </section>
+
+          <section>
+            <h2 class="titulo-previa">Pré-visualização ao vivo</h2>
+            <div id="lab-previa" class="telas-grade"></div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <p class="rodape">
+    Ferramenta de organização e acompanhamento pessoal — não é recomendação de investimento.
+  </p>
+</div>
+
+<div id="toast" class="toast oculto"></div>
+<script src="/blocos.js"></script>
+<script src="/lab.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

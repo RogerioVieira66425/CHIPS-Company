@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: meus-investimentos
+    runtime: node
+    plan: starter            # necessario para ter disco persistente (o plano free nao tem)
+    buildCommand: ""         # sem dependencias para instalar
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DB_PATH
+        value: /var/data/investimentos.db
+    disk:
+      name: dados
+      mountPath: /var/data
+      sizeGB: 1

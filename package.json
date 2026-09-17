@@ -1,0 +1,13 @@
+{
+  "name": "meus-investimentos",
+  "version": "1.0.0",
+  "description": "Sistema de acompanhamento de investimentos com login e laboratorio de telas",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=22.5"
+  }
+}
