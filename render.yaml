@@ -8,13 +8,20 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-# Quando quiser que os dados sobrevivam a deploys e reinicios, troque para:
+      # Credenciais do app criado em https://developers.mercadolivre.com.br
+      # Preencha os valores no painel do Render (Environment), nao aqui no repositorio.
+      - key: ML_CLIENT_ID
+        sync: false
+      - key: ML_CLIENT_SECRET
+        sync: false
+      # Senha do administrador (login: admin). Sem ela, a senha padrao e "admin".
+      - key: ADMIN_SENHA
+        sync: false
+# Para o historico de precos sobreviver a deploys e reinicios, troque para:
 #   plan: starter
-#   envVars:
-#     - key: NODE_ENV
-#       value: production
+#   e acrescente:
 #     - key: DB_PATH
-#       value: /var/data/investimentos.db
+#       value: /var/data/precos.db
 #   disk:
 #     name: dados
 #     mountPath: /var/data

@@ -247,3 +247,42 @@ code { background: #0f141c; padding: 1px 5px; border-radius: 4px; }
   .menu { order: 3; width: 100%; justify-content: flex-start; }
   .bloco.tam-p, .bloco.tam-m, .bloco.tam-g { grid-column: span 12; }
 }
+
+/* ================= COMPARADOR DE PREÇOS ================= */
+.link-produto {
+  background: none; border: 0; padding: 0; color: var(--texto); font: inherit; font-weight: 700;
+  cursor: pointer; text-align: left;
+}
+.link-produto:hover { color: var(--destaque); text-decoration: underline; }
+.termo { display: block; color: var(--texto-fraco); font-weight: 400; font-size: 11px; }
+.link-externo { color: var(--destaque); text-decoration: none; }
+.link-externo:hover { text-decoration: underline; }
+.titulo-oferta { max-width: 340px; white-space: normal; }
+.melhor-linha { background: #13251c; }
+
+/* veredito */
+.veredito { border-left: 4px solid var(--destaque); }
+.veredito.otimo, .veredito.bom { border-left-color: var(--verde); }
+.veredito.ruim { border-left-color: var(--vermelho); }
+.veredito-topo { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+.veredito-topo h2 { margin: 0 0 6px; }
+.veredito-preco { font-size: 34px; font-weight: 700; margin: 0 0 4px; font-variant-numeric: tabular-nums; }
+.veredito-momento { max-width: 340px; text-align: right; }
+.veredito-momento p { margin: 8px 0 4px; font-size: 13px; color: var(--texto-fraco); }
+.selo { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; background: #1b2230; border: 1px solid var(--borda); }
+.selo.otimo, .selo.bom { background: #14321f; border-color: #1f6b3a; color: #7ee2a8; }
+.selo.ruim { background: #3a1d20; border-color: #7a2c31; color: #ffc9c9; }
+.selo.sem_historico { color: var(--texto-fraco); }
+.economia { margin: 14px 0 0; font-size: 13px; color: var(--verde); font-weight: 600; }
+.veredito .dica, .veredito .neutro, .veredito .positivo { margin-top: 10px; font-size: 13px; }
+
+/* busca rápida */
+.lista-ofertas { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+.lista-ofertas li { background: #0f141c; border: 1px solid var(--borda); border-radius: 8px; padding: 10px; display: grid; gap: 4px; }
+.lista-ofertas li.destaque { border-color: var(--verde); }
+.oferta-topo { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.oferta-topo .preco { font-weight: 700; font-variant-numeric: tabular-nums; }
+.lista-ofertas small { color: var(--texto-fraco); font-size: 12px; line-height: 1.35; }
+
+/* gráfico de histórico */
+.grafico { width: 100%; height: auto; }

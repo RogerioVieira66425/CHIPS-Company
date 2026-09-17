@@ -2,8 +2,8 @@
 const { DatabaseSync } = require('node:sqlite');
 const path = require('node:path');
 
-// Em producao (Render) aponte DB_PATH para um disco persistente, ex.: /var/data/investimentos.db
-const CAMINHO = process.env.DB_PATH || path.join(__dirname, 'investimentos.db');
+// Em producao (Render) aponte DB_PATH para um disco persistente, ex.: /var/data/precos.db
+const CAMINHO = process.env.DB_PATH || path.join(__dirname, 'precos.db');
 const db = new DatabaseSync(CAMINHO);
 
 db.exec(`
@@ -24,45 +24,54 @@ CREATE TABLE IF NOT EXISTS sessoes (
   expira_em INTEGER NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS ativos (
-  id           INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id      INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
-  ticker       TEXT NOT NULL,
-  nome         TEXT NOT NULL DEFAULT '',
-  classe       TEXT NOT NULL,
-  preco_atual  REAL NOT NULL DEFAULT 0,
-  atualizado_em TEXT NOT NULL,
-  UNIQUE (user_id, ticker)
-);
-
-CREATE TABLE IF NOT EXISTS transacoes (
-  id         INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id    INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
-  ativo_id   INTEGER NOT NULL REFERENCES ativos(id) ON DELETE CASCADE,
-  tipo       TEXT NOT NULL CHECK (tipo IN ('compra','venda','provento')),
-  quantidade REAL NOT NULL,
-  preco      REAL NOT NULL,
-  taxas      REAL NOT NULL DEFAULT 0,
-  data       TEXT NOT NULL,
-  obs        TEXT NOT NULL DEFAULT ''
-);
-
-CREATE INDEX IF NOT EXISTS idx_tx_user ON transacoes(user_id, data);
-
-CREATE TABLE IF NOT EXISTS telas (
+-- Produtos monitorados (a "lista de desejos" de cada usuario)
+CREATE TABLE IF NOT EXISTS produtos (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id       INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
   nome          TEXT NOT NULL,
-  descricao     TEXT NOT NULL DEFAULT '',
-  status        TEXT NOT NULL DEFAULT 'rascunho' CHECK (status IN ('rascunho','oficial')),
-  inicial       INTEGER NOT NULL DEFAULT 0,
-  ordem         INTEGER NOT NULL DEFAULT 0,
-  config        TEXT NOT NULL DEFAULT '{"blocos":[]}',
+  termo         TEXT NOT NULL,
+  categoria     TEXT NOT NULL DEFAULT 'Outros',
+  preco_alvo    REAL NOT NULL DEFAULT 0,
   criado_em     TEXT NOT NULL,
   atualizado_em TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_telas_user ON telas(user_id, ordem);
+-- Cada execucao de busca em uma fonte (Mercado Livre, manual, ...)
+CREATE TABLE IF NOT EXISTS coletas (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  produto_id   INTEGER NOT NULL REFERENCES produtos(id) ON DELETE CASCADE,
+  user_id      INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  fonte        TEXT NOT NULL,
+  executado_em TEXT NOT NULL,
+  encontrados  INTEGER NOT NULL DEFAULT 0,
+  erro         TEXT NOT NULL DEFAULT ''
+);
+
+-- Cada oferta observada em uma coleta (o historico de precos nasce daqui)
+CREATE TABLE IF NOT EXISTS ofertas (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  coleta_id    INTEGER REFERENCES coletas(id) ON DELETE CASCADE,
+  produto_id   INTEGER NOT NULL REFERENCES produtos(id) ON DELETE CASCADE,
+  user_id      INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  loja         TEXT NOT NULL,
+  titulo       TEXT NOT NULL DEFAULT '',
+  preco        REAL NOT NULL,
+  frete        REAL NOT NULL DEFAULT 0,
+  preco_total  REAL NOT NULL,
+  condicao     TEXT NOT NULL DEFAULT 'novo',
+  vendedor     TEXT NOT NULL DEFAULT '',
+  reputacao    TEXT NOT NULL DEFAULT '',
+  vendidos     INTEGER NOT NULL DEFAULT 0,
+  parcelas     INTEGER NOT NULL DEFAULT 0,
+  url          TEXT NOT NULL DEFAULT '',
+  id_externo   TEXT NOT NULL DEFAULT '',
+  manual       INTEGER NOT NULL DEFAULT 0,
+  coletado_em  TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_ofertas_produto ON ofertas(produto_id, coletado_em);
+CREATE INDEX IF NOT EXISTS idx_coletas_produto ON coletas(produto_id, executado_em);
+CREATE INDEX IF NOT EXISTS idx_produtos_user ON produtos(user_id);
 `);
 
 // Coluna de administrador (adicionada depois; ALTER seguro para bancos antigos)

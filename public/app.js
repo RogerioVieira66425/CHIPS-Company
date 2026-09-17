@@ -2,16 +2,21 @@
 
 const App = (function () {
   const $ = (s) => document.querySelector(s);
-  const CORES = Blocos.CORES;
-  const dinheiro = Blocos.dinheiro;
-  const pct = Blocos.pct;
-  const qtdFmt = Blocos.qtdFmt;
-  const classeSinal = Blocos.sinal;
 
-  let carteira = { posicoes: [], totais: { patrimonio: 0, investido: 0, lucro: 0, realizado: 0, proventos: 0, rentabilidade: 0 }, alocacao: [] };
-  let transacoes = [];
-  let vistaAtual = { tipo: 'painel', id: null };
+  const dinheiro = (v) =>
+    (v < 0 ? '-' : '') + 'R$ ' + Math.abs(Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const pctFmt = (v) => (Number(v) || 0).toFixed(1).replace('.', ',') + '%';
+  const dataHora = (iso) => {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  let produtos = [];
+  let fontes = [];
+  let detalhe = null;
   let usuarioAtual = null;
+  let vistaAtual = { tipo: 'produtos', id: null };
 
   /* ---------- utilitarios ---------- */
   let temporizadorToast;
@@ -20,7 +25,7 @@ const App = (function () {
     e.textContent = msg;
     e.className = 'toast' + (erro ? ' erro' : '');
     clearTimeout(temporizadorToast);
-    temporizadorToast = setTimeout(() => e.classList.add('oculto'), 3600);
+    temporizadorToast = setTimeout(() => e.classList.add('oculto'), 4200);
   }
 
   async function pedir(rota, opcoes) {
@@ -32,13 +37,19 @@ const App = (function () {
     return dados;
   }
 
-  const dados = () => ({ carteira, transacoes });
-
   function dadosForm(form) {
     const o = {};
     new FormData(form).forEach((v, k) => { o[k] = v; });
     return o;
   }
+
+  const el = (tag, classe, texto) => {
+    const e = document.createElement(tag);
+    if (classe) e.className = classe;
+    if (texto !== undefined) e.textContent = texto;
+    return e;
+  };
+  const celula = (texto, classe) => el('td', classe, texto);
 
   /* ---------- login ---------- */
   document.querySelectorAll('.aba').forEach((aba) => {
@@ -85,298 +96,444 @@ const App = (function () {
     $('#app').classList.remove('oculto');
     $('#ola').textContent = usuario.nome + (usuario.admin ? ' (admin)' : '');
     $('#ola').title = usuario.email;
-    await carregar();
-    Lab.iniciar(renderMenu);
-    await Lab.carregar();
-    renderMenu();
-    const inicial = Lab.telaInicial();
-    mostrar(inicial ? { tipo: 'tela', id: inicial.id } : { tipo: 'painel' });
+    fontes = await pedir('/api/fontes').catch(() => []);
+    await carregarProdutos();
+    mostrar({ tipo: 'produtos' });
   }
 
   /* ---------- navegacao ---------- */
   function renderMenu() {
     const menu = $('#menu');
     menu.innerHTML = '';
-
     const botao = (rotulo, vista) => {
-      const b = document.createElement('button');
-      b.className = 'item-menu' + (vistaAtual.tipo === vista.tipo && vistaAtual.id === (vista.id || null) ? ' ativo' : '');
-      b.textContent = rotulo;
+      const b = el('button', 'item-menu' + (vistaAtual.tipo === vista.tipo ? ' ativo' : ''), rotulo);
       b.addEventListener('click', () => mostrar(vista));
       return b;
     };
-
-    menu.appendChild(botao('Painel', { tipo: 'painel' }));
-    Lab.oficiais().forEach((t) => menu.appendChild(botao(t.nome, { tipo: 'tela', id: t.id })));
-    menu.appendChild(botao('🧪 Laboratório', { tipo: 'lab' }));
+    menu.appendChild(botao('Produtos', { tipo: 'produtos' }));
     if (usuarioAtual && usuarioAtual.admin) menu.appendChild(botao('⚙️ Admin', { tipo: 'admin' }));
   }
 
   function mostrar(vista) {
     vistaAtual = { tipo: vista.tipo, id: vista.id || null };
-    $('#vista-painel').classList.toggle('oculto', vista.tipo !== 'painel');
-    $('#vista-tela').classList.toggle('oculto', vista.tipo !== 'tela');
-    $('#vista-lab').classList.toggle('oculto', vista.tipo !== 'lab');
+    $('#vista-produtos').classList.toggle('oculto', vista.tipo !== 'produtos');
+    $('#vista-detalhe').classList.toggle('oculto', vista.tipo !== 'detalhe');
     $('#vista-admin').classList.toggle('oculto', vista.tipo !== 'admin');
-
-    if (vista.tipo === 'tela') {
-      const tela = Lab.lista().find((t) => t.id === vista.id);
-      if (!tela) { mostrar({ tipo: 'painel' }); return; }
-      $('#tela-nome').textContent = tela.nome;
-      $('#tela-descricao').textContent = tela.descricao || '';
-      $('#btn-editar-tela').onclick = () => { Lab.abrir(tela.id); mostrar({ tipo: 'lab' }); };
-      Blocos.renderizarTela(tela, dados(), $('#tela-blocos'));
-    }
-    if (vista.tipo === 'lab') Lab.render();
     if (vista.tipo === 'admin') carregarAdmin().catch((e) => toast(e.message, true));
-
     renderMenu();
     window.scrollTo({ top: 0 });
   }
 
-  /* ---------- dados da carteira ---------- */
-  async function carregar() {
-    const [c, txs] = await Promise.all([pedir('/api/carteira'), pedir('/api/transacoes')]);
-    carteira = c;
-    transacoes = txs;
-    renderKpis(c.totais);
-    renderRosca(c.alocacao);
-    renderCarteira(c.posicoes);
-    renderSelectAtivos(c.posicoes);
-    renderTransacoes(txs);
+  /* ---------- lista de produtos ---------- */
+  async function carregarProdutos() {
+    produtos = await pedir('/api/produtos');
+    renderKpis();
+    renderProdutos();
+  }
 
-    if (vistaAtual.tipo === 'tela') {
-      const tela = Lab.lista().find((t) => t.id === vistaAtual.id);
-      if (tela) Blocos.renderizarTela(tela, dados(), $('#tela-blocos'));
+  function renderKpis() {
+    $('#kpi-produtos').textContent = produtos.length;
+    $('#kpi-ofertas').textContent = produtos.reduce((t, p) => t + p.ofertas, 0);
+
+    const configuradas = fontes.filter((f) => f.configurado);
+    $('#kpi-fontes').textContent = configuradas.length + ' de ' + fontes.length;
+    $('#kpi-fontes-sub').textContent = fontes.length
+      ? fontes.map((f) => f.nome + (f.configurado ? ' ✓' : ' (sem credenciais)')).join(' · ')
+      : 'nenhuma fonte registrada';
+
+    // economia potencial = soma das diferenças entre a melhor e a pior loja de cada produto
+    const economia = produtos.reduce((t, p) => t + (p.economia || 0), 0);
+    $('#kpi-economia').textContent = dinheiro(economia);
+  }
+
+  function renderProdutos() {
+    const tb = $('#tbody-produtos');
+    tb.innerHTML = '';
+    $('#vazio-produtos').classList.toggle('oculto', produtos.length > 0);
+
+    produtos.forEach((p) => {
+      const tr = el('tr');
+
+      const tdNome = el('td');
+      const link = el('button', 'link-produto', p.nome);
+      link.addEventListener('click', () => abrirDetalhe(p.id));
+      tdNome.appendChild(link);
+      tdNome.appendChild(el('small', 'termo', 'busca: ' + p.termo));
+      tr.appendChild(tdNome);
+
+      const tdCat = el('td');
+      tdCat.appendChild(el('span', 'etiqueta', p.categoria));
+      tr.appendChild(tdCat);
+
+      tr.appendChild(celula(p.melhor_loja || '—'));
+
+      const abaixoAlvo = p.preco_alvo > 0 && p.menor_preco > 0 && p.menor_preco <= p.preco_alvo;
+      tr.appendChild(celula(p.menor_preco ? dinheiro(p.menor_preco) : '—', 'dir ' + (abaixoAlvo ? 'positivo' : '')));
+      tr.appendChild(celula(p.preco_alvo ? dinheiro(p.preco_alvo) : '—', 'dir neutro'));
+      tr.appendChild(celula(String(p.ofertas), 'dir'));
+      tr.appendChild(celula(dataHora(p.ultima_coleta)));
+
+      const tdAcoes = el('td', 'dir');
+      const btnColeta = el('button', 'mini', '🔄');
+      btnColeta.title = 'Atualizar preços deste produto';
+      btnColeta.addEventListener('click', () => coletar(p.id, btnColeta));
+      const btnExcluir = el('button', 'mini', '🗑');
+      btnExcluir.title = 'Parar de monitorar';
+      btnExcluir.addEventListener('click', async () => {
+        if (!confirm('Remover "' + p.nome + '" e todo o histórico de preços dele?')) return;
+        try {
+          await pedir('/api/produtos/' + p.id, { method: 'DELETE' });
+          toast('Produto removido.');
+          carregarProdutos();
+        } catch (err) { toast(err.message, true); }
+      });
+      tdAcoes.append(btnColeta, btnExcluir);
+      tr.appendChild(tdAcoes);
+
+      tb.appendChild(tr);
+    });
+  }
+
+  /* ---------- coleta ---------- */
+  async function coletar(id, botao) {
+    if (botao) { botao.disabled = true; botao.textContent = '⏳'; }
+    try {
+      const r = await pedir('/api/produtos/' + id + '/coletar', { method: 'POST' });
+      const ok = r.relatorio.filter((f) => !f.erro);
+      const falhas = r.relatorio.filter((f) => f.erro);
+      const total = ok.reduce((t, f) => t + f.encontrados, 0);
+
+      if (falhas.length) toast(falhas.map((f) => f.fonte + ': ' + f.erro).join(' | '), true);
+      else toast(total + ' oferta(s) coletada(s).');
+
+      await carregarProdutos();
+      if (detalhe && detalhe.produto.id === id) {
+        detalhe = r.detalhe;
+        renderDetalhe();
+      }
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      if (botao) { botao.disabled = false; botao.textContent = '🔄'; }
     }
-    if (vistaAtual.tipo === 'lab') Lab.previa();
   }
 
-  function renderKpis(t) {
-    $('#kpi-patrimonio').textContent = dinheiro(t.patrimonio);
-    $('#kpi-investido').textContent = dinheiro(t.investido);
+  $('#btn-coletar-todos').addEventListener('click', async (e) => {
+    if (!produtos.length) { toast('Cadastre um produto primeiro.', true); return; }
+    e.target.disabled = true;
+    const rotulo = e.target.textContent;
+    let i = 0;
+    for (const p of produtos) {
+      i += 1;
+      e.target.textContent = 'Coletando ' + i + '/' + produtos.length + '...';
+      await coletar(p.id);
+    }
+    e.target.disabled = false;
+    e.target.textContent = rotulo;
+    toast('Coleta concluída em ' + produtos.length + ' produto(s).');
+  });
 
-    const lucro = $('#kpi-lucro');
-    lucro.textContent = dinheiro(t.lucro);
-    lucro.className = classeSinal(t.lucro);
+  /* ---------- formularios ---------- */
+  $('#form-produto').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      const p = await pedir('/api/produtos', { method: 'POST', body: dadosForm(e.target) });
+      e.target.reset();
+      await carregarProdutos();
+      toast('Produto adicionado. Coletando preços...');
+      coletar(p.id);
+    } catch (err) { toast(err.message, true); }
+  });
 
-    const rent = $('#kpi-rent');
-    rent.textContent = pct(t.rentabilidade) + ' sobre o investido';
-    rent.className = 'variacao ' + classeSinal(t.lucro);
+  $('#form-busca').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const destino = $('#resultado-busca');
+    destino.innerHTML = '';
+    destino.appendChild(el('p', 'vazio', 'Consultando as lojas...'));
+    try {
+      const r = await pedir('/api/buscar', { method: 'POST', body: dadosForm(e.target) });
+      destino.innerHTML = '';
 
-    const real = $('#kpi-realizado');
-    real.textContent = dinheiro(t.realizado + t.proventos);
-    real.className = classeSinal(t.realizado + t.proventos);
-    $('#kpi-proventos').textContent = 'vendas ' + dinheiro(t.realizado) + ' · proventos ' + dinheiro(t.proventos);
+      r.fontes.forEach((f) => {
+        if (f.erro) destino.appendChild(el('p', 'aviso', f.fonte + ': ' + f.erro));
+      });
+
+      const ranking = r.comparacao.ranking;
+      if (!ranking.length) {
+        destino.appendChild(el('p', 'vazio', 'Nenhuma oferta encontrada para "' + r.termo + '".'));
+        return;
+      }
+      const ul = el('ul', 'lista-ofertas');
+      ranking.slice(0, 5).forEach((o, i) => {
+        const li = el('li', i === 0 ? 'destaque' : '');
+        const topo = el('div', 'oferta-topo');
+        topo.appendChild(el('b', '', o.loja));
+        topo.appendChild(el('span', 'preco', dinheiro(o.preco_total)));
+        li.appendChild(topo);
+        li.appendChild(el('small', '', o.titulo));
+        if (o.url) {
+          const a = el('a', 'link-externo', 'abrir anúncio ↗');
+          a.href = o.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+          li.appendChild(a);
+        }
+        ul.appendChild(li);
+      });
+      destino.appendChild(ul);
+    } catch (err) {
+      destino.innerHTML = '';
+      destino.appendChild(el('p', 'aviso', err.message));
+    }
+  });
+
+  $('#form-oferta').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!detalhe) return;
+    try {
+      detalhe = await pedir('/api/produtos/' + detalhe.produto.id + '/ofertas', { method: 'POST', body: dadosForm(e.target) });
+      e.target.reset();
+      renderDetalhe();
+      carregarProdutos();
+      toast('Oferta registrada.');
+    } catch (err) { toast(err.message, true); }
+  });
+
+  /* ---------- detalhe do produto ---------- */
+  async function abrirDetalhe(id) {
+    detalhe = await pedir('/api/produtos/' + id);
+    renderDetalhe();
+    mostrar({ tipo: 'detalhe', id });
   }
 
-  function renderRosca(alocacao) {
-    const svg = $('#rosca');
-    const legenda = $('#legenda');
-    legenda.innerHTML = '';
-    const total = alocacao.reduce((s, f) => s + f.valor, 0);
-    Blocos.desenharRosca(svg, alocacao.map((f) => ({ rotulo: f.classe, valor: f.valor })), total);
+  $('#det-voltar').addEventListener('click', () => mostrar({ tipo: 'produtos' }));
+  $('#det-coletar').addEventListener('click', () => { if (detalhe) coletar(detalhe.produto.id); });
 
-    if (!alocacao.length) {
-      legenda.innerHTML = '<li class="neutro">Sem posições com valor de mercado ainda.</li>';
+  function renderDetalhe() {
+    const d = detalhe;
+    $('#det-nome').textContent = d.produto.nome;
+    $('#det-sub').textContent =
+      d.produto.categoria + ' · busca: "' + d.produto.termo + '"' +
+      (d.produto.preco_alvo > 0 ? ' · alvo ' + dinheiro(d.produto.preco_alvo) : '') +
+      ' · última coleta ' + dataHora(d.ultima_coleta ? d.ultima_coleta.executado_em : '');
+
+    renderVeredito(d);
+    renderRanking(d);
+    renderGrafico(d.historico);
+    renderOfertas(d.ofertas);
+  }
+
+  function renderVeredito(d) {
+    const destino = $('#det-veredito');
+    destino.innerHTML = '';
+    const melhor = d.comparacao.melhor;
+
+    if (!melhor) {
+      destino.appendChild(el('p', 'painel vazio', 'Ainda não há ofertas. Clique em "Atualizar preços agora" ou lance uma oferta manualmente.'));
       return;
     }
-    alocacao.forEach((fatia, i) => {
-      const li = document.createElement('li');
-      const ponto = document.createElement('i');
-      ponto.className = 'ponto';
-      ponto.style.background = CORES[i % CORES.length];
-      const nome = document.createElement('b');
-      nome.textContent = fatia.classe;
-      const valor = document.createElement('span');
-      valor.className = 'valor';
-      valor.textContent = Blocos.pctSimples(fatia.pct) + ' · ' + dinheiro(fatia.valor);
-      li.append(ponto, nome, valor);
-      legenda.appendChild(li);
+
+    const cartao = el('section', 'painel veredito ' + d.momento.status);
+    const topo = el('div', 'veredito-topo');
+
+    const esquerda = el('div');
+    esquerda.appendChild(el('h2', '', 'Compre na ' + melhor.loja));
+    esquerda.appendChild(el('p', 'veredito-preco', dinheiro(melhor.preco_total)));
+    const detalhes = [];
+    if (melhor.frete > 0) detalhes.push('inclui frete de ' + dinheiro(melhor.frete));
+    else detalhes.push('frete grátis ou não informado');
+    if (melhor.condicao !== 'novo') detalhes.push('produto ' + melhor.condicao);
+    if (melhor.parcelas > 0) detalhes.push('até ' + melhor.parcelas + 'x');
+    esquerda.appendChild(el('small', 'neutro', detalhes.join(' · ')));
+    topo.appendChild(esquerda);
+
+    const direita = el('div', 'veredito-momento');
+    direita.appendChild(el('span', 'selo ' + d.momento.status, d.momento.titulo));
+    direita.appendChild(el('p', '', d.momento.texto));
+    if (d.momento.dias > 1) {
+      direita.appendChild(el('small', 'neutro',
+        'mínimo ' + dinheiro(d.momento.minimo) + ' · mediana ' + dinheiro(d.momento.mediana) +
+        ' · máximo ' + dinheiro(d.momento.maximo) + ' em ' + d.momento.dias + ' dia(s)'));
+    }
+    topo.appendChild(direita);
+    cartao.appendChild(topo);
+
+    if (d.comparacao.economia > 0) {
+      cartao.appendChild(el('p', 'economia',
+        'Economia de ' + dinheiro(d.comparacao.economia) + ' (' + pctFmt(d.comparacao.economia_pct) +
+        ') em relação à loja mais cara entre as comparadas.'));
+    }
+
+    const maisBarato = d.comparacao.mais_barato;
+    if (maisBarato && maisBarato.id !== melhor.id) {
+      cartao.appendChild(el('p', 'dica',
+        'A oferta mais barata é da ' + maisBarato.loja + ' por ' + dinheiro(maisBarato.preco_total) +
+        ', mas o sistema não a recomenda por causa da condição do produto ou da reputação do vendedor.'));
+    }
+
+    if (d.produto.preco_alvo > 0) {
+      cartao.appendChild(el('p', d.alvo_atingido ? 'positivo' : 'neutro',
+        d.alvo_atingido
+          ? '🎯 Preço-alvo de ' + dinheiro(d.produto.preco_alvo) + ' atingido.'
+          : 'Faltam ' + dinheiro(melhor.preco_total - d.produto.preco_alvo) + ' para chegar ao seu preço-alvo.'));
+    }
+
+    destino.appendChild(cartao);
+  }
+
+  function renderRanking(d) {
+    const destino = $('#det-ranking');
+    destino.innerHTML = '';
+    const ranking = d.comparacao.ranking;
+    if (!ranking.length) {
+      destino.appendChild(el('p', 'vazio', 'Sem lojas para comparar ainda.'));
+      return;
+    }
+    const maximo = Math.max(...ranking.map((o) => o.preco_total));
+    const ul = el('ul', 'barras');
+    ranking.forEach((o, i) => {
+      const li = el('li');
+      li.appendChild(el('span', 'barra-rotulo', o.loja));
+      const trilho = el('div', 'barra-trilho');
+      const barra = el('div', 'barra ' + (i === 0 ? 'positivo' : ''));
+      barra.style.width = (o.preco_total / maximo) * 100 + '%';
+      trilho.appendChild(barra);
+      li.appendChild(trilho);
+      li.appendChild(el('span', 'barra-valor', dinheiro(o.preco_total)));
+      ul.appendChild(li);
     });
+    destino.appendChild(ul);
+    destino.appendChild(el('p', 'dica',
+      'A ordem considera o preço final mais uma penalidade de risco para produto usado ou vendedor com reputação baixa.'));
   }
 
-  function celula(texto, classe) {
-    const td = document.createElement('td');
-    td.textContent = texto;
-    if (classe) td.className = classe;
-    return td;
+  function renderGrafico(historico) {
+    const destino = $('#det-grafico');
+    destino.innerHTML = '';
+    if (!historico || historico.length < 2) {
+      destino.appendChild(el('p', 'vazio', 'O gráfico aparece quando houver coletas em pelo menos dois dias diferentes.'));
+      return;
+    }
+
+    const largura = 560, altura = 220, margem = { topo: 16, dir: 12, baixo: 28, esq: 62 };
+    const valores = historico.map((h) => h.minimo);
+    const min = Math.min(...valores), max = Math.max(...valores);
+    const faixa = max - min || max * 0.1 || 1;
+    const x = (i) => margem.esq + (i / (historico.length - 1)) * (largura - margem.esq - margem.dir);
+    const y = (v) => margem.topo + (1 - (v - min + faixa * 0.1) / (faixa * 1.2)) * (altura - margem.topo - margem.baixo);
+
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 ' + largura + ' ' + altura);
+    svg.setAttribute('class', 'grafico');
+
+    // linhas de referência
+    [0, 0.5, 1].forEach((f) => {
+      const valor = min + faixa * f;
+      const linha = document.createElementNS(ns, 'line');
+      linha.setAttribute('x1', margem.esq); linha.setAttribute('x2', largura - margem.dir);
+      linha.setAttribute('y1', y(valor)); linha.setAttribute('y2', y(valor));
+      linha.setAttribute('stroke', '#232a36');
+      svg.appendChild(linha);
+
+      const rotulo = document.createElementNS(ns, 'text');
+      rotulo.setAttribute('x', 6); rotulo.setAttribute('y', y(valor) + 4);
+      rotulo.setAttribute('fill', '#97a1b2'); rotulo.setAttribute('font-size', '11');
+      rotulo.textContent = dinheiro(valor);
+      svg.appendChild(rotulo);
+    });
+
+    const pontos = historico.map((h, i) => x(i) + ',' + y(h.minimo)).join(' ');
+    const linha = document.createElementNS(ns, 'polyline');
+    linha.setAttribute('points', pontos);
+    linha.setAttribute('fill', 'none');
+    linha.setAttribute('stroke', '#4c8dff');
+    linha.setAttribute('stroke-width', '2');
+    svg.appendChild(linha);
+
+    historico.forEach((h, i) => {
+      const c = document.createElementNS(ns, 'circle');
+      c.setAttribute('cx', x(i)); c.setAttribute('cy', y(h.minimo)); c.setAttribute('r', '3');
+      c.setAttribute('fill', h.minimo === min ? '#22c55e' : '#4c8dff');
+      const titulo = document.createElementNS(ns, 'title');
+      titulo.textContent = h.dia.split('-').reverse().join('/') + ': ' + dinheiro(h.minimo) + ' (' + h.amostras + ' ofertas)';
+      c.appendChild(titulo);
+      svg.appendChild(c);
+    });
+
+    [0, historico.length - 1].forEach((i) => {
+      const t = document.createElementNS(ns, 'text');
+      t.setAttribute('x', x(i)); t.setAttribute('y', altura - 8);
+      t.setAttribute('fill', '#97a1b2'); t.setAttribute('font-size', '11');
+      t.setAttribute('text-anchor', i === 0 ? 'start' : 'end');
+      t.textContent = historico[i].dia.slice(5).split('-').reverse().join('/');
+      svg.appendChild(t);
+    });
+
+    destino.appendChild(svg);
+    destino.appendChild(el('p', 'dica', 'Cada ponto é o menor preço observado naquele dia, somando todas as lojas.'));
   }
 
-  function renderCarteira(posicoes) {
-    const tb = $('#tbody-carteira');
+  function renderOfertas(ofertas) {
+    const tb = $('#tbody-ofertas');
     tb.innerHTML = '';
-    $('#vazio-carteira').classList.toggle('oculto', posicoes.length > 0);
+    $('#vazio-ofertas').classList.toggle('oculto', ofertas.length > 0);
 
-    posicoes.forEach((p) => {
-      const tr = document.createElement('tr');
+    ofertas.forEach((o, i) => {
+      const tr = el('tr', i === 0 ? 'melhor-linha' : '');
+      tr.appendChild(celula(o.loja, 'ticker'));
 
-      const tdAtivo = document.createElement('td');
-      tdAtivo.className = 'ticker';
-      tdAtivo.textContent = p.ticker;
-      if (p.nome) {
-        const s = document.createElement('small');
-        s.textContent = p.nome;
-        tdAtivo.appendChild(s);
+      const tdTitulo = el('td', 'titulo-oferta');
+      if (o.url) {
+        const a = el('a', 'link-externo', o.titulo || 'ver anúncio');
+        a.href = o.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+        tdTitulo.appendChild(a);
+      } else {
+        tdTitulo.textContent = o.titulo || '—';
       }
-      tr.appendChild(tdAtivo);
+      tr.appendChild(tdTitulo);
 
-      const tdClasse = document.createElement('td');
-      const et = document.createElement('span');
-      et.className = 'etiqueta';
-      et.textContent = p.classe;
-      tdClasse.appendChild(et);
-      tr.appendChild(tdClasse);
+      tr.appendChild(celula(o.condicao, o.condicao === 'usado' ? 'negativo' : ''));
+      tr.appendChild(celula((o.vendedor || '—') + (o.vendidos ? ' · ' + o.vendidos + ' vendas' : '')));
+      tr.appendChild(celula(dinheiro(o.preco), 'dir'));
+      tr.appendChild(celula(o.frete > 0 ? dinheiro(o.frete) : 'grátis', 'dir'));
+      tr.appendChild(celula(dinheiro(o.preco_total), 'dir ' + (i === 0 ? 'positivo' : '')));
 
-      tr.appendChild(celula(qtdFmt(p.quantidade), 'dir'));
-      tr.appendChild(celula(dinheiro(p.preco_medio), 'dir'));
-
-      const tdPreco = document.createElement('td');
-      tdPreco.className = 'dir';
-      const input = document.createElement('input');
-      input.className = 'editavel';
-      input.value = p.preco_atual.toFixed(2).replace('.', ',');
-      input.title = 'Atualize a cotação e pressione Enter';
-      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
-      input.addEventListener('blur', async () => {
-        const novo = input.value.replace(',', '.');
-        if (Number(novo) === p.preco_atual) return;
-        try {
-          await pedir('/api/ativos/' + p.id, { method: 'PATCH', body: { preco_atual: novo } });
-          toast(p.ticker + ' atualizado.');
-          carregar();
-        } catch (err) { toast(err.message, true); carregar(); }
-      });
-      tdPreco.appendChild(input);
-      tr.appendChild(tdPreco);
-
-      tr.appendChild(celula(dinheiro(p.custo), 'dir'));
-      tr.appendChild(celula(dinheiro(p.valor_atual), 'dir'));
-      tr.appendChild(celula(dinheiro(p.lucro), 'dir ' + classeSinal(p.lucro)));
-      tr.appendChild(celula(p.custo > 0 ? pct(p.rentabilidade) : '—', 'dir ' + classeSinal(p.lucro)));
-
-      const tdAcao = document.createElement('td');
-      tdAcao.className = 'dir';
-      const btn = document.createElement('button');
-      btn.className = 'mini';
-      btn.textContent = '🗑';
-      btn.title = 'Remover ativo e seus lançamentos';
-      btn.addEventListener('click', async () => {
-        if (!confirm('Remover ' + p.ticker + ' e todos os seus lançamentos?')) return;
-        try {
-          await pedir('/api/ativos/' + p.id, { method: 'DELETE' });
-          toast(p.ticker + ' removido.');
-          carregar();
-        } catch (err) { toast(err.message, true); }
-      });
-      tdAcao.appendChild(btn);
+      const tdAcao = el('td', 'dir');
+      if (o.manual) {
+        const btn = el('button', 'mini', '🗑');
+        btn.title = 'Excluir oferta manual';
+        btn.addEventListener('click', async () => {
+          try {
+            await pedir('/api/ofertas/' + o.id, { method: 'DELETE' });
+            detalhe = await pedir('/api/produtos/' + detalhe.produto.id);
+            renderDetalhe();
+            toast('Oferta excluída.');
+          } catch (err) { toast(err.message, true); }
+        });
+        tdAcao.appendChild(btn);
+      }
       tr.appendChild(tdAcao);
-
       tb.appendChild(tr);
     });
   }
-
-  function renderSelectAtivos(posicoes) {
-    const sel = $('#select-ativo');
-    const anterior = sel.value;
-    sel.innerHTML = '';
-    posicoes.forEach((p) => {
-      const op = document.createElement('option');
-      op.value = p.id;
-      op.textContent = p.ticker;
-      sel.appendChild(op);
-    });
-    if (anterior) sel.value = anterior;
-  }
-
-  const NOME_TIPO = { compra: 'Compra', venda: 'Venda', provento: 'Provento' };
-
-  function renderTransacoes(txs) {
-    const tb = $('#tbody-tx');
-    tb.innerHTML = '';
-    $('#vazio-tx').classList.toggle('oculto', txs.length > 0);
-
-    txs.forEach((t) => {
-      const tr = document.createElement('tr');
-      tr.appendChild(celula(t.data.split('-').reverse().join('/')));
-      tr.appendChild(celula(t.ticker, 'ticker'));
-      tr.appendChild(celula(NOME_TIPO[t.tipo], t.tipo === 'compra' ? 'positivo' : t.tipo === 'venda' ? 'negativo' : 'neutro'));
-      tr.appendChild(celula(t.tipo === 'provento' ? '—' : qtdFmt(t.quantidade), 'dir'));
-      tr.appendChild(celula(dinheiro(t.tipo === 'provento' ? t.preco : t.quantidade * t.preco + t.taxas), 'dir'));
-
-      const tdAcao = document.createElement('td');
-      tdAcao.className = 'dir';
-      const btn = document.createElement('button');
-      btn.className = 'mini';
-      btn.textContent = '🗑';
-      btn.title = 'Excluir lançamento';
-      btn.addEventListener('click', async () => {
-        if (!confirm('Excluir este lançamento?')) return;
-        try {
-          await pedir('/api/transacoes/' + t.id, { method: 'DELETE' });
-          toast('Lançamento excluído.');
-          carregar();
-        } catch (err) { toast(err.message, true); }
-      });
-      tdAcao.appendChild(btn);
-      tr.appendChild(tdAcao);
-
-      tb.appendChild(tr);
-    });
-  }
-
-  /* ---------- formularios do painel ---------- */
-  $('#form-ativo').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    try {
-      await pedir('/api/ativos', { method: 'POST', body: dadosForm(e.target) });
-      e.target.reset();
-      toast('Ativo adicionado.');
-      carregar();
-    } catch (err) { toast(err.message, true); }
-  });
-
-  $('#select-tipo').addEventListener('change', (e) => {
-    const provento = e.target.value === 'provento';
-    $('#campo-qtd').classList.toggle('oculto', provento);
-    $('#campo-preco').firstChild.textContent = provento ? 'Valor recebido' : 'Preço unitário';
-  });
-
-  $('#form-tx').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    try {
-      await pedir('/api/transacoes', { method: 'POST', body: dadosForm(e.target) });
-      const tipo = $('#select-tipo').value;
-      const ativo = $('#select-ativo').value;
-      e.target.reset();
-      $('#select-tipo').value = tipo;
-      $('#select-ativo').value = ativo;
-      toast('Lançamento registrado.');
-      carregar();
-    } catch (err) { toast(err.message, true); }
-  });
 
   /* ---------- administracao ---------- */
   async function carregarAdmin() {
     const usuarios = await pedir('/api/admin/usuarios');
     const soma = (campo) => usuarios.reduce((t, u) => t + u[campo], 0);
     $('#admin-total-usuarios').textContent = usuarios.length;
-    $('#admin-total-ativos').textContent = soma('ativos');
-    $('#admin-total-lancamentos').textContent = soma('lancamentos');
-    $('#admin-total-telas').textContent = soma('telas');
+    $('#admin-total-produtos').textContent = soma('produtos');
+    $('#admin-total-coletas').textContent = soma('coletas');
+    $('#admin-total-ofertas').textContent = soma('ofertas');
 
     const tb = $('#tbody-admin');
     tb.innerHTML = '';
     usuarios.forEach((u) => {
-      const tr = document.createElement('tr');
+      const tr = el('tr');
       tr.appendChild(celula('#' + u.id));
 
-      const tdNome = document.createElement('td');
-      tdNome.textContent = u.nome;
+      const tdNome = el('td', '', u.nome);
       if (u.admin) {
-        const et = document.createElement('span');
-        et.className = 'etiqueta oficial';
-        et.textContent = 'admin';
+        const et = el('span', 'etiqueta oficial', 'admin');
         et.style.marginLeft = '6px';
         tdNome.appendChild(et);
       }
@@ -384,24 +541,20 @@ const App = (function () {
 
       tr.appendChild(celula(u.email));
       tr.appendChild(celula(u.criado_em.slice(0, 10).split('-').reverse().join('/')));
-      tr.appendChild(celula(String(u.ativos), 'dir'));
-      tr.appendChild(celula(String(u.lancamentos), 'dir'));
-      tr.appendChild(celula(String(u.telas), 'dir'));
-      tr.appendChild(celula(u.sessoes > 0 ? 'ativa' : '\u2014', 'dir ' + (u.sessoes > 0 ? 'positivo' : 'neutro')));
+      tr.appendChild(celula(String(u.produtos), 'dir'));
+      tr.appendChild(celula(String(u.coletas), 'dir'));
+      tr.appendChild(celula(String(u.ofertas), 'dir'));
+      tr.appendChild(celula(u.sessoes > 0 ? 'ativa' : '—', 'dir ' + (u.sessoes > 0 ? 'positivo' : 'neutro')));
 
-      const tdAcoes = document.createElement('td');
-      tdAcoes.className = 'dir';
-
-      const btnSenha = document.createElement('button');
-      btnSenha.className = 'mini';
-      btnSenha.textContent = '\u{1F511}';
+      const tdAcoes = el('td', 'dir');
+      const btnSenha = el('button', 'mini', '🔑');
       btnSenha.title = 'Definir nova senha';
       btnSenha.addEventListener('click', async () => {
-        const senha = prompt('Nova senha para ' + u.nome + ' (m\u00ednimo 8 caracteres):');
+        const senha = prompt('Nova senha para ' + u.nome + ' (mínimo 8 caracteres):');
         if (!senha) return;
         try {
           await pedir('/api/admin/usuarios/' + u.id + '/senha', { method: 'POST', body: { senha } });
-          toast('Senha de ' + u.nome + ' redefinida. As sess\u00f5es dele foram encerradas.');
+          toast('Senha de ' + u.nome + ' redefinida. As sessões dele foram encerradas.');
           if (u.id === usuarioAtual.id) location.reload();
           else carregarAdmin();
         } catch (err) { toast(err.message, true); }
@@ -409,15 +562,13 @@ const App = (function () {
       tdAcoes.appendChild(btnSenha);
 
       if (u.id !== usuarioAtual.id) {
-        const btnExcluir = document.createElement('button');
-        btnExcluir.className = 'mini';
-        btnExcluir.textContent = '\u{1F5D1}';
+        const btnExcluir = el('button', 'mini', '🗑');
         btnExcluir.title = 'Excluir conta e todos os dados dela';
         btnExcluir.addEventListener('click', async () => {
-          if (!confirm('Excluir a conta de ' + u.nome + ' com a carteira, os lan\u00e7amentos e as telas? Isso n\u00e3o pode ser desfeito.')) return;
+          if (!confirm('Excluir a conta de ' + u.nome + ' com os produtos e o histórico? Isso não pode ser desfeito.')) return;
           try {
             await pedir('/api/admin/usuarios/' + u.id, { method: 'DELETE' });
-            toast('Conta exclu\u00edda.');
+            toast('Conta excluída.');
             carregarAdmin();
           } catch (err) { toast(err.message, true); }
         });
@@ -433,7 +584,6 @@ const App = (function () {
 
   /* ---------- inicio ---------- */
   (async function iniciar() {
-    document.querySelector('input[name="data"]').value = new Date().toISOString().slice(0, 10);
     try {
       await abrirApp(await pedir('/api/eu'));
     } catch {
@@ -441,5 +591,5 @@ const App = (function () {
     }
   })();
 
-  return { pedir, toast, dados, carregar, mostrar };
+  return { pedir, toast };
 })();

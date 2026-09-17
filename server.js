@@ -90,77 +90,9 @@ function usuarioDaRequisicao(req) {
   return u ? { id: u.id, email: u.email, nome: u.nome, admin: !!u.admin, token: m[1] } : null;
 }
 
-/* ---------- calculo da carteira ---------- */
-function calcularCarteira(userId) {
-  const ativos = db.prepare('SELECT * FROM ativos WHERE user_id = ? ORDER BY ticker').all(userId);
-  const txs = db.prepare('SELECT * FROM transacoes WHERE user_id = ? ORDER BY data, id').all(userId);
-
-  const posicoes = ativos.map((a) => {
-    let qtd = 0, custo = 0, realizado = 0, proventos = 0;
-    for (const t of txs) {
-      if (t.ativo_id !== a.id) continue;
-      if (t.tipo === 'compra') {
-        qtd += t.quantidade;
-        custo += t.quantidade * t.preco + t.taxas;
-      } else if (t.tipo === 'venda') {
-        const pm = qtd > 0 ? custo / qtd : 0;
-        const q = Math.min(t.quantidade, qtd);
-        realizado += q * t.preco - t.taxas - q * pm;
-        qtd -= q;
-        custo -= q * pm;
-        if (qtd <= 1e-9) { qtd = 0; custo = 0; }
-      } else {
-        proventos += t.preco;
-      }
-    }
-    const preco_medio = qtd > 0 ? custo / qtd : 0;
-    const valor_atual = qtd * a.preco_atual;
-    const lucro = valor_atual - custo;
-    return {
-      id: a.id,
-      ticker: a.ticker,
-      nome: a.nome,
-      classe: a.classe,
-      preco_atual: a.preco_atual,
-      atualizado_em: a.atualizado_em,
-      quantidade: qtd,
-      custo,
-      preco_medio,
-      valor_atual,
-      lucro,
-      rentabilidade: custo > 0 ? (lucro / custo) * 100 : 0,
-      realizado,
-      proventos,
-    };
-  });
-
-  const totais = posicoes.reduce(
-    (acc, p) => ({
-      investido: acc.investido + p.custo,
-      patrimonio: acc.patrimonio + p.valor_atual,
-      lucro: acc.lucro + p.lucro,
-      realizado: acc.realizado + p.realizado,
-      proventos: acc.proventos + p.proventos,
-    }),
-    { investido: 0, patrimonio: 0, lucro: 0, realizado: 0, proventos: 0 }
-  );
-  totais.rentabilidade = totais.investido > 0 ? (totais.lucro / totais.investido) * 100 : 0;
-
-  const porClasse = {};
-  for (const p of posicoes) {
-    if (p.valor_atual <= 0) continue;
-    porClasse[p.classe] = (porClasse[p.classe] || 0) + p.valor_atual;
-  }
-  const alocacao = Object.entries(porClasse)
-    .map(([classe, valor]) => ({
-      classe,
-      valor,
-      pct: totais.patrimonio > 0 ? (valor / totais.patrimonio) * 100 : 0,
-    }))
-    .sort((a, b) => b.valor - a.valor);
-
-  return { posicoes, totais, alocacao };
-}
+/* ---------- coletores e analise ---------- */
+const coletores = [require('./coletores/mercadolivre.js')];
+const analise = require('./analise.js');
 
 /* ---------- helpers HTTP ---------- */
 function json(res, status, dados) {
@@ -192,56 +124,111 @@ const num = (v) => {
   return Number.isFinite(n) ? n : NaN;
 };
 
-/* ---------- telas do laboratorio ---------- */
-const TIPOS_BLOCO = ['kpi', 'rosca', 'barras', 'tabela', 'lancamentos', 'texto', 'metas', 'livre'];
-const MAX_BLOCOS = 40;
-const MAX_CONFIG = 400000; // ~400 KB por tela
-
-function validarConfig(config) {
-  if (typeof config === 'string') {
-    try { config = JSON.parse(config); } catch { throw new Error('Configuracao da tela invalida.'); }
-  }
-  if (!config || typeof config !== 'object' || Array.isArray(config)) throw new Error('Configuracao da tela invalida.');
-  const blocos = Array.isArray(config.blocos) ? config.blocos : [];
-  if (blocos.length > MAX_BLOCOS) throw new Error('Limite de ' + MAX_BLOCOS + ' blocos por tela.');
-  const limpos = blocos.map((b, i) => {
-    if (!b || typeof b !== 'object') throw new Error('Bloco ' + (i + 1) + ' invalido.');
-    if (TIPOS_BLOCO.indexOf(b.tipo) === -1) throw new Error('Tipo de bloco desconhecido: ' + b.tipo);
-    return {
-      id: String(b.id || 'b' + Date.now() + i),
-      tipo: b.tipo,
-      titulo: String(b.titulo || ''),
-      tamanho: ['p', 'm', 'g'].indexOf(b.tamanho) === -1 ? 'm' : b.tamanho,
-      opcoes: b.opcoes && typeof b.opcoes === 'object' && !Array.isArray(b.opcoes) ? b.opcoes : {},
-    };
+/* ---------- produtos, coleta e historico ---------- */
+function listarProdutos(userId) {
+  const produtos = db.prepare('SELECT * FROM produtos WHERE user_id = ? ORDER BY nome').all(userId);
+  return produtos.map((p) => {
+    const melhor = db.prepare(
+      'SELECT loja, preco_total, coletado_em FROM ofertas WHERE produto_id = ? ' +
+      'AND coleta_id IN (SELECT c.id FROM coletas c WHERE c.produto_id = ? AND c.executado_em = ' +
+    '  (SELECT MAX(c2.executado_em) FROM coletas c2 WHERE c2.produto_id = c.produto_id AND c2.fonte = c.fonte)) ' +
+      'ORDER BY preco_total LIMIT 1'
+    ).get(p.id, p.id);
+    const total = db.prepare(
+      'SELECT COUNT(*) AS n FROM ofertas WHERE produto_id = ? ' +
+      'AND coleta_id IN (SELECT c.id FROM coletas c WHERE c.produto_id = ? AND c.executado_em = ' +
+      '  (SELECT MAX(c2.executado_em) FROM coletas c2 WHERE c2.produto_id = c.produto_id AND c2.fonte = c.fonte))'
+    ).get(p.id, p.id);
+    return Object.assign({}, p, {
+      menor_preco: melhor ? melhor.preco_total : 0,
+      melhor_loja: melhor ? melhor.loja : '',
+      ultima_coleta: melhor ? melhor.coletado_em : '',
+      ofertas: total ? total.n : 0,
+    });
   });
-  const saida = { blocos: limpos };
-  const texto = JSON.stringify(saida);
-  if (texto.length > MAX_CONFIG) throw new Error('Tela grande demais para salvar.');
-  return saida;
 }
 
-function formatarTela(linha) {
-  let config;
-  try { config = JSON.parse(linha.config); } catch { config = { blocos: [] }; }
+function produtoPorId(userId, id) {
+  return listarProdutos(userId).find((p) => p.id === id) || null;
+}
+
+/* Serie diaria: menor preco observado em cada dia (base do grafico e do veredito). */
+function historicoDiario(produtoId, dias) {
+  return db.prepare(
+    'SELECT substr(coletado_em, 1, 10) AS dia, MIN(preco_total) AS minimo, AVG(preco_total) AS media, COUNT(*) AS amostras ' +
+    'FROM ofertas WHERE produto_id = ? GROUP BY dia ORDER BY dia DESC LIMIT ?'
+  ).all(produtoId, dias || 90).reverse();
+}
+
+function detalheProduto(userId, id) {
+  const produto = db.prepare('SELECT * FROM produtos WHERE id = ? AND user_id = ?').get(id, userId);
+  if (!produto) return null;
+
+  const ultimaColeta = db.prepare(
+    'SELECT * FROM coletas WHERE produto_id = ? ORDER BY executado_em DESC, id DESC LIMIT 1'
+  ).get(id);
+
+  // ofertas da coleta mais recente de cada fonte
+  const ofertas = db.prepare(
+    'SELECT * FROM ofertas WHERE produto_id = ? ' +
+    'AND coleta_id IN (SELECT c.id FROM coletas c WHERE c.produto_id = ? AND c.executado_em = ' +
+    '  (SELECT MAX(c2.executado_em) FROM coletas c2 WHERE c2.produto_id = c.produto_id AND c2.fonte = c.fonte)) ' +
+    'ORDER BY preco_total'
+  ).all(id, id);
+
+  const historico = historicoDiario(id, 90);
+  const comparacao = analise.compararLojas(ofertas);
+  const momento = analise.avaliarMomento(comparacao.melhor ? comparacao.melhor.preco_total : 0, historico);
+
   return {
-    id: linha.id,
-    nome: linha.nome,
-    descricao: linha.descricao,
-    status: linha.status,
-    inicial: !!linha.inicial,
-    ordem: linha.ordem,
-    config,
-    criado_em: linha.criado_em,
-    atualizado_em: linha.atualizado_em,
+    produto,
+    ofertas,
+    comparacao,
+    historico,
+    momento,
+    ultima_coleta: ultimaColeta || null,
+    alvo_atingido: produto.preco_alvo > 0 && comparacao.melhor ? comparacao.melhor.preco_total <= produto.preco_alvo : false,
   };
 }
-function listarTelas(userId) {
-  return db.prepare('SELECT * FROM telas WHERE user_id = ? ORDER BY ordem, id').all(userId).map(formatarTela);
-}
-function telaPorId(userId, id) {
-  const linha = db.prepare('SELECT * FROM telas WHERE id = ? AND user_id = ?').get(id, userId);
-  return linha ? formatarTela(linha) : null;
+
+/* Executa todos os coletores configurados e grava o resultado. */
+async function coletarPrecos(userId, produto) {
+  const agora = new Date().toISOString();
+  const relatorio = [];
+
+  for (const coletor of coletores) {
+    if (!coletor.configurado()) {
+      relatorio.push({ fonte: coletor.nome, encontrados: 0, erro: 'Fonte nao configurada.' });
+      continue;
+    }
+    let ofertas = [];
+    let erro = '';
+    try {
+      ofertas = await coletor.buscar(produto.termo);
+    } catch (e) {
+      erro = e.message;
+    }
+
+    const coleta = db.prepare(
+      'INSERT INTO coletas (produto_id, user_id, fonte, executado_em, encontrados, erro) VALUES (?,?,?,?,?,?)'
+    ).run(produto.id, userId, coletor.nome, agora, ofertas.length, erro);
+
+    const inserir = db.prepare(
+      'INSERT INTO ofertas (coleta_id, produto_id, user_id, loja, titulo, preco, frete, preco_total, condicao, vendedor, reputacao, vendidos, parcelas, url, id_externo, manual, coletado_em) ' +
+      'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)'
+    );
+    ofertas.forEach((o) => {
+      inserir.run(
+        Number(coleta.lastInsertRowid), produto.id, userId, o.loja, o.titulo, o.preco, o.frete, o.preco_total,
+        o.condicao, o.vendedor, o.reputacao, o.vendidos, o.parcelas, o.url, o.id_externo, agora
+      );
+    });
+
+    relatorio.push({ fonte: coletor.nome, encontrados: ofertas.length, erro });
+  }
+
+  db.prepare('UPDATE produtos SET atualizado_em = ? WHERE id = ?').run(agora, produto.id);
+  return { executado_em: agora, relatorio };
 }
 
 /* ---------- rotas ---------- */
@@ -296,158 +283,130 @@ async function api(req, res, rota) {
     return json(res, 200, { nome: usuario.nome, email: usuario.email, admin: usuario.admin });
   }
 
-  if (rota === '/api/carteira' && metodo === 'GET') {
-    return json(res, 200, calcularCarteira(usuario.id));
+  /* ================= PRODUTOS MONITORADOS ================= */
+  if (rota === '/api/fontes' && metodo === 'GET') {
+    return json(res, 200, coletores.map((c) => ({ chave: c.chave, nome: c.nome, configurado: c.configurado() })));
   }
 
-  if (rota === '/api/ativos' && metodo === 'POST') {
-    const { ticker, nome, classe, preco_atual } = await lerCorpo(req);
-    const t = String(ticker || '').trim().toUpperCase();
-    if (!t) return json(res, 400, { erro: 'Informe o ticker do ativo.' });
-    if (!classe) return json(res, 400, { erro: 'Informe a classe do ativo.' });
-    const preco = num(preco_atual) || 0;
-    if (!Number.isFinite(preco) || preco < 0) return json(res, 400, { erro: 'Preco atual invalido.' });
-    if (db.prepare('SELECT id FROM ativos WHERE user_id = ? AND ticker = ?').get(usuario.id, t)) {
-      return json(res, 409, { erro: 'O ativo ' + t + ' ja existe na sua carteira.' });
-    }
-    db.prepare('INSERT INTO ativos (user_id, ticker, nome, classe, preco_atual, atualizado_em) VALUES (?,?,?,?,?,?)')
-      .run(usuario.id, t, String(nome || ''), String(classe), preco, new Date().toISOString());
-    return json(res, 201, { ok: true });
+  if (rota === '/api/produtos' && metodo === 'GET') {
+    return json(res, 200, listarProdutos(usuario.id));
   }
 
-  let m = rota.match(/^\/api\/ativos\/(\d+)$/);
+  if (rota === '/api/produtos' && metodo === 'POST') {
+    const { nome, termo, categoria, preco_alvo } = await lerCorpo(req);
+    const n = String(nome || '').trim();
+    if (!n) return json(res, 400, { erro: 'Informe o nome do produto.' });
+    const t = String(termo || '').trim() || n;
+    const alvo = num(preco_alvo) || 0;
+    if (!Number.isFinite(alvo) || alvo < 0) return json(res, 400, { erro: 'Preco alvo invalido.' });
+    const agora = new Date().toISOString();
+    const info = db.prepare(
+      'INSERT INTO produtos (user_id, nome, termo, categoria, preco_alvo, criado_em, atualizado_em) VALUES (?,?,?,?,?,?,?)'
+    ).run(usuario.id, n, t, String(categoria || 'Outros'), alvo, agora, agora);
+    return json(res, 201, produtoPorId(usuario.id, Number(info.lastInsertRowid)));
+  }
+
+  let m = rota.match(/^\/api\/produtos\/(\d+)$/);
   if (m) {
     const id = Number(m[1]);
-    const ativo = db.prepare('SELECT * FROM ativos WHERE id = ? AND user_id = ?').get(id, usuario.id);
-    if (!ativo) return json(res, 404, { erro: 'Ativo nao encontrado.' });
+    const produto = db.prepare('SELECT * FROM produtos WHERE id = ? AND user_id = ?').get(id, usuario.id);
+    if (!produto) return json(res, 404, { erro: 'Produto nao encontrado.' });
+
+    if (metodo === 'GET') return json(res, 200, detalheProduto(usuario.id, id));
 
     if (metodo === 'PATCH') {
-      const corpo = await lerCorpo(req);
-      const preco = corpo.preco_atual === undefined ? ativo.preco_atual : num(corpo.preco_atual);
-      if (!Number.isFinite(preco) || preco < 0) return json(res, 400, { erro: 'Preco atual invalido.' });
-      db.prepare('UPDATE ativos SET preco_atual = ?, nome = ?, classe = ?, atualizado_em = ? WHERE id = ?')
+      const c = await lerCorpo(req);
+      const alvo = c.preco_alvo === undefined ? produto.preco_alvo : num(c.preco_alvo);
+      if (!Number.isFinite(alvo) || alvo < 0) return json(res, 400, { erro: 'Preco alvo invalido.' });
+      db.prepare('UPDATE produtos SET nome = ?, termo = ?, categoria = ?, preco_alvo = ?, atualizado_em = ? WHERE id = ?')
         .run(
-          preco,
-          corpo.nome === undefined ? ativo.nome : String(corpo.nome),
-          corpo.classe === undefined ? ativo.classe : String(corpo.classe),
+          c.nome === undefined ? produto.nome : String(c.nome).trim() || produto.nome,
+          c.termo === undefined ? produto.termo : String(c.termo).trim() || produto.termo,
+          c.categoria === undefined ? produto.categoria : String(c.categoria),
+          alvo,
           new Date().toISOString(),
           id
         );
-      return json(res, 200, { ok: true });
-    }
-    if (metodo === 'DELETE') {
-      db.prepare('DELETE FROM transacoes WHERE ativo_id = ? AND user_id = ?').run(id, usuario.id);
-      db.prepare('DELETE FROM ativos WHERE id = ?').run(id);
-      return json(res, 200, { ok: true });
-    }
-  }
-
-  if (rota === '/api/transacoes' && metodo === 'GET') {
-    const linhas = db.prepare(
-      'SELECT t.*, a.ticker FROM transacoes t JOIN ativos a ON a.id = t.ativo_id ' +
-      'WHERE t.user_id = ? ORDER BY t.data DESC, t.id DESC LIMIT 300'
-    ).all(usuario.id);
-    return json(res, 200, linhas);
-  }
-
-  if (rota === '/api/transacoes' && metodo === 'POST') {
-    const { ativo_id, tipo, quantidade, preco, taxas, data, obs } = await lerCorpo(req);
-    if (['compra', 'venda', 'provento'].indexOf(tipo) === -1) return json(res, 400, { erro: 'Tipo de lancamento invalido.' });
-    const ativo = db.prepare('SELECT id FROM ativos WHERE id = ? AND user_id = ?').get(Number(ativo_id), usuario.id);
-    if (!ativo) return json(res, 400, { erro: 'Selecione um ativo da sua carteira.' });
-    const q = tipo === 'provento' ? 0 : num(quantidade);
-    const p = num(preco);
-    const tx = num(taxas) || 0;
-    if (tipo !== 'provento' && (!Number.isFinite(q) || q <= 0)) return json(res, 400, { erro: 'Quantidade invalida.' });
-    if (!Number.isFinite(p) || p < 0) return json(res, 400, { erro: tipo === 'provento' ? 'Valor recebido invalido.' : 'Preco invalido.' });
-    if (!Number.isFinite(tx) || tx < 0) return json(res, 400, { erro: 'Taxas invalidas.' });
-    const dataISO = /^\d{4}-\d{2}-\d{2}$/.test(String(data || '')) ? data : new Date().toISOString().slice(0, 10);
-    db.prepare('INSERT INTO transacoes (user_id, ativo_id, tipo, quantidade, preco, taxas, data, obs) VALUES (?,?,?,?,?,?,?,?)')
-      .run(usuario.id, ativo.id, tipo, q, p, tx, dataISO, String(obs || ''));
-    return json(res, 201, { ok: true });
-  }
-
-  /* ----- telas do laboratorio ----- */
-  if (rota === '/api/telas' && metodo === 'GET') {
-    return json(res, 200, listarTelas(usuario.id));
-  }
-
-  if (rota === '/api/telas' && metodo === 'POST') {
-    const corpo = await lerCorpo(req);
-    const nome = String(corpo.nome || '').trim() || 'Nova tela';
-    const agora = new Date().toISOString();
-    const maxOrdem = db.prepare('SELECT COALESCE(MAX(ordem), 0) AS m FROM telas WHERE user_id = ?').get(usuario.id).m;
-    let config;
-    try {
-      config = validarConfig(corpo.config === undefined ? { blocos: [] } : corpo.config);
-    } catch (e) {
-      return json(res, 400, { erro: e.message });
-    }
-    const info = db.prepare(
-      'INSERT INTO telas (user_id, nome, descricao, status, inicial, ordem, config, criado_em, atualizado_em) ' +
-      "VALUES (?,?,?,'rascunho',0,?,?,?,?)"
-    ).run(usuario.id, nome, String(corpo.descricao || ''), maxOrdem + 1, JSON.stringify(config), agora, agora);
-    return json(res, 201, telaPorId(usuario.id, Number(info.lastInsertRowid)));
-  }
-
-  m = rota.match(/^\/api\/telas\/(\d+)$/);
-  if (m) {
-    const id = Number(m[1]);
-    const tela = db.prepare('SELECT * FROM telas WHERE id = ? AND user_id = ?').get(id, usuario.id);
-    if (!tela) return json(res, 404, { erro: 'Tela nao encontrada.' });
-
-    if (metodo === 'GET') return json(res, 200, telaPorId(usuario.id, id));
-
-    if (metodo === 'PATCH') {
-      const corpo = await lerCorpo(req);
-      let config = tela.config;
-      if (corpo.config !== undefined) {
-        try {
-          config = JSON.stringify(validarConfig(corpo.config));
-        } catch (e) {
-          return json(res, 400, { erro: e.message });
-        }
-      }
-      const nome = corpo.nome === undefined ? tela.nome : String(corpo.nome).trim() || tela.nome;
-      const descricao = corpo.descricao === undefined ? tela.descricao : String(corpo.descricao);
-      const status = corpo.status === undefined ? tela.status : String(corpo.status);
-      if (['rascunho', 'oficial'].indexOf(status) === -1) return json(res, 400, { erro: 'Status invalido.' });
-      const ordem = corpo.ordem === undefined ? tela.ordem : Number(corpo.ordem) || 0;
-      let inicial = corpo.inicial === undefined ? tela.inicial : corpo.inicial ? 1 : 0;
-      if (status !== 'oficial') inicial = 0;
-
-      if (inicial) db.prepare('UPDATE telas SET inicial = 0 WHERE user_id = ?').run(usuario.id);
-      db.prepare(
-        'UPDATE telas SET nome = ?, descricao = ?, status = ?, inicial = ?, ordem = ?, config = ?, atualizado_em = ? WHERE id = ?'
-      ).run(nome, descricao, status, inicial, ordem, config, new Date().toISOString(), id);
-      return json(res, 200, telaPorId(usuario.id, id));
+      return json(res, 200, produtoPorId(usuario.id, id));
     }
 
     if (metodo === 'DELETE') {
-      db.prepare('DELETE FROM telas WHERE id = ?').run(id);
+      db.prepare('DELETE FROM ofertas WHERE produto_id = ? AND user_id = ?').run(id, usuario.id);
+      db.prepare('DELETE FROM coletas WHERE produto_id = ? AND user_id = ?').run(id, usuario.id);
+      db.prepare('DELETE FROM produtos WHERE id = ?').run(id);
       return json(res, 200, { ok: true });
     }
   }
 
-  m = rota.match(/^\/api\/telas\/(\d+)\/duplicar$/);
+  /* ----- coleta de precos ----- */
+  m = rota.match(/^\/api\/produtos\/(\d+)\/coletar$/);
   if (m && metodo === 'POST') {
-    const tela = db.prepare('SELECT * FROM telas WHERE id = ? AND user_id = ?').get(Number(m[1]), usuario.id);
-    if (!tela) return json(res, 404, { erro: 'Tela nao encontrada.' });
-    const agora = new Date().toISOString();
-    const maxOrdem = db.prepare('SELECT COALESCE(MAX(ordem), 0) AS m FROM telas WHERE user_id = ?').get(usuario.id).m;
-    const info = db.prepare(
-      'INSERT INTO telas (user_id, nome, descricao, status, inicial, ordem, config, criado_em, atualizado_em) ' +
-      "VALUES (?,?,?,'rascunho',0,?,?,?,?)"
-    ).run(usuario.id, tela.nome + ' (cópia)', tela.descricao, maxOrdem + 1, tela.config, agora, agora);
-    return json(res, 201, telaPorId(usuario.id, Number(info.lastInsertRowid)));
+    const id = Number(m[1]);
+    const produto = db.prepare('SELECT * FROM produtos WHERE id = ? AND user_id = ?').get(id, usuario.id);
+    if (!produto) return json(res, 404, { erro: 'Produto nao encontrado.' });
+    const resultado = await coletarPrecos(usuario.id, produto);
+    return json(res, 200, Object.assign(resultado, { detalhe: detalheProduto(usuario.id, id) }));
   }
 
-  m = rota.match(/^\/api\/transacoes\/(\d+)$/);
+  /* ----- oferta lancada a mao (plano B e lojas sem API) ----- */
+  m = rota.match(/^\/api\/produtos\/(\d+)\/ofertas$/);
+  if (m && metodo === 'POST') {
+    const id = Number(m[1]);
+    const produto = db.prepare('SELECT * FROM produtos WHERE id = ? AND user_id = ?').get(id, usuario.id);
+    if (!produto) return json(res, 404, { erro: 'Produto nao encontrado.' });
+
+    const c = await lerCorpo(req);
+    const loja = String(c.loja || '').trim();
+    const preco = num(c.preco);
+    const frete = num(c.frete) || 0;
+    if (!loja) return json(res, 400, { erro: 'Informe a loja.' });
+    if (!Number.isFinite(preco) || preco <= 0) return json(res, 400, { erro: 'Preco invalido.' });
+    if (!Number.isFinite(frete) || frete < 0) return json(res, 400, { erro: 'Frete invalido.' });
+
+    const agora = new Date().toISOString();
+    const coleta = db.prepare(
+      "INSERT INTO coletas (produto_id, user_id, fonte, executado_em, encontrados, erro) VALUES (?,?,?,?,1,'')"
+    ).run(id, usuario.id, loja, agora);
+
+    db.prepare(
+      'INSERT INTO ofertas (coleta_id, produto_id, user_id, loja, titulo, preco, frete, preco_total, condicao, vendedor, reputacao, vendidos, parcelas, url, id_externo, manual, coletado_em) ' +
+      "VALUES (?,?,?,?,?,?,?,?,?,'','',0,0,?,'',1,?)"
+    ).run(
+      Number(coleta.lastInsertRowid), id, usuario.id, loja, String(c.titulo || produto.nome),
+      preco, frete, preco + frete, ['novo', 'usado'].indexOf(c.condicao) === -1 ? 'novo' : c.condicao,
+      String(c.url || ''), agora
+    );
+    return json(res, 201, detalheProduto(usuario.id, id));
+  }
+
+  m = rota.match(/^\/api\/ofertas\/(\d+)$/);
   if (m && metodo === 'DELETE') {
-    const info = db.prepare('DELETE FROM transacoes WHERE id = ? AND user_id = ?').run(Number(m[1]), usuario.id);
-    if (!info.changes) return json(res, 404, { erro: 'Lancamento nao encontrado.' });
+    const info = db.prepare('DELETE FROM ofertas WHERE id = ? AND user_id = ?').run(Number(m[1]), usuario.id);
+    if (!info.changes) return json(res, 404, { erro: 'Oferta nao encontrada.' });
     return json(res, 200, { ok: true });
   }
+
+  /* ----- busca avulsa, sem salvar ----- */
+  if (rota === '/api/buscar' && metodo === 'POST') {
+    const { termo } = await lerCorpo(req);
+    const t = String(termo || '').trim();
+    if (!t) return json(res, 400, { erro: 'Informe o que voce quer buscar.' });
+    const saida = [];
+    for (const coletor of coletores) {
+      if (!coletor.configurado()) {
+        saida.push({ fonte: coletor.nome, erro: 'Fonte nao configurada.', ofertas: [] });
+        continue;
+      }
+      try {
+        saida.push({ fonte: coletor.nome, erro: '', ofertas: await coletor.buscar(t) });
+      } catch (e) {
+        saida.push({ fonte: coletor.nome, erro: e.message, ofertas: [] });
+      }
+    }
+    const todas = saida.reduce((acc, f) => acc.concat(f.ofertas), []);
+    return json(res, 200, { termo: t, fontes: saida, comparacao: analise.compararLojas(todas) });
+  }
+
 
   /* ----- area do administrador ----- */
   if (rota.indexOf('/api/admin/') === 0) {
@@ -456,9 +415,9 @@ async function api(req, res, rota) {
     if (rota === '/api/admin/usuarios' && metodo === 'GET') {
       const linhas = db.prepare(
         'SELECT u.id, u.nome, u.email, u.admin, u.criado_em, ' +
-        '  (SELECT COUNT(*) FROM ativos a WHERE a.user_id = u.id) AS ativos, ' +
-        '  (SELECT COUNT(*) FROM transacoes t WHERE t.user_id = u.id) AS lancamentos, ' +
-        '  (SELECT COUNT(*) FROM telas te WHERE te.user_id = u.id) AS telas, ' +
+        '  (SELECT COUNT(*) FROM produtos p WHERE p.user_id = u.id) AS produtos, ' +
+        '  (SELECT COUNT(*) FROM coletas c WHERE c.user_id = u.id) AS coletas, ' +
+        '  (SELECT COUNT(*) FROM ofertas o WHERE o.user_id = u.id) AS ofertas, ' +
         '  (SELECT COUNT(*) FROM sessoes s WHERE s.user_id = u.id AND s.expira_em > ?) AS sessoes ' +
         'FROM usuarios u ORDER BY u.id'
       ).all(Date.now());
@@ -471,9 +430,9 @@ async function api(req, res, rota) {
       if (id === usuario.id) return json(res, 400, { erro: 'Voce nao pode excluir a propria conta.' });
       const alvo = db.prepare('SELECT id FROM usuarios WHERE id = ?').get(id);
       if (!alvo) return json(res, 404, { erro: 'Usuario nao encontrado.' });
-      db.prepare('DELETE FROM transacoes WHERE user_id = ?').run(id);
-      db.prepare('DELETE FROM ativos WHERE user_id = ?').run(id);
-      db.prepare('DELETE FROM telas WHERE user_id = ?').run(id);
+      db.prepare('DELETE FROM ofertas WHERE user_id = ?').run(id);
+      db.prepare('DELETE FROM coletas WHERE user_id = ?').run(id);
+      db.prepare('DELETE FROM produtos WHERE user_id = ?').run(id);
       db.prepare('DELETE FROM sessoes WHERE user_id = ?').run(id);
       db.prepare('DELETE FROM usuarios WHERE id = ?').run(id);
       return json(res, 200, { ok: true });

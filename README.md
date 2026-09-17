@@ -1,108 +1,95 @@
-# Meus Investimentos
+# Comparador de Preços de Equipamentos Gamer
 
-Sistema com login e senha para acompanhar a carteira de investimentos — e um **Laboratório**
-onde cada pessoa monta as próprias telas de análise e publica quando estiver pronta.
+Sistema web que monitora o preço de equipamentos gamer em várias lojas, guarda o histórico
+e responde a duas perguntas: **em qual loja compensa comprar** e **se este é um bom momento**.
 
-Sem bibliotecas externas: só Node.js (SQLite já vem embutido no Node 22.5+).
+Projeto de TCC. Sem bibliotecas externas: só Node.js (o SQLite já vem embutido no Node 22.5+).
 
 ## Rodar no seu computador
 
 1. Dê dois cliques em **INICIAR.bat** (ou rode `node server.js`).
-2. Abra http://localhost:3000 e clique em **Criar conta**.
-3. Para encerrar, feche a janela do terminal (ou Ctrl+C).
+2. Abra http://localhost:3000 e entre com **admin / admin**, ou crie sua conta.
 
-## O que o sistema faz
+## Como funciona
 
-### Painel
-- Cadastro de ativos (ticker, classe, preço atual) e lançamentos de **compra**, **venda** e **provento**.
-- **Preço médio automático** a partir das compras (taxas incluídas). Vendas baixam a posição pelo preço médio e geram lucro/prejuízo realizado.
-- Indicadores: patrimônio, total investido, lucro/prejuízo, rentabilidade %, realizado e proventos.
-- Alocação por classe e atualização de cotação direto na tabela (digite e pressione Enter).
-
-### Laboratório de telas
-Menu **🧪 Laboratório** → *Nova tela* → adicione blocos → veja a **pré-visualização ao vivo** →
-**Publicar como tela oficial** (ela passa a aparecer no menu do topo; dá para marcar uma como
-*tela inicial*, que abre ao entrar).
-
-Blocos disponíveis:
-
-| Bloco | Para quê |
-|---|---|
-| Indicador (KPI) | Um número grande, com filtro por classe |
-| Gráfico de rosca | Participação por classe ou por ativo |
-| Gráfico de barras | Comparar ativos/classes por valor, custo, lucro ou rentabilidade |
-| Tabela da carteira | Posições com as colunas, ordem e filtro que você escolher |
-| Lista de lançamentos | Histórico filtrado por tipo e classe |
-| Metas de alocação | Meta x real, mostrando quanto falta ou sobra em cada classe |
-| Texto / anotação | Regras, lembretes, tese da carteira |
-| **Código livre** | HTML + CSS + JavaScript seus, com os dados da carteira na mão |
-
-No bloco de código livre você recebe:
-
-```js
-dados.carteira.posicoes  // cada ativo: ticker, classe, quantidade, preco_medio, valor_atual, lucro...
-dados.carteira.totais    // patrimonio, investido, lucro, rentabilidade, realizado, proventos
-dados.transacoes         // histórico de lançamentos
-dinheiro(valor)          // formata em R$
+```
+ [ Coletores ]          [ Banco ]                  [ Análise ]              [ Interface ]
+ Mercado Livre  --+                             compararLojas()  --+
+ (API oficial)     +--> coletas --> ofertas -->                     +--> "Compre na X por R$ Y"
+ Oferta manual   --+               (histórico)  avaliarMomento() --+      + gráfico + ranking
 ```
 
-Cada tela é privada: só quem criou enxerga e edita. O código livre roda dentro de um
-`iframe` com `sandbox`, isolado do resto do sistema.
+1. **Coleta** — cada fonte de preço é um módulo em `coletores/` com a mesma interface
+   (`configurado()` e `buscar(termo)`). Hoje há o Mercado Livre pela API oficial;
+   novas lojas entram sem mexer no resto do sistema.
+2. **Armazenamento** — cada execução vira uma linha em `coletas` e cada anúncio encontrado
+   vira uma linha em `ofertas`. Nada é sobrescrito: é isso que forma o histórico de preços.
+3. **Análise** (`analise.js`, isolada e testável — é o núcleo acadêmico do trabalho):
+   - `compararLojas()` pega a melhor oferta de cada loja, soma o frete e ordena por **custo ajustado**:
+     o preço final mais uma penalidade de risco (15% para produto usado, até 12% conforme a
+     reputação do vendedor). Assim o sistema não recomenda uma loja 2% mais barata com vendedor ruim
+     — e avisa na tela quando o mais barato não é o recomendado.
+   - `avaliarMomento()` compara o preço de hoje com a **mediana** do histórico do próprio produto
+     e classifica em: melhor preço já registrado / bom momento / na média / vale esperar.
+4. **Interface** — lista de produtos monitorados, tela de comparação com veredito, ranking
+   por loja e gráfico do menor preço por dia.
+
+## Fontes de preço
+
+| Fonte | Como entra | Situação |
+|---|---|---|
+| Mercado Livre | API oficial (`/sites/MLB/search`) | Precisa de `ML_CLIENT_ID` e `ML_CLIENT_SECRET` |
+| Kabum, Pichau, Terabyte, Amazon... | Não têm API pública | Lançamento manual de oferta, ou coletor próprio a ser escrito |
+
+### Credenciais do Mercado Livre
+1. Acesse https://developers.mercadolivre.com.br → *Suas aplicações* → **Criar aplicação**.
+2. Anote o **Client ID** e o **Client Secret**.
+3. Local: `ML_CLIENT_ID=... ML_CLIENT_SECRET=... node server.js`
+4. Render: *Environment → Add Environment Variable* → `ML_CLIENT_ID` e `ML_CLIENT_SECRET`.
+
+Sem as credenciais o sistema continua funcionando: a coleta avisa "fonte não configurada"
+e você registra as ofertas manualmente — útil como plano B na apresentação.
+
+## Telas
+
+- **Produtos** — lista do que você monitora, com melhor loja, menor preço, preço-alvo e última coleta.
+  Tem também uma **busca rápida**, que consulta as lojas sem salvar nada (bom para testar o termo).
+- **Detalhe do produto** — veredito (onde comprar + se o momento é bom), ranking por loja,
+  gráfico do histórico, todas as ofertas da última coleta e o formulário de oferta manual.
+- **⚙️ Admin** — só para o administrador: contas, quantos produtos/coletas/ofertas cada uma tem,
+  redefinição de senha e exclusão de conta.
 
 ## Publicar na web (Render)
 
-O projeto já vem com `render.yaml`, `package.json` e suporte a disco persistente.
+Já está publicado em **https://meus-investimentos-x7dn.onrender.com** (o nome do serviço vem do
+projeto anterior; para trocar, crie um serviço novo com outro nome apontando para este repositório).
 
-1. Suba o código para um repositório no GitHub (o `git` local já está iniciado com o primeiro commit):
-   ```
-   git remote add origin https://github.com/SEU-USUARIO/meus-investimentos.git
-   git push -u origin main
-   ```
-2. No Render: **New → Blueprint**, aponte para o repositório. Ele lê o `render.yaml` sozinho.
-3. Confirme e aguarde o deploy. A URL fica parecida com `https://meus-investimentos.onrender.com`.
-4. Cada amigo entra nessa URL e cria a própria conta.
+O `render.yaml` está no plano **free**, então:
+- **os dados são apagados a cada deploy ou reinício** — inclusive o histórico de preços;
+- o serviço **dorme após 15 minutos** sem acesso e demora ~50s para acordar.
 
-### Sobre planos e dados
-O `render.yaml` está no plano **free**, para testar com os amigos sem custo. Nele:
+Para o TCC o histórico é o coração do trabalho: antes de começar a coletar dados de verdade,
+troque para `plan: starter` e descomente o bloco `disk` + `DB_PATH` no `render.yaml`.
 
-- **os dados são apagados a cada deploy ou reinício** (contas, carteiras e telas) — o free não tem disco persistente;
-- o serviço **dorme após 15 minutos** sem acesso e leva ~30s para acordar no primeiro acesso.
+## Segurança
 
-Quando quiser guardar os dados de verdade, troque no `render.yaml` para `plan: starter`
-(~US$ 7/mês) e descomente o bloco `disk` + a variável `DB_PATH` que já estão no arquivo:
-o banco passa a viver em `/var/data/investimentos.db` e sobrevive aos deploys.
-
-### Conta de administrador
-O sistema cria sozinho, no primeiro boot, a conta de administrador:
-
-- **login:** `admin`  **senha:** `admin`
-
-O admin ganha o menu **⚙️ Admin**, que lista todas as contas (com quantos ativos, lançamentos,
-telas e se há sessão ativa), permite **definir nova senha** para quem esqueceu e **excluir contas**
-com todos os dados. Ele não vê a carteira dos outros pela interface, mas tem poder sobre as contas.
-
-> **Troque essa senha antes de divulgar o site.** No Render: *Environment → Add Environment Variable*
-> → `ADMIN_SENHA` = uma senha forte → *Save* (o serviço reinicia e a senha do admin é atualizada).
-> Para mudar também o nome do login, use `ADMIN_LOGIN`.
-
-### Segurança em produção
 - Senhas com `scrypt` + salt aleatório; nunca em texto puro.
-- Cookie de sessão `HttpOnly`, `SameSite=Lax` e `Secure` quando `NODE_ENV=production`.
-- Máximo de 8 tentativas de login erradas por e-mail/IP a cada 15 minutos.
-- Cada usuário só acessa os próprios ativos, lançamentos e telas (verificado em toda rota).
-- Não há recuperação de senha por e-mail: se alguém esquecer, é preciso criar outra conta.
+- Cookie de sessão `HttpOnly`, `SameSite=Lax` e `Secure` em produção.
+- Máximo de 8 tentativas de login erradas por usuário/IP a cada 15 minutos.
+- Cada usuário só acessa os próprios produtos, coletas e ofertas.
+- **Troque a senha do admin** definindo `ADMIN_SENHA` antes de divulgar o endereço.
 
 ## Estrutura
 
 | Arquivo | Função |
 |---|---|
-| `server.js` | Servidor HTTP, autenticação e API |
-| `db.js` | Banco SQLite e tabelas |
-| `public/index.html` | Telas de login, painel, telas publicadas e laboratório |
-| `public/app.js` | Painel, navegação e chamadas à API |
-| `public/blocos.js` | Motor que transforma blocos em gráficos e tabelas |
-| `public/lab.js` | Editor do laboratório |
+| `server.js` | Servidor HTTP, autenticação, rotas da API e orquestração da coleta |
+| `db.js` | Banco SQLite e tabelas (`usuarios`, `sessoes`, `produtos`, `coletas`, `ofertas`) |
+| `analise.js` | Regra de decisão: comparação entre lojas e avaliação do momento de compra |
+| `coletores/mercadolivre.js` | Coletor da API oficial do Mercado Livre |
+| `public/index.html` | Telas de login, produtos, comparação e administração |
+| `public/app.js` | Lógica da interface, gráfico de histórico e chamadas à API |
 | `public/estilo.css` | Visual |
-| `render.yaml` | Configuração de deploy no Render |
+| `render.yaml` | Configuração de deploy |
 
-Ferramenta de organização e acompanhamento pessoal — não é recomendação de investimento.
+Os preços são coletados das lojas e mudam a qualquer momento: confirme no site da loja antes de comprar.

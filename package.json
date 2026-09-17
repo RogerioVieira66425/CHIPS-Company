@@ -1,7 +1,7 @@
 {
-  "name": "meus-investimentos",
-  "version": "1.0.0",
-  "description": "Sistema de acompanhamento de investimentos com login e laboratorio de telas",
+  "name": "comparador-precos-gamer",
+  "version": "2.0.0",
+  "description": "TCC - sistema de apoio a decisao de compra: compara precos de equipamentos gamer em varias lojas",
   "private": true,
   "main": "server.js",
   "scripts": {
