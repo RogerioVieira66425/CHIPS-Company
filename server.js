@@ -488,5 +488,5 @@ const servidor = http.createServer((req, res) => {
 garantirAdmin();
 
 servidor.listen(PORTA, ENDERECO, () => {
-  console.log('\n  Meus Investimentos rodando em  http://localhost:' + PORTA + '\n  (Ctrl+C para parar)\n');
+  console.log('\n  Comparador de Precos rodando em  http://localhost:' + PORTA + '\n  (Ctrl+C para parar)\n');
 });

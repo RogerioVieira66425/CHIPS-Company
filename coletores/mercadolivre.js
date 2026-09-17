@@ -4,8 +4,8 @@
    e das variaveis de ambiente ML_CLIENT_ID e ML_CLIENT_SECRET. */
 
 const SITE = process.env.ML_SITE || 'MLB'; // MLB = Brasil
-const CLIENT_ID = process.env.ML_CLIENT_ID || '';
-const CLIENT_SECRET = process.env.ML_CLIENT_SECRET || '';
+const CLIENT_ID = String(process.env.ML_CLIENT_ID || '').trim().replace(/^["']|["']$/g, '');
+const CLIENT_SECRET = String(process.env.ML_CLIENT_SECRET || '').trim().replace(/^["']|["']$/g, '');
 const LIMITE = Number(process.env.ML_LIMITE) || 20;
 
 const NOME = 'Mercado Livre';
@@ -34,7 +34,10 @@ async function obterToken() {
 
   if (!r.ok || !dados.access_token) {
     const detalhe = dados.message || dados.error || ('HTTP ' + r.status);
-    throw new Error('Nao foi possivel autenticar no Mercado Livre: ' + detalhe);
+    throw new Error(
+      'Nao foi possivel autenticar no Mercado Livre: ' + detalhe +
+      ' (Client ID usado: ' + CLIENT_ID.slice(0, 6) + '...' + CLIENT_ID.slice(-4) + ', tamanho do secret: ' + CLIENT_SECRET.length + ' caracteres)'
+    );
   }
 
   cache = {
