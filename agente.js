@@ -84,6 +84,27 @@ async function principal() {
 
   // 2) o termo de busca e o que identifica o produto entre servidores diferentes
   const termos = [...new Set(destinos.flatMap((d) => d.produtos.map((p) => p.termo)))];
+
+  // 2b) espelha: o que existe em um destino passa a existir nos outros
+  const modelo = new Map();
+  destinos.forEach((d) => d.produtos.forEach((p) => { if (!modelo.has(p.termo)) modelo.set(p.termo, p); }));
+
+  for (const destino of destinos) {
+    const faltando = termos.filter((t) => !destino.produtos.some((p) => p.termo === t));
+    for (const termo of faltando) {
+      const base = modelo.get(termo);
+      try {
+        const r = await pedir(destino.servidor, '/api/ingestao/produtos', {
+          method: 'POST',
+          body: { nome: base.nome, termo: base.termo },
+        });
+        destino.produtos.push({ id: r.produto.id, nome: r.produto.nome, termo: r.produto.termo });
+        if (r.criado) console.log('  ' + apelido(destino.servidor) + ': produto "' + base.nome + '" criado');
+      } catch (e) {
+        console.log('  ' + apelido(destino.servidor) + ': nao consegui criar "' + base.nome + '" (' + e.message + ')');
+      }
+    }
+  }
   if (!termos.length) {
     console.log('\n  Nenhum produto monitorado. Cadastre um produto no site e rode de novo.\n');
     return;

@@ -282,6 +282,30 @@ async function api(req, res, rota) {
       return json(res, 200, linhas);
     }
 
+    /* cria (ou reaproveita) um produto no dono indicado, para espelhar o que
+       existe no servidor local. Sem dono informado, usa o administrador. */
+    if (rota === '/api/ingestao/produtos' && metodo === 'POST') {
+      const c = await lerCorpo(req);
+      const nome = String(c.nome || '').trim();
+      const termo = String(c.termo || '').trim() || nome;
+      if (!nome) return json(res, 400, { erro: 'Informe o nome do produto.' });
+
+      let dono = null;
+      if (c.email) dono = db.prepare('SELECT id FROM usuarios WHERE email = ?').get(String(c.email).toLowerCase().trim());
+      if (!dono) dono = db.prepare('SELECT id FROM usuarios WHERE admin = 1 ORDER BY id LIMIT 1').get();
+      if (!dono) return json(res, 400, { erro: 'Nenhum usuario para receber o produto.' });
+
+      const existente = db.prepare('SELECT * FROM produtos WHERE user_id = ? AND termo = ?').get(dono.id, termo);
+      if (existente) return json(res, 200, { criado: false, produto: existente });
+
+      const agora = new Date().toISOString();
+      const info = db.prepare(
+        'INSERT INTO produtos (user_id, nome, termo, categoria, preco_alvo, criado_em, atualizado_em) VALUES (?,?,?,?,?,?,?)'
+      ).run(dono.id, nome, termo, String(c.categoria || 'Outros'), num(c.preco_alvo) || 0, agora, agora);
+      const produto = db.prepare('SELECT * FROM produtos WHERE id = ?').get(Number(info.lastInsertRowid));
+      return json(res, 201, { criado: true, produto });
+    }
+
     if (rota === '/api/ingestao' && metodo === 'POST') {
       const corpo = await lerCorpo(req);
       const produto = db.prepare('SELECT * FROM produtos WHERE id = ?').get(Number(corpo.produto_id));
