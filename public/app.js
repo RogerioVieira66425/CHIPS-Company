@@ -99,6 +99,7 @@ const App = (function () {
     fontes = await pedir('/api/fontes').catch(() => []);
     await carregarProdutos();
     mostrar({ tipo: 'produtos' });
+    verificarFontes();
   }
 
   /* ---------- navegacao ---------- */
@@ -122,6 +123,23 @@ const App = (function () {
     if (vista.tipo === 'admin') carregarAdmin().catch((e) => toast(e.message, true));
     renderMenu();
     window.scrollTo({ top: 0 });
+  }
+
+  /* Se o servidor nao alcanca nenhuma loja (bloqueio de IP), avisa e explica o agente local. */
+  async function verificarFontes() {
+    try {
+      const d = await pedir('/api/diagnostico');
+      const alcancaveis = d.fontes.filter((f) => f.ok);
+      const aviso = $('#aviso-coleta');
+      if (alcancaveis.length) { aviso.classList.add('oculto'); return; }
+      aviso.classList.remove('oculto');
+      aviso.innerHTML = '';
+      aviso.appendChild(el('b', '', 'As lojas bloqueiam consultas vindas deste servidor.'));
+      aviso.appendChild(el('p', '', 'O botao “Atualizar precos” vai falhar: KaBuM! e Mercado Livre recusam requisicoes de servidores de nuvem no exterior. Rode o agente coletor no seu computador (rede brasileira) para alimentar o historico:'));
+      const cmd = el('code', 'comando', 'npm run coletar');
+      aviso.appendChild(cmd);
+      aviso.appendChild(el('small', '', 'Detalhes em /api/diagnostico e no README do projeto.'));
+    } catch (e) { /* diagnostico e opcional */ }
   }
 
   /* ---------- lista de produtos ---------- */

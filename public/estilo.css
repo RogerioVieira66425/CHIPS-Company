@@ -286,3 +286,9 @@ code { background: #0f141c; padding: 1px 5px; border-radius: 4px; }
 
 /* gráfico de histórico */
 .grafico { width: 100%; height: auto; }
+
+.aviso-fontes { border-left: 4px solid var(--vermelho); display: grid; gap: 6px; }
+.aviso-fontes b { font-size: 15px; }
+.aviso-fontes p { margin: 0; font-size: 13px; color: var(--texto-fraco); }
+.aviso-fontes .comando { background: #0b0f16; border: 1px solid var(--borda); padding: 8px 12px; border-radius: 8px; font-family: Consolas, monospace; justify-self: start; }
+.aviso-fontes small { color: var(--texto-fraco); font-size: 11px; }
