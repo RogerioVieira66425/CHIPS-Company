@@ -42,8 +42,29 @@ function normalizar(item) {
 
 async function buscar(termo) {
   const url = BASE + '?query=' + encodeURIComponent(termo) + '&limit=' + LIMITE;
-  const r = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'application/json', 'Accept-Language': 'pt-BR,pt;q=0.9' } });
+  const r = await fetch(url, {
+    headers: {
+      'User-Agent': UA,
+      Accept: 'application/json, text/plain, */*',
+      'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+      Origin: 'https://www.kabum.com.br',
+      Referer: 'https://www.kabum.com.br/busca/' + encodeURIComponent(termo),
+      'sec-ch-ua': '\"Chromium\";v=\"124\", \"Google Chrome\";v=\"124\"',
+      'sec-ch-ua-mobile': '?0',
+      'sec-ch-ua-platform': '\"Windows\"',
+      'Sec-Fetch-Dest': 'empty',
+      'Sec-Fetch-Mode': 'cors',
+      'Sec-Fetch-Site': 'same-site',
+    },
+  });
 
+  if (r.status === 403) {
+    throw new Error(
+      'A KaBuM! recusou a consulta (403). A API funciona a partir de uma rede brasileira, mas ' +
+      'costuma bloquear servidores de nuvem no exterior. Rode o coletor local (npm run coletar) ' +
+      'ou lance a oferta manualmente.'
+    );
+  }
   if (!r.ok) throw new Error('KaBuM! respondeu HTTP ' + r.status + '.');
 
   const dados = await r.json().catch(() => ({}));
