@@ -532,12 +532,15 @@ const App = (function () {
       tr.appendChild(celula(o.loja, 'ticker'));
 
       const tdTitulo = el('td', 'titulo-oferta');
+      const textoCurto = (o.titulo || '').length > 62 ? o.titulo.slice(0, 62).trim() + '…' : (o.titulo || 'ver anúncio');
       if (o.url) {
-        const a = el('a', 'link-externo', o.titulo || 'ver anúncio');
+        const a = el('a', 'link-externo', textoCurto);
         a.href = o.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+        a.title = o.titulo || '';
         tdTitulo.appendChild(a);
       } else {
-        tdTitulo.textContent = o.titulo || '—';
+        tdTitulo.textContent = textoCurto;
+        tdTitulo.title = o.titulo || '';
       }
       tr.appendChild(tdTitulo);
 

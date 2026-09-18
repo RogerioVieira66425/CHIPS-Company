@@ -257,7 +257,7 @@ code { background: #0f141c; padding: 1px 5px; border-radius: 4px; }
 .termo { display: block; color: var(--texto-fraco); font-weight: 400; font-size: 11px; }
 .link-externo { color: var(--destaque); text-decoration: none; }
 .link-externo:hover { text-decoration: underline; }
-.titulo-oferta { max-width: 340px; white-space: normal; }
+.titulo-oferta { max-width: 330px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .melhor-linha { background: #13251c; }
 
 /* veredito */
