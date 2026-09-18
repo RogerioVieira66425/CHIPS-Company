@@ -106,8 +106,8 @@ input:focus, select:focus { outline: 2px solid var(--destaque); outline-offset: 
 .legenda span.valor { margin-left: auto; color: var(--texto-fraco); font-variant-numeric: tabular-nums; }
 
 /* ---------- tabelas ---------- */
-.rolagem { overflow-x: auto; }
-.rolagem.alta { max-height: 320px; overflow-y: auto; }
+.rolagem { overflow-x: auto; }  /* mantido so para telas estreitas */
+.rolagem.alta { max-height: none; overflow-y: visible; }
 .tabela { width: 100%; border-collapse: collapse; font-size: 13px; }
 .tabela th {
   text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .4px;
@@ -189,7 +189,7 @@ code { background: #0f141c; padding: 1px 5px; border-radius: 4px; }
 
 /* ================= LABORATÓRIO ================= */
 .lab-layout { display: grid; grid-template-columns: 290px 1fr; gap: 18px; align-items: start; }
-.lab-lateral { position: sticky; top: 76px; max-height: calc(100vh - 100px); overflow-y: auto; }
+
 .lab-lateral h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .4px; color: var(--texto-fraco); }
 .lab-lateral h2.espaco { margin-top: 22px; }
 .lab-principal { display: grid; gap: 18px; }
@@ -296,3 +296,6 @@ code { background: #0f141c; padding: 1px 5px; border-radius: 4px; }
 .comprar { display: inline-block; margin-top: 12px; text-decoration: none; }
 .anuncio-titulo { margin: 10px 0 0; font-size: 13px; color: var(--texto-fraco); max-width: 420px; }
 .barra-valor .link-externo { font-variant-numeric: tabular-nums; }
+
+.largo { width: 100%; margin-top: 10px; }
+.tabela { table-layout: auto; }

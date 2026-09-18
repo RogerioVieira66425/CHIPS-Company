@@ -131,6 +131,12 @@ const num = (v) => {
 };
 
 /* ---------- produtos, coleta e historico ---------- */
+/* A vitrine publica mostra os produtos do administrador: e o catalogo do site. */
+function donoDaVitrine() {
+  const admin = db.prepare('SELECT id FROM usuarios WHERE admin = 1 ORDER BY id LIMIT 1').get();
+  return admin ? admin.id : 0;
+}
+
 function listarProdutos(userId) {
   const produtos = db.prepare('SELECT * FROM produtos WHERE user_id = ? ORDER BY nome').all(userId);
   return produtos.map((p) => {
@@ -386,6 +392,23 @@ async function api(req, res, rota) {
     return json(res, 200, { ok: true });
   }
 
+  /* ---------- leitura publica (o site e aberto; login so para administrar) ---------- */
+  if (rota === '/api/fontes' && metodo === 'GET') {
+    return json(res, 200, coletores.map((c) => ({ chave: c.chave, nome: c.nome, configurado: c.configurado() })));
+  }
+
+  if (rota === '/api/produtos' && metodo === 'GET') {
+    return json(res, 200, listarProdutos(usuario ? usuario.id : donoDaVitrine()));
+  }
+
+  const mPublico = rota.match(/^\/api\/produtos\/(\d+)$/);
+  if (mPublico && metodo === 'GET') {
+    const id = Number(mPublico[1]);
+    const detalhe = detalheProduto(usuario ? usuario.id : donoDaVitrine(), id);
+    if (!detalhe) return json(res, 404, { erro: 'Produto nao encontrado.' });
+    return json(res, 200, detalhe);
+  }
+
   if (!usuario) return json(res, 401, { erro: 'Nao autenticado.' });
 
   if (rota === '/api/eu' && metodo === 'GET') {
@@ -393,14 +416,6 @@ async function api(req, res, rota) {
   }
 
   /* ================= PRODUTOS MONITORADOS ================= */
-  if (rota === '/api/fontes' && metodo === 'GET') {
-    return json(res, 200, coletores.map((c) => ({ chave: c.chave, nome: c.nome, configurado: c.configurado() })));
-  }
-
-  if (rota === '/api/produtos' && metodo === 'GET') {
-    return json(res, 200, listarProdutos(usuario.id));
-  }
-
   if (rota === '/api/produtos' && metodo === 'POST') {
     const { nome, termo, categoria, preco_alvo } = await lerCorpo(req);
     const n = String(nome || '').trim();
@@ -420,8 +435,6 @@ async function api(req, res, rota) {
     const id = Number(m[1]);
     const produto = db.prepare('SELECT * FROM produtos WHERE id = ? AND user_id = ?').get(id, usuario.id);
     if (!produto) return json(res, 404, { erro: 'Produto nao encontrado.' });
-
-    if (metodo === 'GET') return json(res, 200, detalheProduto(usuario.id, id));
 
     if (metodo === 'PATCH') {
       const c = await lerCorpo(req);

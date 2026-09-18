@@ -8,7 +8,10 @@ Projeto de TCC. Sem bibliotecas externas: só Node.js (o SQLite já vem embutido
 ## Rodar no seu computador
 
 1. Dê dois cliques em **INICIAR.bat** (ou rode `node server.js`).
-2. Abra http://localhost:3000 e entre com **admin / admin**, ou crie sua conta.
+2. Abra http://localhost:3000 — **o site é público**: qualquer visitante vê os produtos,
+   a comparação entre lojas e o link de compra, sem precisar de conta.
+3. Para administrar (cadastrar produtos, coletar, excluir), clique em **Entrar** e use
+   `admin` com a senha definida em `ADMIN_SENHA` (padrão `admin` no ambiente local).
 
 ## Como funciona
 

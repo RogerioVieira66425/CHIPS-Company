@@ -16,6 +16,7 @@ const App = (function () {
   let fontes = [];
   let detalhe = null;
   let usuarioAtual = null;
+  let ehAdmin = false;
   let vistaAtual = { tipo: 'produtos', id: null };
 
   /* ---------- utilitarios ---------- */
@@ -52,15 +53,6 @@ const App = (function () {
   const celula = (texto, classe) => el('td', classe, texto);
 
   /* ---------- login ---------- */
-  document.querySelectorAll('.aba').forEach((aba) => {
-    aba.addEventListener('click', () => {
-      document.querySelectorAll('.aba').forEach((a) => a.classList.toggle('ativa', a === aba));
-      $('#form-entrar').classList.toggle('oculto', aba.dataset.aba !== 'entrar');
-      $('#form-criar').classList.toggle('oculto', aba.dataset.aba !== 'criar');
-      $('#aviso-login').classList.add('oculto');
-    });
-  });
-
   function erroLogin(msg) {
     const e = $('#aviso-login');
     e.textContent = msg;
@@ -70,19 +62,20 @@ const App = (function () {
   $('#form-entrar').addEventListener('submit', async (e) => {
     e.preventDefault();
     try {
-      const u = await pedir('/api/login', { method: 'POST', body: dadosForm(e.target) });
-      e.target.reset();
-      abrirApp(u);
+      await pedir('/api/login', { method: 'POST', body: dadosForm(e.target) });
+      location.reload();
     } catch (err) { erroLogin(err.message); }
   });
 
-  $('#form-criar').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    try {
-      const u = await pedir('/api/registrar', { method: 'POST', body: dadosForm(e.target) });
-      e.target.reset();
-      abrirApp(u);
-    } catch (err) { erroLogin(err.message); }
+  $('#btn-entrar').addEventListener('click', () => {
+    $('#tela-login').classList.remove('oculto');
+    $('#app').classList.add('oculto');
+  });
+
+  $('#btn-voltar-site').addEventListener('click', () => {
+    $('#tela-login').classList.add('oculto');
+    $('#app').classList.remove('oculto');
+    $('#aviso-login').classList.add('oculto');
   });
 
   $('#btn-sair').addEventListener('click', async () => {
@@ -92,14 +85,22 @@ const App = (function () {
 
   async function abrirApp(usuario) {
     usuarioAtual = usuario;
+    ehAdmin = Boolean(usuario && usuario.admin);
+
     $('#tela-login').classList.add('oculto');
     $('#app').classList.remove('oculto');
-    $('#ola').textContent = usuario.nome + (usuario.admin ? ' (admin)' : '');
-    $('#ola').title = usuario.email;
+
+    // visitante ve o catalogo; administrador ve tambem as ferramentas
+    document.querySelectorAll('.so-admin').forEach((e) => e.classList.toggle('oculto', !ehAdmin));
+    $('#btn-entrar').classList.toggle('oculto', Boolean(usuario));
+    $('#btn-sair').classList.toggle('oculto', !usuario);
+    $('#ola').textContent = usuario ? usuario.nome + (usuario.admin ? ' (admin)' : '') : '';
+    if (usuario) $('#ola').title = usuario.email;
+
     fontes = await pedir('/api/fontes').catch(() => []);
     await carregarProdutos();
     mostrar({ tipo: 'produtos' });
-    verificarFontes();
+    if (ehAdmin) verificarFontes();
   }
 
   /* ---------- navegacao ---------- */
@@ -112,7 +113,7 @@ const App = (function () {
       return b;
     };
     menu.appendChild(botao('Produtos', { tipo: 'produtos' }));
-    if (usuarioAtual && usuarioAtual.admin) menu.appendChild(botao('⚙️ Admin', { tipo: 'admin' }));
+    if (ehAdmin) menu.appendChild(botao('⚙️ Admin', { tipo: 'admin' }));
   }
 
   function mostrar(vista) {
@@ -153,15 +154,19 @@ const App = (function () {
     $('#kpi-produtos').textContent = produtos.length;
     $('#kpi-ofertas').textContent = produtos.reduce((t, p) => t + p.ofertas, 0);
 
-    const configuradas = fontes.filter((f) => f.configurado);
-    $('#kpi-fontes').textContent = configuradas.length + ' de ' + fontes.length;
-    $('#kpi-fontes-sub').textContent = fontes.length
-      ? fontes.map((f) => f.nome + (f.configurado ? ' ✓' : ' (sem credenciais)')).join(' · ')
-      : 'nenhuma fonte registrada';
+    const lojas = [...new Set(produtos.map((p) => p.melhor_loja).filter(Boolean))];
+    $('#kpi-fontes').textContent = lojas.length || fontes.length;
+    $('#kpi-fontes-sub').textContent = lojas.length ? lojas.join(' · ') : fontes.map((f) => f.nome).join(' · ');
 
-    // economia potencial = soma das diferenças entre a melhor e a pior loja de cada produto
-    const economia = produtos.reduce((t, p) => t + (p.economia || 0), 0);
-    $('#kpi-economia').textContent = dinheiro(economia);
+    const comPreco = produtos.filter((p) => p.menor_preco > 0);
+    if (comPreco.length) {
+      const barato = comPreco.reduce((a, b) => (a.menor_preco <= b.menor_preco ? a : b));
+      $('#kpi-menor').textContent = dinheiro(barato.menor_preco);
+      $('#kpi-menor-sub').textContent = barato.nome + ' · ' + barato.melhor_loja;
+    } else {
+      $('#kpi-menor').textContent = '—';
+      $('#kpi-menor-sub').textContent = 'aguardando a primeira coleta';
+    }
   }
 
   function renderProdutos() {
@@ -203,6 +208,8 @@ const App = (function () {
       tr.appendChild(celula(dataHora(p.ultima_coleta)));
 
       const tdAcoes = el('td', 'dir');
+      if (!ehAdmin) { tr.appendChild(tdAcoes); tb.appendChild(tr); return; }
+
       const btnColeta = el('button', 'mini', '🔄');
       btnColeta.title = 'Atualizar preços deste produto';
       btnColeta.addEventListener('click', () => coletar(p.id, btnColeta));
@@ -551,7 +558,7 @@ const App = (function () {
       tr.appendChild(celula(dinheiro(o.preco_total), 'dir ' + (i === 0 ? 'positivo' : '')));
 
       const tdAcao = el('td', 'dir');
-      if (o.manual) {
+      if (o.manual && ehAdmin) {
         const btn = el('button', 'mini', '🗑');
         btn.title = 'Excluir oferta manual';
         btn.addEventListener('click', async () => {
@@ -637,10 +644,16 @@ const App = (function () {
 
   /* ---------- inicio ---------- */
   (async function iniciar() {
+    let usuario = null;
     try {
-      await abrirApp(await pedir('/api/eu'));
+      usuario = await pedir('/api/eu');
     } catch {
-      $('#tela-login').classList.remove('oculto');
+      usuario = null; // visitante: o site e publico
+    }
+    try {
+      await abrirApp(usuario);
+    } catch (e) {
+      toast('Nao consegui carregar os produtos: ' + e.message, true);
     }
   })();
 

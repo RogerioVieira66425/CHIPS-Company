@@ -9,16 +9,11 @@
 </head>
 <body>
 
-<!-- ============ LOGIN ============ -->
+<!-- ============ LOGIN (só para administrar) ============ -->
 <section id="tela-login" class="tela-login oculto">
   <div class="cartao-login">
     <div class="marca"><span>🎮</span> Comparador de Preços</div>
-    <p class="sub">Monitore equipamentos gamer em várias lojas e descubra onde compensa comprar.</p>
-
-    <div class="abas">
-      <button class="aba ativa" data-aba="entrar">Entrar</button>
-      <button class="aba" data-aba="criar">Criar conta</button>
-    </div>
+    <p class="sub">Área de administração. Para só consultar preços, o site é aberto.</p>
 
     <form id="form-entrar" class="form">
       <label>E-mail ou usuário<input type="text" name="email" autocomplete="username" required></label>
@@ -26,48 +21,58 @@
       <button class="botao primario" type="submit">Entrar</button>
     </form>
 
-    <form id="form-criar" class="form oculto">
-      <label>Nome<input type="text" name="nome" autocomplete="name" required></label>
-      <label>E-mail<input type="email" name="email" autocomplete="username" required></label>
-      <label>Senha <small>(mínimo 8 caracteres)</small><input type="password" name="senha" autocomplete="new-password" minlength="8" required></label>
-      <button class="botao primario" type="submit">Criar conta</button>
-    </form>
-
     <p id="aviso-login" class="aviso oculto"></p>
+    <button id="btn-voltar-site" class="botao fantasma largo">← Voltar para o site</button>
   </div>
 </section>
 
-<!-- ============ APLICAÇÃO ============ -->
+<!-- ============ SITE ============ -->
 <div id="app" class="oculto">
   <header class="topo">
     <div class="marca pequena"><span>🎮</span> Comparador de Preços</div>
     <nav id="menu" class="menu"></nav>
     <div class="topo-dir">
       <span id="ola" class="ola"></span>
-      <button id="btn-sair" class="botao fantasma">Sair</button>
+      <button id="btn-entrar" class="botao fantasma oculto">Entrar</button>
+      <button id="btn-sair" class="botao fantasma oculto">Sair</button>
     </div>
   </header>
 
-  <!-- ---------- MONITORADOS ---------- -->
+  <!-- ---------- PRODUTOS ---------- -->
   <main id="vista-produtos" class="conteudo">
     <div class="cabecalho-tela">
       <div>
-        <h1>Produtos monitorados</h1>
-        <p class="sub">Cada produto guarda o histórico de preços de todas as lojas consultadas.</p>
+        <h1>Comparador de preços</h1>
+        <p class="sub">Equipamentos gamer monitorados em várias lojas: veja onde está mais barato e se vale comprar agora.</p>
       </div>
-      <button id="btn-coletar-todos" class="botao primario">Atualizar preços de todos</button>
+      <button id="btn-coletar-todos" class="botao primario so-admin">Atualizar preços de todos</button>
     </div>
 
-    <section id="aviso-coleta" class="painel aviso-fontes oculto"></section>
+    <section id="aviso-coleta" class="painel aviso-fontes oculto so-admin"></section>
 
     <section class="kpis">
       <article class="kpi"><h3>Produtos</h3><strong id="kpi-produtos">0</strong></article>
       <article class="kpi"><h3>Ofertas na última coleta</h3><strong id="kpi-ofertas">0</strong></article>
-      <article class="kpi"><h3>Economia potencial</h3><strong id="kpi-economia">R$ 0,00</strong><span class="variacao neutro">somando a melhor x a pior loja</span></article>
-      <article class="kpi"><h3>Fontes de preço</h3><strong id="kpi-fontes">—</strong><span id="kpi-fontes-sub" class="variacao neutro"></span></article>
+      <article class="kpi"><h3>Menor preço do catálogo</h3><strong id="kpi-menor">R$ 0,00</strong><span id="kpi-menor-sub" class="variacao neutro"></span></article>
+      <article class="kpi"><h3>Lojas consultadas</h3><strong id="kpi-fontes">—</strong><span id="kpi-fontes-sub" class="variacao neutro"></span></article>
     </section>
 
-    <div class="grade">
+    <section class="painel">
+      <h2>Produtos monitorados</h2>
+      <table class="tabela">
+        <thead>
+          <tr>
+            <th>Produto</th><th>Categoria</th><th>Melhor loja</th>
+            <th class="dir">Menor preço</th><th class="dir">Alvo</th>
+            <th class="dir">Ofertas</th><th>Atualizado</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody-produtos"></tbody>
+      </table>
+      <p id="vazio-produtos" class="vazio">Nenhum produto monitorado ainda.</p>
+    </section>
+
+    <div class="grade so-admin">
       <section class="painel">
         <h2>Adicionar produto</h2>
         <form id="form-produto" class="form compacto">
@@ -107,23 +112,6 @@
         <div id="resultado-busca"></div>
       </section>
     </div>
-
-    <section class="painel">
-      <h2>Meus produtos</h2>
-      <div class="rolagem">
-        <table class="tabela">
-          <thead>
-            <tr>
-              <th>Produto</th><th>Categoria</th><th>Melhor loja</th>
-              <th class="dir">Menor preço</th><th class="dir">Alvo</th>
-              <th class="dir">Ofertas</th><th>Última coleta</th><th></th>
-            </tr>
-          </thead>
-          <tbody id="tbody-produtos"></tbody>
-        </table>
-      </div>
-      <p id="vazio-produtos" class="vazio">Nenhum produto monitorado ainda. Cadastre o primeiro acima.</p>
-    </section>
   </main>
 
   <!-- ---------- DETALHE / COMPARAÇÃO ---------- -->
@@ -135,7 +123,7 @@
       </div>
       <div class="barra-acoes">
         <button id="det-voltar" class="botao fantasma">← Voltar</button>
-        <button id="det-coletar" class="botao primario">Atualizar preços agora</button>
+        <button id="det-coletar" class="botao primario so-admin">Atualizar preços agora</button>
       </div>
     </div>
 
@@ -154,27 +142,25 @@
     </div>
 
     <section class="painel">
-      <h2>Todas as ofertas da última coleta</h2>
-      <div class="rolagem alta">
-        <table class="tabela">
-          <thead>
-            <tr>
-              <th>Loja</th><th>Anúncio</th><th>Condição</th><th>Vendedor</th>
-              <th class="dir">Preço</th><th class="dir">Frete</th><th class="dir">Total</th><th></th>
-            </tr>
-          </thead>
-          <tbody id="tbody-ofertas"></tbody>
-        </table>
-      </div>
+      <h2>Todas as ofertas encontradas</h2>
+      <table class="tabela">
+        <thead>
+          <tr>
+            <th>Loja</th><th>Anúncio</th><th>Condição</th><th>Vendedor</th>
+            <th class="dir">Preço</th><th class="dir">Frete</th><th class="dir">Total</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody-ofertas"></tbody>
+      </table>
       <p id="vazio-ofertas" class="vazio">Nenhuma oferta coletada ainda.</p>
     </section>
 
-    <section class="painel">
+    <section class="painel so-admin">
       <h2>Lançar oferta manualmente</h2>
-      <p class="dica">Para lojas sem API (Kabum, Pichau, Terabyte...) ou para registrar um preço que você viu na vitrine.</p>
+      <p class="dica">Para lojas sem API (Pichau, Terabyte...) ou para registrar um preço visto na vitrine.</p>
       <form id="form-oferta" class="form compacto">
         <div class="linha">
-          <label>Loja<input name="loja" placeholder="Kabum" required></label>
+          <label>Loja<input name="loja" placeholder="Pichau" required></label>
           <label>Condição
             <select name="condicao"><option value="novo">Novo</option><option value="usado">Usado</option></select>
           </label>
@@ -194,7 +180,7 @@
     <div class="cabecalho-tela">
       <div>
         <h1>Administração</h1>
-        <p class="sub">Contas cadastradas no sistema. Visível apenas para o administrador.</p>
+        <p class="sub">Contas cadastradas no sistema.</p>
       </div>
       <button id="admin-atualizar" class="botao">Atualizar</button>
     </div>
@@ -208,28 +194,25 @@
 
     <section class="painel">
       <h2>Contas</h2>
-      <div class="rolagem">
-        <table class="tabela">
-          <thead>
-            <tr>
-              <th>#</th><th>Nome</th><th>Login</th><th>Criada em</th>
-              <th class="dir">Produtos</th><th class="dir">Coletas</th><th class="dir">Ofertas</th>
-              <th class="dir">Sessões</th><th></th>
-            </tr>
-          </thead>
-          <tbody id="tbody-admin"></tbody>
-        </table>
-      </div>
+      <table class="tabela">
+        <thead>
+          <tr>
+            <th>#</th><th>Nome</th><th>Login</th><th>Criada em</th>
+            <th class="dir">Produtos</th><th class="dir">Coletas</th><th class="dir">Ofertas</th>
+            <th class="dir">Sessões</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody-admin"></tbody>
+      </table>
       <p class="dica" style="margin-top:14px">
         A senha do administrador vem da variável de ambiente <code>ADMIN_SENHA</code>.
-        Enquanto ela não for definida, o login é <b>admin</b> e a senha é <b>admin</b> — qualquer pessoa pode adivinhar.
       </p>
     </section>
   </main>
 
   <p class="rodape">
     TCC — sistema de apoio à decisão de compra de equipamentos gamer. Os preços são coletados das lojas
-    e podem mudar a qualquer momento; confirme sempre no site da loja antes de comprar.
+    e mudam a qualquer momento; confirme no site da loja antes de comprar.
   </p>
 </div>
 
