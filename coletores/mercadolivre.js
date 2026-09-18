@@ -92,10 +92,20 @@ async function buscar(termo) {
 
   const r = await fetch(url, { headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' } });
 
-  if (r.status === 401 || r.status === 403) {
+  if (r.status === 403) {
+    // Desde 2025 o Mercado Livre restringiu /sites/$SITE/search: aplicacoes comuns
+    // recebem 403 mesmo com token valido e permissao de leitura. E preciso pedir
+    // liberacao do endpoint ao suporte / Developer Partner Program.
+    throw new Error(
+      'O Mercado Livre bloqueia a busca publica para aplicacoes nao liberadas (403). ' +
+      'Suas credenciais estao corretas: o token foi emitido. Para usar esta fonte e preciso ' +
+      'solicitar a liberacao do endpoint de busca ao suporte do Mercado Livre. ' +
+      'Enquanto isso, use as outras lojas ou o lancamento manual de ofertas.'
+    );
+  }
+  if (r.status === 401) {
     cache = { token: '', expira: 0 };
-    const detalhe = await r.text().catch(() => '');
-    throw new Error('Mercado Livre recusou a consulta (' + r.status + '). ' + detalhe.slice(0, 200));
+    throw new Error('Mercado Livre recusou o token (401). Verifique ML_CLIENT_ID e ML_CLIENT_SECRET.');
   }
   if (!r.ok) throw new Error('Mercado Livre respondeu HTTP ' + r.status + '.');
 

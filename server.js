@@ -91,7 +91,10 @@ function usuarioDaRequisicao(req) {
 }
 
 /* ---------- coletores e analise ---------- */
-const coletores = [require('./coletores/mercadolivre.js')];
+const coletores = [
+  require('./coletores/kabum.js'),
+  require('./coletores/mercadolivre.js'),
+];
 const analise = require('./analise.js');
 
 /* ---------- helpers HTTP ---------- */

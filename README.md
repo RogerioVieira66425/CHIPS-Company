@@ -36,10 +36,29 @@ Projeto de TCC. Sem bibliotecas externas: só Node.js (o SQLite já vem embutido
 
 ## Fontes de preço
 
-| Fonte | Como entra | Situação |
+| Fonte | Como entra | Situação (testado em 17/09/2026) |
 |---|---|---|
-| Mercado Livre | API oficial (`/sites/MLB/search`) | Precisa de `ML_CLIENT_ID` e `ML_CLIENT_SECRET` |
-| Kabum, Pichau, Terabyte, Amazon... | Não têm API pública | Lançamento manual de oferta, ou coletor próprio a ser escrito |
+| **KaBuM!** | API pública do catálogo | **Funcionando**, sem credenciais |
+| Mercado Livre | API oficial (`/sites/MLB/search`) | **Bloqueada**: aplicações comuns recebem 403 |
+| Pichau, Terabyte, Magalu | HTML público | Respondem 403 a requisições fora do navegador |
+| Amazon BR | HTML público | Responde 503 (proteção anti-robô) |
+| Qualquer loja | Lançamento manual na interface | Sempre disponível |
+
+### A restrição do Mercado Livre (limitação documentada do projeto)
+
+A integração com o Mercado Livre está implementada e a autenticação funciona: o app emite o
+token normalmente pelo fluxo *client credentials*. O que o Mercado Livre bloqueia é a consulta:
+o endpoint `/sites/MLB/search` passou a responder **403 forbidden** para aplicações que não foram
+liberadas, mesmo com token válido e permissão de leitura. Vários desenvolvedores relataram a
+mesma mudança em 2025, e a liberação exige pedido ao suporte / Developer Partner Program.
+
+A busca em HTML público (`lista.mercadolivre.com.br`) também não serve de alternativa: o site
+devolve uma página de verificação de "tráfego suspeito" para requisições que não vêm de um navegador.
+
+O coletor continua no projeto e volta a funcionar sozinho no dia em que o acesso for liberado —
+basta as credenciais estarem configuradas. É bom material para a seção de limitações e decisões
+de projeto do TCC: mostra dependência de terceiros e o valor de uma arquitetura de coletores
+intercambiáveis.
 
 ### Credenciais do Mercado Livre
 1. Acesse https://developers.mercadolivre.com.br → *Suas aplicações* → **Criar aplicação**.
@@ -86,7 +105,8 @@ troque para `plan: starter` e descomente o bloco `disk` + `DB_PATH` no `render.y
 | `server.js` | Servidor HTTP, autenticação, rotas da API e orquestração da coleta |
 | `db.js` | Banco SQLite e tabelas (`usuarios`, `sessoes`, `produtos`, `coletas`, `ofertas`) |
 | `analise.js` | Regra de decisão: comparação entre lojas e avaliação do momento de compra |
-| `coletores/mercadolivre.js` | Coletor da API oficial do Mercado Livre |
+| `coletores/kabum.js` | Coletor da API pública do catálogo da KaBuM! |
+| `coletores/mercadolivre.js` | Coletor da API oficial do Mercado Livre (aguardando liberação) |
 | `public/index.html` | Telas de login, produtos, comparação e administração |
 | `public/app.js` | Lógica da interface, gráfico de histórico e chamadas à API |
 | `public/estilo.css` | Visual |
