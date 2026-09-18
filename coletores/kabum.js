@@ -57,6 +57,9 @@ async function buscar(termo) {
     },
   });
 
+  // A KaBuM! responde 404 quando a busca nao encontra nada: isso e resultado vazio, nao falha.
+  if (r.status === 404) return [];
+
   if (r.status === 403) {
     throw new Error(
       'A KaBuM! recusou a consulta (403). A API funciona a partir de uma rede brasileira, mas ' +
