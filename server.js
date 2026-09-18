@@ -245,6 +245,66 @@ async function coletarPrecos(userId, produto) {
   return { executado_em: agora, relatorio };
 }
 
+/* ---------- buscas publicas (fila) ----------
+   O visitante pede uma busca; quem executa e quem alcancar as lojas:
+   o proprio servidor (quando roda em rede brasileira) ou o agente local. */
+const VALIDADE_BUSCA_MS = 30 * 60 * 1000; // resultado vale 30 minutos
+
+function normalizarTermo(t) {
+  return String(t || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 120);
+}
+
+function formatarBusca(linha) {
+  let resultado = null;
+  try { resultado = linha.resultado ? JSON.parse(linha.resultado) : null; } catch { resultado = null; }
+  return {
+    id: linha.id,
+    termo: linha.termo,
+    status: linha.status,
+    erro: linha.erro,
+    origem: linha.origem,
+    criado_em: linha.criado_em,
+    atualizado_em: linha.atualizado_em,
+    resultado,
+  };
+}
+
+function buscaRecente(termo) {
+  const linha = db.prepare(
+    "SELECT * FROM buscas WHERE termo = ? AND status = 'pronta' ORDER BY atualizado_em DESC LIMIT 1"
+  ).get(termo);
+  if (!linha) return null;
+  return Date.now() - new Date(linha.atualizado_em).getTime() < VALIDADE_BUSCA_MS ? linha : null;
+}
+
+/* Tenta executar aqui mesmo. Devolve true quando conseguiu falar com alguma loja. */
+async function executarBuscaLocalmente(id, termo) {
+  const fontes = [];
+  let algumaOk = false;
+
+  for (const coletor of coletores) {
+    if (!coletor.configurado()) {
+      fontes.push({ fonte: coletor.nome, erro: 'Fonte nao configurada.', ofertas: [] });
+      continue;
+    }
+    try {
+      const ofertas = await coletor.buscar(termo);
+      fontes.push({ fonte: coletor.nome, erro: '', ofertas });
+      algumaOk = true;
+    } catch (e) {
+      fontes.push({ fonte: coletor.nome, erro: e.message, ofertas: [] });
+    }
+  }
+
+  if (!algumaOk) return false;
+
+  const todas = fontes.reduce((acc, f) => acc.concat(f.ofertas), []);
+  const resultado = { fontes, comparacao: analise.compararLojas(todas) };
+  db.prepare("UPDATE buscas SET status = 'pronta', resultado = ?, erro = '', origem = 'servidor', atualizado_em = ? WHERE id = ?")
+    .run(JSON.stringify(resultado), new Date().toISOString(), id);
+  return true;
+}
+
 /* ---------- rotas ---------- */
 async function api(req, res, rota) {
   const metodo = req.method;
@@ -281,6 +341,42 @@ async function api(req, res, rota) {
     if (enviado.length !== COLETOR_TOKEN.length ||
         !crypto.timingSafeEqual(Buffer.from(enviado), Buffer.from(COLETOR_TOKEN))) {
       return json(res, 401, { erro: 'Token do coletor invalido.' });
+    }
+
+    /* fila de buscas pedidas pelos visitantes */
+    if (rota === '/api/ingestao/buscas' && metodo === 'GET') {
+      const linhas = db.prepare(
+        "SELECT id, termo FROM buscas WHERE status = 'pendente' ORDER BY id LIMIT 10"
+      ).all();
+      const agora = new Date().toISOString();
+      linhas.forEach((b) => {
+        db.prepare("UPDATE buscas SET status = 'executando', atualizado_em = ? WHERE id = ?").run(agora, b.id);
+      });
+      return json(res, 200, linhas);
+    }
+
+    let mIng = rota.match(/^\/api\/ingestao\/buscas\/(\d+)$/);
+    if (mIng && metodo === 'POST') {
+      const id = Number(mIng[1]);
+      const linha = db.prepare('SELECT * FROM buscas WHERE id = ?').get(id);
+      if (!linha) return json(res, 404, { erro: 'Busca nao encontrada.' });
+
+      const c = await lerCorpo(req);
+      const fontes = Array.isArray(c.fontes) ? c.fontes : [];
+      const todas = fontes.reduce((acc, f) => acc.concat(Array.isArray(f.ofertas) ? f.ofertas : []), []);
+      const encontrou = todas.length > 0;
+      const resultado = { fontes, comparacao: analise.compararLojas(todas) };
+
+      db.prepare('UPDATE buscas SET status = ?, resultado = ?, erro = ?, origem = ?, atualizado_em = ? WHERE id = ?')
+        .run(
+          encontrou || !c.erro ? 'pronta' : 'falhou',
+          JSON.stringify(resultado),
+          String(c.erro || ''),
+          'agente',
+          new Date().toISOString(),
+          id
+        );
+      return json(res, 200, { ok: true, ofertas: todas.length });
     }
 
     if (rota === '/api/ingestao/pendentes' && metodo === 'GET') {
@@ -390,6 +486,45 @@ async function api(req, res, rota) {
     if (usuario) db.prepare('DELETE FROM sessoes WHERE token = ?').run(usuario.token);
     res.setHeader('Set-Cookie', 'sid=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0' + (PRODUCAO ? '; Secure' : ''));
     return json(res, 200, { ok: true });
+  }
+
+  /* ---------- busca publica: qualquer visitante pode pesquisar ---------- */
+  if (rota === '/api/buscas' && metodo === 'POST') {
+    const { termo } = await lerCorpo(req);
+    const t = normalizarTermo(termo);
+    if (t.length < 2) return json(res, 400, { erro: 'Digite o que voce quer procurar.' });
+
+    const recente = buscaRecente(t);
+    if (recente) return json(res, 200, formatarBusca(recente));
+
+    const agora = new Date().toISOString();
+    const info = db.prepare(
+      "INSERT INTO buscas (termo, status, resultado, erro, origem, criado_em, atualizado_em) VALUES (?,'pendente','','','',?,?)"
+    ).run(t, agora, agora);
+    const id = Number(info.lastInsertRowid);
+
+    // se este servidor alcanca as lojas, ja responde na hora
+    try {
+      await executarBuscaLocalmente(id, t);
+    } catch (e) { /* segue para a fila do agente */ }
+
+    const linha = db.prepare('SELECT * FROM buscas WHERE id = ?').get(id);
+    return json(res, linha.status === 'pronta' ? 200 : 202, formatarBusca(linha));
+  }
+
+  let mBusca = rota.match(/^\/api\/buscas\/(\d+)$/);
+  if (mBusca && metodo === 'GET') {
+    const linha = db.prepare('SELECT * FROM buscas WHERE id = ?').get(Number(mBusca[1]));
+    if (!linha) return json(res, 404, { erro: 'Busca nao encontrada.' });
+    return json(res, 200, formatarBusca(linha));
+  }
+
+  if (rota === '/api/buscas/populares' && metodo === 'GET') {
+    const linhas = db.prepare(
+      "SELECT termo, MAX(atualizado_em) AS quando, COUNT(*) AS vezes FROM buscas " +
+      "WHERE status = 'pronta' GROUP BY termo ORDER BY quando DESC LIMIT 12"
+    ).all();
+    return json(res, 200, linhas);
   }
 
   /* ---------- leitura publica (o site e aberto; login so para administrar) ---------- */
@@ -598,6 +733,15 @@ const servidor = http.createServer((req, res) => {
   }
   fs.readFile(destino, (err, conteudo) => {
     if (err) {
+      // rotas da interface (ex.: /admin) caem no index.html
+      if (!path.extname(destino)) {
+        fs.readFile(path.join(PUBLICO, 'index.html'), (e2, pagina) => {
+          if (e2) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('Pagina nao encontrada'); return; }
+          res.writeHead(200, { 'Content-Type': TIPOS['.html'] });
+          res.end(pagina);
+        });
+        return;
+      }
       res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
       res.end('Pagina nao encontrada');
       return;

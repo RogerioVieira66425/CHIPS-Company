@@ -299,3 +299,33 @@ code { background: #0f141c; padding: 1px 5px; border-radius: 4px; }
 
 .largo { width: 100%; margin-top: 10px; }
 .tabela { table-layout: auto; }
+
+/* ================= BUSCA PÚBLICA ================= */
+.heroi { text-align: center; padding: 26px 0 6px; }
+.heroi h1 { font-size: 32px; margin: 0 0 8px; }
+.heroi .sub { max-width: 620px; margin: 0 auto 22px; font-size: 14px; }
+.caixa-busca { display: flex; gap: 10px; max-width: 640px; margin: 0 auto; }
+.caixa-busca input {
+  flex: 1; font-size: 16px; padding: 14px 16px; border-radius: 10px;
+  background: var(--fundo-2); border: 1px solid var(--borda);
+}
+.caixa-busca button { padding: 14px 26px; font-size: 15px; border-radius: 10px; }
+.sugestoes { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-top: 16px; }
+.sugestoes-titulo { color: var(--texto-fraco); font-size: 12px; align-self: center; margin-right: 4px; }
+.chip {
+  background: var(--fundo-2); border: 1px solid var(--borda); color: var(--texto-fraco);
+  border-radius: 20px; padding: 5px 12px; font-size: 12px; cursor: pointer; font-family: inherit;
+}
+.chip:hover { border-color: var(--destaque); color: var(--texto); }
+#estado-busca { display: flex; align-items: center; gap: 10px; justify-content: center; font-size: 14px; color: var(--texto-fraco); }
+.girando { display: inline-block; animation: girar 1s linear infinite; font-size: 18px; color: var(--destaque); }
+@keyframes girar { to { transform: rotate(360deg); } }
+.ranking-lado { min-width: 280px; flex: 1; }
+.ranking-lado h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .4px; color: var(--texto-fraco); margin: 0 0 10px; }
+.rodape-busca { display: block; margin-top: 14px; }
+.mini-botao {
+  background: #1b2230; border: 1px solid var(--borda); color: var(--texto); text-decoration: none;
+  padding: 4px 10px; border-radius: 6px; font-size: 12px; white-space: nowrap;
+}
+.mini-botao:hover { border-color: var(--destaque); }
+#resultado { display: grid; gap: 18px; }

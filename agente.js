@@ -158,7 +158,70 @@ async function principal() {
   console.log('\n  Concluido: ' + gravadasTotal + ' gravacao(oes) em ' + destinos.length + ' destino(s).\n');
 }
 
+/* ---------- modo servico: atende as buscas pedidas no site publico ---------- */
+async function atenderBuscas() {
+  for (const servidor of SERVIDORES) {
+    let pendentes = [];
+    try {
+      pendentes = await pedir(servidor, '/api/ingestao/buscas');
+    } catch (e) {
+      continue; // servidor fora do ar ou sem token: tenta no proximo ciclo
+    }
+
+    for (const busca of pendentes) {
+      console.log('  [' + new Date().toLocaleTimeString('pt-BR') + '] busca de visitante: "' + busca.termo + '"');
+      const fontes = [];
+      for (const coletor of coletores) {
+        if (!coletor.configurado()) {
+          fontes.push({ fonte: coletor.nome, erro: 'Fonte nao configurada.', ofertas: [] });
+          continue;
+        }
+        try {
+          const ofertas = await coletor.buscar(busca.termo);
+          fontes.push({ fonte: coletor.nome, erro: '', ofertas });
+          console.log('      ' + coletor.nome + ': ' + ofertas.length + ' oferta(s)');
+        } catch (e) {
+          fontes.push({ fonte: coletor.nome, erro: e.message, ofertas: [] });
+          console.log('      ' + coletor.nome + ': ' + e.message.slice(0, 80));
+        }
+        await espera(PAUSA_MS);
+      }
+      try {
+        await pedir(servidor, '/api/ingestao/buscas/' + busca.id, { method: 'POST', body: { fontes } });
+      } catch (e) {
+        console.log('      nao consegui devolver o resultado: ' + e.message);
+      }
+    }
+  }
+}
+
+async function servico() {
+  const intervalo = Number(process.env.INTERVALO_MS) || 4000;
+  console.log('');
+  console.log('  Agente em modo servico');
+  console.log('  destinos: ' + SERVIDORES.map(apelido).join(', '));
+  console.log('  atendendo buscas do site a cada ' + (intervalo / 1000) + 's. Ctrl+C para parar.');
+  console.log('');
+  for (;;) {
+    try {
+      await atenderBuscas();
+    } catch (e) {
+      console.log('  erro no ciclo: ' + e.message);
+    }
+    await espera(intervalo);
+  }
+}
+
+if (process.argv.indexOf('--servico') !== -1) {
+  if (!TOKEN) {
+    console.error('Defina COLETOR_TOKEN antes de rodar.');
+    process.exit(1);
+  }
+  servico();
+} else {
+
 principal().catch((e) => {
   console.error('\n  Erro: ' + e.message + '\n');
   process.exit(1);
 });
+}

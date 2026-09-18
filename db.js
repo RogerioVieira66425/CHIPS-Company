@@ -69,6 +69,22 @@ CREATE TABLE IF NOT EXISTS ofertas (
   coletado_em  TEXT NOT NULL
 );
 
+-- Buscas pedidas pelos visitantes do site publico.
+-- O servidor registra o pedido; quem executa e o agente na rede brasileira.
+CREATE TABLE IF NOT EXISTS buscas (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  termo         TEXT NOT NULL,
+  status        TEXT NOT NULL DEFAULT 'pendente' CHECK (status IN ('pendente','executando','pronta','falhou')),
+  resultado     TEXT NOT NULL DEFAULT '',
+  erro          TEXT NOT NULL DEFAULT '',
+  origem        TEXT NOT NULL DEFAULT '',
+  criado_em     TEXT NOT NULL,
+  atualizado_em TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_buscas_termo ON buscas(termo, atualizado_em);
+CREATE INDEX IF NOT EXISTS idx_buscas_status ON buscas(status, id);
+
 CREATE INDEX IF NOT EXISTS idx_ofertas_produto ON ofertas(produto_id, coletado_em);
 CREATE INDEX IF NOT EXISTS idx_coletas_produto ON coletas(produto_id, executado_em);
 CREATE INDEX IF NOT EXISTS idx_produtos_user ON produtos(user_id);

@@ -12,12 +12,26 @@ const App = (function () {
     return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   };
 
+  const el = (tag, classe, texto) => {
+    const e = document.createElement(tag);
+    if (classe) e.className = classe;
+    if (texto !== undefined) e.textContent = texto;
+    return e;
+  };
+  const celula = (texto, classe) => el('td', classe, texto);
+  const link = (texto, url, classe) => {
+    const a = el('a', classe || 'link-externo', texto);
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    return a;
+  };
+
   let produtos = [];
-  let fontes = [];
   let detalhe = null;
   let usuarioAtual = null;
   let ehAdmin = false;
-  let vistaAtual = { tipo: 'produtos', id: null };
+  let vistaAtual = 'busca';
 
   /* ---------- utilitarios ---------- */
   let temporizadorToast;
@@ -44,395 +58,164 @@ const App = (function () {
     return o;
   }
 
-  const el = (tag, classe, texto) => {
-    const e = document.createElement(tag);
-    if (classe) e.className = classe;
-    if (texto !== undefined) e.textContent = texto;
-    return e;
-  };
-  const celula = (texto, classe) => el('td', classe, texto);
+  const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  /* ---------- login ---------- */
-  function erroLogin(msg) {
-    const e = $('#aviso-login');
-    e.textContent = msg;
-    e.classList.remove('oculto');
-  }
-
-  $('#form-entrar').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    try {
-      await pedir('/api/login', { method: 'POST', body: dadosForm(e.target) });
-      location.reload();
-    } catch (err) { erroLogin(err.message); }
-  });
-
-  $('#btn-entrar').addEventListener('click', () => {
-    $('#tela-login').classList.remove('oculto');
-    $('#app').classList.add('oculto');
-  });
-
-  $('#btn-voltar-site').addEventListener('click', () => {
-    $('#tela-login').classList.add('oculto');
-    $('#app').classList.remove('oculto');
-    $('#aviso-login').classList.add('oculto');
-  });
-
-  $('#btn-sair').addEventListener('click', async () => {
-    await pedir('/api/logout', { method: 'POST' }).catch(() => {});
-    location.reload();
-  });
-
-  async function abrirApp(usuario) {
-    usuarioAtual = usuario;
-    ehAdmin = Boolean(usuario && usuario.admin);
-
-    $('#tela-login').classList.add('oculto');
-    $('#app').classList.remove('oculto');
-
-    // visitante ve o catalogo; administrador ve tambem as ferramentas
-    document.querySelectorAll('.so-admin').forEach((e) => e.classList.toggle('oculto', !ehAdmin));
-    $('#btn-entrar').classList.toggle('oculto', Boolean(usuario));
-    $('#btn-sair').classList.toggle('oculto', !usuario);
-    $('#ola').textContent = usuario ? usuario.nome + (usuario.admin ? ' (admin)' : '') : '';
-    if (usuario) $('#ola').title = usuario.email;
-
-    fontes = await pedir('/api/fontes').catch(() => []);
-    await carregarProdutos();
-    mostrar({ tipo: 'produtos' });
-    if (ehAdmin) verificarFontes();
-  }
-
-  /* ---------- navegacao ---------- */
-  function renderMenu() {
-    const menu = $('#menu');
-    menu.innerHTML = '';
-    const botao = (rotulo, vista) => {
-      const b = el('button', 'item-menu' + (vistaAtual.tipo === vista.tipo ? ' ativo' : ''), rotulo);
-      b.addEventListener('click', () => mostrar(vista));
-      return b;
-    };
-    menu.appendChild(botao('Produtos', { tipo: 'produtos' }));
-    if (ehAdmin) menu.appendChild(botao('⚙️ Admin', { tipo: 'admin' }));
-  }
-
+  /* ================= NAVEGACAO ================= */
   function mostrar(vista) {
-    vistaAtual = { tipo: vista.tipo, id: vista.id || null };
-    $('#vista-produtos').classList.toggle('oculto', vista.tipo !== 'produtos');
-    $('#vista-detalhe').classList.toggle('oculto', vista.tipo !== 'detalhe');
-    $('#vista-admin').classList.toggle('oculto', vista.tipo !== 'admin');
-    if (vista.tipo === 'admin') carregarAdmin().catch((e) => toast(e.message, true));
+    vistaAtual = vista;
+    $('#vista-busca').classList.toggle('oculto', vista !== 'busca');
+    $('#vista-detalhe').classList.toggle('oculto', vista !== 'detalhe');
+    $('#vista-admin').classList.toggle('oculto', vista !== 'admin');
+    if (vista === 'admin') carregarAdmin().catch((e) => toast(e.message, true));
     renderMenu();
     window.scrollTo({ top: 0 });
   }
 
-  /* Se o servidor nao alcanca nenhuma loja (bloqueio de IP), avisa e explica o agente local. */
-  async function verificarFontes() {
+  function renderMenu() {
+    const menu = $('#menu');
+    menu.innerHTML = '';
+    const botao = (rotulo, vista) => {
+      const b = el('button', 'item-menu' + (vistaAtual === vista ? ' ativo' : ''), rotulo);
+      b.addEventListener('click', () => mostrar(vista));
+      return b;
+    };
+    menu.appendChild(botao('Buscar', 'busca'));
+    if (ehAdmin) menu.appendChild(botao('⚙️ Admin', 'admin'));
+  }
+
+  /* ================= BUSCA PUBLICA ================= */
+  function estado(texto, carregando) {
+    const caixa = $('#estado-busca');
+    caixa.classList.remove('oculto');
+    caixa.innerHTML = '';
+    if (carregando) caixa.appendChild(el('span', 'girando', '◐'));
+    caixa.appendChild(el('span', '', texto));
+  }
+
+  function limparEstado() {
+    $('#estado-busca').classList.add('oculto');
+  }
+
+  $('#form-busca').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const termo = $('#campo-busca').value.trim();
+    if (termo.length >= 2) buscar(termo);
+  });
+
+  async function buscar(termo) {
+    $('#campo-busca').value = termo;
+    $('#resultado').classList.add('oculto');
+    estado('Procurando "' + termo + '" nas lojas...', true);
+
+    let busca;
     try {
-      const d = await pedir('/api/diagnostico');
-      const alcancaveis = d.fontes.filter((f) => f.ok);
-      const aviso = $('#aviso-coleta');
-      if (alcancaveis.length) { aviso.classList.add('oculto'); return; }
-      aviso.classList.remove('oculto');
-      aviso.innerHTML = '';
-      aviso.appendChild(el('b', '', 'As lojas bloqueiam consultas vindas deste servidor.'));
-      aviso.appendChild(el('p', '', 'O botao “Atualizar precos” vai falhar: KaBuM! e Mercado Livre recusam requisicoes de servidores de nuvem no exterior. Rode o agente coletor no seu computador (rede brasileira) para alimentar o historico:'));
-      const cmd = el('code', 'comando', 'npm run coletar');
-      aviso.appendChild(cmd);
-      aviso.appendChild(el('small', '', 'Detalhes em /api/diagnostico e no README do projeto.'));
-    } catch (e) { /* diagnostico e opcional */ }
-  }
-
-  /* ---------- lista de produtos ---------- */
-  async function carregarProdutos() {
-    produtos = await pedir('/api/produtos');
-    renderKpis();
-    renderProdutos();
-  }
-
-  function renderKpis() {
-    $('#kpi-produtos').textContent = produtos.length;
-    $('#kpi-ofertas').textContent = produtos.reduce((t, p) => t + p.ofertas, 0);
-
-    const lojas = [...new Set(produtos.map((p) => p.melhor_loja).filter(Boolean))];
-    $('#kpi-fontes').textContent = lojas.length || fontes.length;
-    $('#kpi-fontes-sub').textContent = lojas.length ? lojas.join(' · ') : fontes.map((f) => f.nome).join(' · ');
-
-    const comPreco = produtos.filter((p) => p.menor_preco > 0);
-    if (comPreco.length) {
-      const barato = comPreco.reduce((a, b) => (a.menor_preco <= b.menor_preco ? a : b));
-      $('#kpi-menor').textContent = dinheiro(barato.menor_preco);
-      $('#kpi-menor-sub').textContent = barato.nome + ' · ' + barato.melhor_loja;
-    } else {
-      $('#kpi-menor').textContent = '—';
-      $('#kpi-menor-sub').textContent = 'aguardando a primeira coleta';
-    }
-  }
-
-  function renderProdutos() {
-    const tb = $('#tbody-produtos');
-    tb.innerHTML = '';
-    $('#vazio-produtos').classList.toggle('oculto', produtos.length > 0);
-
-    produtos.forEach((p) => {
-      const tr = el('tr');
-
-      const tdNome = el('td');
-      const link = el('button', 'link-produto', p.nome);
-      link.addEventListener('click', () => abrirDetalhe(p.id));
-      tdNome.appendChild(link);
-      tdNome.appendChild(el('small', 'termo', 'busca: ' + p.termo));
-      tr.appendChild(tdNome);
-
-      const tdCat = el('td');
-      tdCat.appendChild(el('span', 'etiqueta', p.categoria));
-      tr.appendChild(tdCat);
-
-      const tdLoja = el('td');
-      if (p.melhor_url) {
-        const a = el('a', 'link-externo', p.melhor_loja + ' ↗');
-        a.href = p.melhor_url;
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
-        a.title = 'Abrir a melhor oferta na loja';
-        tdLoja.appendChild(a);
-      } else {
-        tdLoja.textContent = p.melhor_loja || '—';
-      }
-      tr.appendChild(tdLoja);
-
-      const abaixoAlvo = p.preco_alvo > 0 && p.menor_preco > 0 && p.menor_preco <= p.preco_alvo;
-      tr.appendChild(celula(p.menor_preco ? dinheiro(p.menor_preco) : '—', 'dir ' + (abaixoAlvo ? 'positivo' : '')));
-      tr.appendChild(celula(p.preco_alvo ? dinheiro(p.preco_alvo) : '—', 'dir neutro'));
-      tr.appendChild(celula(String(p.ofertas), 'dir'));
-      tr.appendChild(celula(dataHora(p.ultima_coleta)));
-
-      const tdAcoes = el('td', 'dir');
-      if (!ehAdmin) { tr.appendChild(tdAcoes); tb.appendChild(tr); return; }
-
-      const btnColeta = el('button', 'mini', '🔄');
-      btnColeta.title = 'Atualizar preços deste produto';
-      btnColeta.addEventListener('click', () => coletar(p.id, btnColeta));
-      const btnExcluir = el('button', 'mini', '🗑');
-      btnExcluir.title = 'Parar de monitorar';
-      btnExcluir.addEventListener('click', async () => {
-        if (!confirm('Remover "' + p.nome + '" e todo o histórico de preços dele?')) return;
-        try {
-          await pedir('/api/produtos/' + p.id, { method: 'DELETE' });
-          toast('Produto removido.');
-          carregarProdutos();
-        } catch (err) { toast(err.message, true); }
-      });
-      tdAcoes.append(btnColeta, btnExcluir);
-      tr.appendChild(tdAcoes);
-
-      tb.appendChild(tr);
-    });
-  }
-
-  /* ---------- coleta ---------- */
-  async function coletar(id, botao) {
-    if (botao) { botao.disabled = true; botao.textContent = '⏳'; }
-    try {
-      const r = await pedir('/api/produtos/' + id + '/coletar', { method: 'POST' });
-      const ok = r.relatorio.filter((f) => !f.erro);
-      const falhas = r.relatorio.filter((f) => f.erro);
-      const total = ok.reduce((t, f) => t + f.encontrados, 0);
-
-      if (falhas.length) toast(falhas.map((f) => f.fonte + ': ' + f.erro).join(' | '), true);
-      else toast(total + ' oferta(s) coletada(s).');
-
-      await carregarProdutos();
-      if (detalhe && detalhe.produto.id === id) {
-        detalhe = r.detalhe;
-        renderDetalhe();
-      }
+      busca = await pedir('/api/buscas', { method: 'POST', body: { termo } });
     } catch (err) {
-      toast(err.message, true);
-    } finally {
-      if (botao) { botao.disabled = false; botao.textContent = '🔄'; }
-    }
-  }
-
-  $('#btn-coletar-todos').addEventListener('click', async (e) => {
-    if (!produtos.length) { toast('Cadastre um produto primeiro.', true); return; }
-    e.target.disabled = true;
-    const rotulo = e.target.textContent;
-    let i = 0;
-    for (const p of produtos) {
-      i += 1;
-      e.target.textContent = 'Coletando ' + i + '/' + produtos.length + '...';
-      await coletar(p.id);
-    }
-    e.target.disabled = false;
-    e.target.textContent = rotulo;
-    toast('Coleta concluída em ' + produtos.length + ' produto(s).');
-  });
-
-  /* ---------- formularios ---------- */
-  $('#form-produto').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    try {
-      const p = await pedir('/api/produtos', { method: 'POST', body: dadosForm(e.target) });
-      e.target.reset();
-      await carregarProdutos();
-      toast('Produto adicionado. Coletando preços...');
-      coletar(p.id);
-    } catch (err) { toast(err.message, true); }
-  });
-
-  $('#form-busca').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const destino = $('#resultado-busca');
-    destino.innerHTML = '';
-    destino.appendChild(el('p', 'vazio', 'Consultando as lojas...'));
-    try {
-      const r = await pedir('/api/buscar', { method: 'POST', body: dadosForm(e.target) });
-      destino.innerHTML = '';
-
-      r.fontes.forEach((f) => {
-        if (f.erro) destino.appendChild(el('p', 'aviso', f.fonte + ': ' + f.erro));
-      });
-
-      const ranking = r.comparacao.ranking;
-      if (!ranking.length) {
-        destino.appendChild(el('p', 'vazio', 'Nenhuma oferta encontrada para "' + r.termo + '".'));
-        return;
-      }
-      const ul = el('ul', 'lista-ofertas');
-      ranking.slice(0, 5).forEach((o, i) => {
-        const li = el('li', i === 0 ? 'destaque' : '');
-        const topo = el('div', 'oferta-topo');
-        topo.appendChild(el('b', '', o.loja));
-        topo.appendChild(el('span', 'preco', dinheiro(o.preco_total)));
-        li.appendChild(topo);
-        li.appendChild(el('small', '', o.titulo));
-        if (o.url) {
-          const a = el('a', 'link-externo', 'abrir anúncio ↗');
-          a.href = o.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
-          li.appendChild(a);
-        }
-        ul.appendChild(li);
-      });
-      destino.appendChild(ul);
-    } catch (err) {
-      destino.innerHTML = '';
-      destino.appendChild(el('p', 'aviso', err.message));
-    }
-  });
-
-  $('#form-oferta').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if (!detalhe) return;
-    try {
-      detalhe = await pedir('/api/produtos/' + detalhe.produto.id + '/ofertas', { method: 'POST', body: dadosForm(e.target) });
-      e.target.reset();
-      renderDetalhe();
-      carregarProdutos();
-      toast('Oferta registrada.');
-    } catch (err) { toast(err.message, true); }
-  });
-
-  /* ---------- detalhe do produto ---------- */
-  async function abrirDetalhe(id) {
-    detalhe = await pedir('/api/produtos/' + id);
-    renderDetalhe();
-    mostrar({ tipo: 'detalhe', id });
-  }
-
-  $('#det-voltar').addEventListener('click', () => mostrar({ tipo: 'produtos' }));
-  $('#det-coletar').addEventListener('click', () => { if (detalhe) coletar(detalhe.produto.id); });
-
-  function renderDetalhe() {
-    const d = detalhe;
-    $('#det-nome').textContent = d.produto.nome;
-    $('#det-sub').textContent =
-      d.produto.categoria + ' · busca: "' + d.produto.termo + '"' +
-      (d.produto.preco_alvo > 0 ? ' · alvo ' + dinheiro(d.produto.preco_alvo) : '') +
-      ' · última coleta ' + dataHora(d.ultima_coleta ? d.ultima_coleta.executado_em : '');
-
-    renderVeredito(d);
-    renderRanking(d);
-    renderGrafico(d.historico);
-    renderOfertas(d.ofertas);
-  }
-
-  function renderVeredito(d) {
-    const destino = $('#det-veredito');
-    destino.innerHTML = '';
-    const melhor = d.comparacao.melhor;
-
-    if (!melhor) {
-      destino.appendChild(el('p', 'painel vazio', 'Ainda não há ofertas. Clique em "Atualizar preços agora" ou lance uma oferta manualmente.'));
+      estado(err.message, false);
       return;
     }
 
-    const cartao = el('section', 'painel veredito ' + d.momento.status);
-    const topo = el('div', 'veredito-topo');
+    // o resultado pode vir do proprio servidor ou do agente coletor
+    const limite = Date.now() + 90000;
+    while (busca.status !== 'pronta' && busca.status !== 'falhou' && Date.now() < limite) {
+      estado('Consultando as lojas... (' + (busca.status === 'executando' ? 'em andamento' : 'na fila') + ')', true);
+      await espera(2000);
+      try {
+        busca = await pedir('/api/buscas/' + busca.id);
+      } catch (err) { break; }
+    }
 
-    const esquerda = el('div');
-    esquerda.appendChild(el('h2', '', 'Compre na ' + melhor.loja));
-    esquerda.appendChild(el('p', 'veredito-preco', dinheiro(melhor.preco_total)));
+    if (busca.status !== 'pronta') {
+      estado(
+        busca.erro ||
+        'Nenhuma loja respondeu a tempo. O coletor precisa estar rodando para atender buscas neste site.',
+        false
+      );
+      return;
+    }
+
+    limparEstado();
+    renderResultado(busca);
+    carregarSugestoes();
+  }
+
+  function renderResultado(busca) {
+    const r = busca.resultado || {};
+    const comparacao = r.comparacao || { ranking: [], melhor: null, economia: 0, economia_pct: 0 };
+    const ofertas = (r.fontes || []).reduce((acc, f) => acc.concat(f.ofertas || []), []);
+    ofertas.sort((a, b) => a.preco_total - b.preco_total);
+
+    $('#resultado').classList.remove('oculto');
+
+    const destino = $('#res-veredito');
+    destino.innerHTML = '';
+
+    if (!comparacao.melhor) {
+      destino.appendChild(el('p', 'painel vazio', 'Nenhuma oferta encontrada para "' + busca.termo + '".'));
+    } else {
+      destino.appendChild(cartaoMelhor(comparacao, busca));
+    }
+
+    // detalhes tecnicos de cada fonte so interessam a quem administra
+    if (ehAdmin) {
+      (r.fontes || []).filter((f) => f.erro).forEach((f) => {
+        destino.appendChild(el('p', 'aviso', f.fonte + ': ' + f.erro));
+      });
+    }
+
+    renderOfertas($('#tbody-ofertas'), ofertas, $('#vazio-ofertas'));
+  }
+
+  function cartaoMelhor(comparacao, busca) {
+    const melhor = comparacao.melhor;
+    const cartao = el('section', 'painel veredito bom');
+
+    const topo = el('div', 'veredito-topo');
+    const esq = el('div');
+    esq.appendChild(el('h2', '', 'Mais vantajoso: ' + melhor.loja));
+    esq.appendChild(el('p', 'veredito-preco', dinheiro(melhor.preco_total)));
+
     const detalhes = [];
     if (melhor.frete > 0) detalhes.push('inclui frete de ' + dinheiro(melhor.frete));
     else detalhes.push('frete grátis ou não informado');
     if (melhor.condicao !== 'novo') detalhes.push('produto ' + melhor.condicao);
     if (melhor.parcelas > 0) detalhes.push('até ' + melhor.parcelas + 'x');
-    esquerda.appendChild(el('small', 'neutro', detalhes.join(' · ')));
+    esq.appendChild(el('small', 'neutro', detalhes.join(' · ')));
 
-    if (melhor.titulo) esquerda.appendChild(el('p', 'anuncio-titulo', melhor.titulo));
+    if (melhor.titulo) esq.appendChild(el('p', 'anuncio-titulo', melhor.titulo));
+    if (melhor.url) esq.appendChild(link('Ir à loja e comprar ↗', melhor.url, 'botao primario comprar'));
+    topo.appendChild(esq);
 
-    if (melhor.url) {
-      const comprar = el('a', 'botao primario comprar', 'Ir à loja e comprar ↗');
-      comprar.href = melhor.url;
-      comprar.target = '_blank';
-      comprar.rel = 'noopener noreferrer';
-      esquerda.appendChild(comprar);
+    const dir = el('div', 'ranking-lado');
+    if (comparacao.ranking.length > 1) {
+      dir.appendChild(el('h3', '', 'Comparação entre lojas'));
+      dir.appendChild(barrasDeLojas(comparacao.ranking));
     }
-    topo.appendChild(esquerda);
-
-    const direita = el('div', 'veredito-momento');
-    direita.appendChild(el('span', 'selo ' + d.momento.status, d.momento.titulo));
-    direita.appendChild(el('p', '', d.momento.texto));
-    if (d.momento.dias > 1) {
-      direita.appendChild(el('small', 'neutro',
-        'mínimo ' + dinheiro(d.momento.minimo) + ' · mediana ' + dinheiro(d.momento.mediana) +
-        ' · máximo ' + dinheiro(d.momento.maximo) + ' em ' + d.momento.dias + ' dia(s)'));
-    }
-    topo.appendChild(direita);
+    topo.appendChild(dir);
     cartao.appendChild(topo);
 
-    if (d.comparacao.economia > 0) {
+    if (comparacao.economia > 0) {
       cartao.appendChild(el('p', 'economia',
-        'Economia de ' + dinheiro(d.comparacao.economia) + ' (' + pctFmt(d.comparacao.economia_pct) +
-        ') em relação à loja mais cara entre as comparadas.'));
+        'Comprando aqui em vez da loja mais cara você economiza ' + dinheiro(comparacao.economia) +
+        ' (' + pctFmt(comparacao.economia_pct) + ').'));
     }
 
-    const maisBarato = d.comparacao.mais_barato;
-    if (maisBarato && maisBarato.id !== melhor.id) {
+    const maisBarato = comparacao.mais_barato;
+    if (maisBarato && maisBarato.preco_total < melhor.preco_total) {
       cartao.appendChild(el('p', 'dica',
-        'A oferta mais barata é da ' + maisBarato.loja + ' por ' + dinheiro(maisBarato.preco_total) +
-        ', mas o sistema não a recomenda por causa da condição do produto ou da reputação do vendedor.'));
+        'Existe oferta mais barata (' + dinheiro(maisBarato.preco_total) + ' na ' + maisBarato.loja +
+        '), mas o sistema não a recomenda por causa da condição do produto ou da reputação do vendedor.'));
     }
 
-    if (d.produto.preco_alvo > 0) {
-      cartao.appendChild(el('p', d.alvo_atingido ? 'positivo' : 'neutro',
-        d.alvo_atingido
-          ? '🎯 Preço-alvo de ' + dinheiro(d.produto.preco_alvo) + ' atingido.'
-          : 'Faltam ' + dinheiro(melhor.preco_total - d.produto.preco_alvo) + ' para chegar ao seu preço-alvo.'));
+    if (busca && busca.atualizado_em) {
+      cartao.appendChild(el('small', 'neutro rodape-busca',
+        'Consulta feita em ' + dataHora(busca.atualizado_em) + (busca.origem ? ' · coleta pelo ' + busca.origem : '')));
     }
 
-    destino.appendChild(cartao);
+    return cartao;
   }
 
-  function renderRanking(d) {
-    const destino = $('#det-ranking');
-    destino.innerHTML = '';
-    const ranking = d.comparacao.ranking;
-    if (!ranking.length) {
-      destino.appendChild(el('p', 'vazio', 'Sem lojas para comparar ainda.'));
-      return;
-    }
+  function barrasDeLojas(ranking) {
     const maximo = Math.max(...ranking.map((o) => o.preco_total));
     const ul = el('ul', 'barras');
     ranking.forEach((o, i) => {
@@ -444,22 +227,177 @@ const App = (function () {
       trilho.appendChild(barra);
       li.appendChild(trilho);
       const valor = el('span', 'barra-valor');
-      if (o.url) {
-        const a = el('a', 'link-externo', dinheiro(o.preco_total) + ' ↗');
-        a.href = o.url;
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
-        a.title = o.titulo || ('Abrir na ' + o.loja);
-        valor.appendChild(a);
-      } else {
-        valor.textContent = dinheiro(o.preco_total);
-      }
+      if (o.url) valor.appendChild(link(dinheiro(o.preco_total) + ' ↗', o.url));
+      else valor.textContent = dinheiro(o.preco_total);
       li.appendChild(valor);
       ul.appendChild(li);
     });
-    destino.appendChild(ul);
-    destino.appendChild(el('p', 'dica',
-      'A ordem considera o preço final mais uma penalidade de risco para produto usado ou vendedor com reputação baixa.'));
+    return ul;
+  }
+
+  function renderOfertas(tbody, ofertas, avisoVazio) {
+    tbody.innerHTML = '';
+    if (avisoVazio) avisoVazio.classList.toggle('oculto', ofertas.length > 0);
+
+    ofertas.forEach((o, i) => {
+      const tr = el('tr', i === 0 ? 'melhor-linha' : '');
+      tr.appendChild(celula(o.loja, 'ticker'));
+
+      const tdTitulo = el('td', 'titulo-oferta');
+      const curto = (o.titulo || '').length > 62 ? o.titulo.slice(0, 62).trim() + '…' : (o.titulo || 'ver anúncio');
+      if (o.url) {
+        const a = link(curto, o.url);
+        a.title = o.titulo || '';
+        tdTitulo.appendChild(a);
+      } else {
+        tdTitulo.textContent = curto;
+      }
+      tr.appendChild(tdTitulo);
+
+      tr.appendChild(celula(o.condicao, o.condicao === 'usado' ? 'negativo' : ''));
+      tr.appendChild(celula((o.vendedor || '—') + (o.vendidos ? ' · ' + o.vendidos + ' vendas' : '')));
+      tr.appendChild(celula(dinheiro(o.preco), 'dir'));
+      tr.appendChild(celula(o.frete > 0 ? dinheiro(o.frete) : 'grátis', 'dir'));
+      tr.appendChild(celula(dinheiro(o.preco_total), 'dir ' + (i === 0 ? 'positivo' : '')));
+
+      const tdAcao = el('td', 'dir');
+      if (o.url) tdAcao.appendChild(link('comprar ↗', o.url, 'mini-botao'));
+      tr.appendChild(tdAcao);
+
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function carregarSugestoes() {
+    try {
+      const populares = await pedir('/api/buscas/populares');
+      const caixa = $('#sugestoes');
+      caixa.innerHTML = '';
+      if (!populares.length) return;
+      caixa.appendChild(el('span', 'sugestoes-titulo', 'Buscas recentes:'));
+      populares.forEach((p) => {
+        const b = el('button', 'chip', p.termo);
+        b.addEventListener('click', () => buscar(p.termo));
+        caixa.appendChild(b);
+      });
+    } catch (e) { /* sugestoes sao opcionais */ }
+  }
+
+  /* ================= PRODUTOS ACOMPANHADOS ================= */
+  async function carregarProdutos() {
+    try {
+      produtos = await pedir('/api/produtos');
+    } catch (e) {
+      produtos = [];
+    }
+    $('#monitorados').classList.toggle('oculto', produtos.length === 0);
+
+    const tb = $('#tbody-produtos');
+    tb.innerHTML = '';
+
+    produtos.forEach((p) => {
+      const tr = el('tr');
+
+      const tdNome = el('td');
+      const botao = el('button', 'link-produto', p.nome);
+      botao.addEventListener('click', () => abrirDetalhe(p.id));
+      tdNome.appendChild(botao);
+      tdNome.appendChild(el('small', 'termo', 'busca: ' + p.termo));
+      tr.appendChild(tdNome);
+
+      const tdCat = el('td');
+      tdCat.appendChild(el('span', 'etiqueta', p.categoria));
+      tr.appendChild(tdCat);
+
+      const tdLoja = el('td');
+      if (p.melhor_url) tdLoja.appendChild(link(p.melhor_loja + ' ↗', p.melhor_url));
+      else tdLoja.textContent = p.melhor_loja || '—';
+      tr.appendChild(tdLoja);
+
+      const abaixoAlvo = p.preco_alvo > 0 && p.menor_preco > 0 && p.menor_preco <= p.preco_alvo;
+      tr.appendChild(celula(p.menor_preco ? dinheiro(p.menor_preco) : '—', 'dir ' + (abaixoAlvo ? 'positivo' : '')));
+      tr.appendChild(celula(String(p.ofertas), 'dir'));
+      tr.appendChild(celula(dataHora(p.ultima_coleta)));
+
+      const tdAcoes = el('td', 'dir');
+      if (ehAdmin) {
+        const btnColeta = el('button', 'mini', '🔄');
+        btnColeta.title = 'Atualizar preços deste produto';
+        btnColeta.addEventListener('click', () => coletar(p.id, btnColeta));
+        const btnExcluir = el('button', 'mini', '🗑');
+        btnExcluir.title = 'Parar de acompanhar';
+        btnExcluir.addEventListener('click', async () => {
+          if (!confirm('Remover "' + p.nome + '" e todo o histórico dele?')) return;
+          try {
+            await pedir('/api/produtos/' + p.id, { method: 'DELETE' });
+            toast('Produto removido.');
+            carregarProdutos();
+          } catch (err) { toast(err.message, true); }
+        });
+        tdAcoes.append(btnColeta, btnExcluir);
+      }
+      tr.appendChild(tdAcoes);
+
+      tb.appendChild(tr);
+    });
+  }
+
+  async function abrirDetalhe(id) {
+    try {
+      detalhe = await pedir('/api/produtos/' + id);
+    } catch (e) {
+      toast(e.message, true);
+      return;
+    }
+    renderDetalhe();
+    mostrar('detalhe');
+  }
+
+  $('#det-voltar').addEventListener('click', () => mostrar('busca'));
+  $('#det-coletar').addEventListener('click', () => { if (detalhe) coletar(detalhe.produto.id); });
+
+  function renderDetalhe() {
+    const d = detalhe;
+    $('#det-nome').textContent = d.produto.nome;
+    $('#det-sub').textContent =
+      d.produto.categoria + ' · busca: "' + d.produto.termo + '"' +
+      (d.produto.preco_alvo > 0 ? ' · alvo ' + dinheiro(d.produto.preco_alvo) : '') +
+      ' · última coleta ' + dataHora(d.ultima_coleta ? d.ultima_coleta.executado_em : '');
+
+    const destino = $('#det-veredito');
+    destino.innerHTML = '';
+
+    if (!d.comparacao.melhor) {
+      destino.appendChild(el('p', 'painel vazio', 'Ainda não há ofertas para este produto.'));
+    } else {
+      const cartao = cartaoMelhor(d.comparacao, null);
+      cartao.classList.remove('bom');
+      cartao.classList.add(d.momento.status);
+
+      const momento = el('div', 'veredito-momento');
+      momento.appendChild(el('span', 'selo ' + d.momento.status, d.momento.titulo));
+      momento.appendChild(el('p', '', d.momento.texto));
+      if (d.momento.dias > 1) {
+        momento.appendChild(el('small', 'neutro',
+          'mínimo ' + dinheiro(d.momento.minimo) + ' · mediana ' + dinheiro(d.momento.mediana) +
+          ' · máximo ' + dinheiro(d.momento.maximo) + ' em ' + d.momento.dias + ' dia(s)'));
+      }
+      cartao.querySelector('.veredito-topo').appendChild(momento);
+      destino.appendChild(cartao);
+    }
+
+    const ranking = $('#det-ranking');
+    ranking.innerHTML = '';
+    if (d.comparacao.ranking.length) {
+      ranking.appendChild(barrasDeLojas(d.comparacao.ranking));
+      ranking.appendChild(el('p', 'dica',
+        'A ordem considera o preço final mais uma penalidade de risco para produto usado ou vendedor com reputação baixa.'));
+    } else {
+      ranking.appendChild(el('p', 'vazio', 'Sem lojas para comparar ainda.'));
+    }
+
+    renderGrafico(d.historico);
+    renderOfertas($('#tbody-det-ofertas'), d.ofertas, $('#vazio-det-ofertas'));
   }
 
   function renderGrafico(historico) {
@@ -482,7 +420,6 @@ const App = (function () {
     svg.setAttribute('viewBox', '0 0 ' + largura + ' ' + altura);
     svg.setAttribute('class', 'grafico');
 
-    // linhas de referência
     [0, 0.5, 1].forEach((f) => {
       const valor = min + faixa * f;
       const linha = document.createElementNS(ns, 'line');
@@ -490,7 +427,6 @@ const App = (function () {
       linha.setAttribute('y1', y(valor)); linha.setAttribute('y2', y(valor));
       linha.setAttribute('stroke', '#232a36');
       svg.appendChild(linha);
-
       const rotulo = document.createElementNS(ns, 'text');
       rotulo.setAttribute('x', 6); rotulo.setAttribute('y', y(valor) + 4);
       rotulo.setAttribute('fill', '#97a1b2'); rotulo.setAttribute('font-size', '11');
@@ -498,9 +434,8 @@ const App = (function () {
       svg.appendChild(rotulo);
     });
 
-    const pontos = historico.map((h, i) => x(i) + ',' + y(h.minimo)).join(' ');
     const linha = document.createElementNS(ns, 'polyline');
-    linha.setAttribute('points', pontos);
+    linha.setAttribute('points', historico.map((h, i) => x(i) + ',' + y(h.minimo)).join(' '));
     linha.setAttribute('fill', 'none');
     linha.setAttribute('stroke', '#4c8dff');
     linha.setAttribute('stroke-width', '2');
@@ -510,9 +445,9 @@ const App = (function () {
       const c = document.createElementNS(ns, 'circle');
       c.setAttribute('cx', x(i)); c.setAttribute('cy', y(h.minimo)); c.setAttribute('r', '3');
       c.setAttribute('fill', h.minimo === min ? '#22c55e' : '#4c8dff');
-      const titulo = document.createElementNS(ns, 'title');
-      titulo.textContent = h.dia.split('-').reverse().join('/') + ': ' + dinheiro(h.minimo) + ' (' + h.amostras + ' ofertas)';
-      c.appendChild(titulo);
+      const t = document.createElementNS(ns, 'title');
+      t.textContent = h.dia.split('-').reverse().join('/') + ': ' + dinheiro(h.minimo);
+      c.appendChild(t);
       svg.appendChild(c);
     });
 
@@ -529,54 +464,48 @@ const App = (function () {
     destino.appendChild(el('p', 'dica', 'Cada ponto é o menor preço observado naquele dia, somando todas as lojas.'));
   }
 
-  function renderOfertas(ofertas) {
-    const tb = $('#tbody-ofertas');
-    tb.innerHTML = '';
-    $('#vazio-ofertas').classList.toggle('oculto', ofertas.length > 0);
+  /* ================= ADMINISTRACAO ================= */
+  async function coletar(id, botao) {
+    if (botao) { botao.disabled = true; botao.textContent = '⏳'; }
+    try {
+      const r = await pedir('/api/produtos/' + id + '/coletar', { method: 'POST' });
+      const falhas = r.relatorio.filter((f) => f.erro);
+      if (falhas.length) toast(falhas.map((f) => f.fonte + ': ' + f.erro).join(' | '), true);
+      else toast(r.relatorio.reduce((t, f) => t + f.encontrados, 0) + ' oferta(s) coletada(s).');
+      await carregarProdutos();
+      if (detalhe && detalhe.produto.id === id) { detalhe = r.detalhe; renderDetalhe(); }
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      if (botao) { botao.disabled = false; botao.textContent = '🔄'; }
+    }
+  }
 
-    ofertas.forEach((o, i) => {
-      const tr = el('tr', i === 0 ? 'melhor-linha' : '');
-      tr.appendChild(celula(o.loja, 'ticker'));
-
-      const tdTitulo = el('td', 'titulo-oferta');
-      const textoCurto = (o.titulo || '').length > 62 ? o.titulo.slice(0, 62).trim() + '…' : (o.titulo || 'ver anúncio');
-      if (o.url) {
-        const a = el('a', 'link-externo', textoCurto);
-        a.href = o.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
-        a.title = o.titulo || '';
-        tdTitulo.appendChild(a);
-      } else {
-        tdTitulo.textContent = textoCurto;
-        tdTitulo.title = o.titulo || '';
-      }
-      tr.appendChild(tdTitulo);
-
-      tr.appendChild(celula(o.condicao, o.condicao === 'usado' ? 'negativo' : ''));
-      tr.appendChild(celula((o.vendedor || '—') + (o.vendidos ? ' · ' + o.vendidos + ' vendas' : '')));
-      tr.appendChild(celula(dinheiro(o.preco), 'dir'));
-      tr.appendChild(celula(o.frete > 0 ? dinheiro(o.frete) : 'grátis', 'dir'));
-      tr.appendChild(celula(dinheiro(o.preco_total), 'dir ' + (i === 0 ? 'positivo' : '')));
-
-      const tdAcao = el('td', 'dir');
-      if (o.manual && ehAdmin) {
-        const btn = el('button', 'mini', '🗑');
-        btn.title = 'Excluir oferta manual';
-        btn.addEventListener('click', async () => {
-          try {
-            await pedir('/api/ofertas/' + o.id, { method: 'DELETE' });
-            detalhe = await pedir('/api/produtos/' + detalhe.produto.id);
-            renderDetalhe();
-            toast('Oferta excluída.');
-          } catch (err) { toast(err.message, true); }
-        });
-        tdAcao.appendChild(btn);
-      }
-      tr.appendChild(tdAcao);
-      tb.appendChild(tr);
+  const formProduto = $('#form-produto');
+  if (formProduto) {
+    formProduto.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const p = await pedir('/api/produtos', { method: 'POST', body: dadosForm(e.target) });
+        e.target.reset();
+        await carregarProdutos();
+        toast('Produto adicionado ao acompanhamento.');
+        coletar(p.id);
+      } catch (err) { toast(err.message, true); }
     });
   }
 
-  /* ---------- administracao ---------- */
+  const btnColetarTodos = $('#btn-coletar-todos');
+  if (btnColetarTodos) {
+    btnColetarTodos.addEventListener('click', async (e) => {
+      if (!produtos.length) { toast('Nenhum produto acompanhado.', true); return; }
+      e.target.disabled = true;
+      for (const p of produtos) await coletar(p.id);
+      e.target.disabled = false;
+      toast('Coleta concluída.');
+    });
+  }
+
   async function carregarAdmin() {
     const usuarios = await pedir('/api/admin/usuarios');
     const soma = (campo) => usuarios.reduce((t, u) => t + u[campo], 0);
@@ -614,48 +543,69 @@ const App = (function () {
         if (!senha) return;
         try {
           await pedir('/api/admin/usuarios/' + u.id + '/senha', { method: 'POST', body: { senha } });
-          toast('Senha de ' + u.nome + ' redefinida. As sessões dele foram encerradas.');
-          if (u.id === usuarioAtual.id) location.reload();
+          toast('Senha redefinida.');
+          if (usuarioAtual && u.id === usuarioAtual.id) location.reload();
           else carregarAdmin();
         } catch (err) { toast(err.message, true); }
       });
       tdAcoes.appendChild(btnSenha);
-
-      if (u.id !== usuarioAtual.id) {
-        const btnExcluir = el('button', 'mini', '🗑');
-        btnExcluir.title = 'Excluir conta e todos os dados dela';
-        btnExcluir.addEventListener('click', async () => {
-          if (!confirm('Excluir a conta de ' + u.nome + ' com os produtos e o histórico? Isso não pode ser desfeito.')) return;
-          try {
-            await pedir('/api/admin/usuarios/' + u.id, { method: 'DELETE' });
-            toast('Conta excluída.');
-            carregarAdmin();
-          } catch (err) { toast(err.message, true); }
-        });
-        tdAcoes.appendChild(btnExcluir);
-      }
-
       tr.appendChild(tdAcoes);
+
       tb.appendChild(tr);
     });
   }
 
-  $('#admin-atualizar').addEventListener('click', () => carregarAdmin().catch((e) => toast(e.message, true)));
+  const btnAdminAtualizar = $('#admin-atualizar');
+  if (btnAdminAtualizar) btnAdminAtualizar.addEventListener('click', () => carregarAdmin().catch((e) => toast(e.message, true)));
 
-  /* ---------- inicio ---------- */
+  /* ---------- login (so em /admin) ---------- */
+  $('#form-entrar').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await pedir('/api/login', { method: 'POST', body: dadosForm(e.target) });
+      location.href = '/';
+    } catch (err) {
+      const aviso = $('#aviso-login');
+      aviso.textContent = err.message;
+      aviso.classList.remove('oculto');
+    }
+  });
+
+  $('#btn-voltar-site').addEventListener('click', () => { location.href = '/'; });
+
+  $('#btn-sair').addEventListener('click', async () => {
+    await pedir('/api/logout', { method: 'POST' }).catch(() => {});
+    location.href = '/';
+  });
+
+  /* ================= INICIO ================= */
   (async function iniciar() {
-    let usuario = null;
     try {
-      usuario = await pedir('/api/eu');
+      usuarioAtual = await pedir('/api/eu');
+      ehAdmin = Boolean(usuarioAtual && usuarioAtual.admin);
     } catch {
-      usuario = null; // visitante: o site e publico
+      usuarioAtual = null;
+      ehAdmin = false;
     }
-    try {
-      await abrirApp(usuario);
-    } catch (e) {
-      toast('Nao consegui carregar os produtos: ' + e.message, true);
+
+    const querAdmin = location.pathname.replace(/\/+$/, '') === '/admin';
+
+    if (querAdmin && !usuarioAtual) {
+      $('#tela-login').classList.remove('oculto');
+      document.querySelector('header').classList.add('oculto');
+      document.querySelector('.rodape').classList.add('oculto');
+      return;
     }
+
+    document.querySelectorAll('.so-admin').forEach((e) => e.classList.toggle('oculto', !ehAdmin));
+    $('#btn-sair').classList.toggle('oculto', !usuarioAtual);
+    $('#ola').textContent = usuarioAtual ? usuarioAtual.nome : '';
+
+    await carregarProdutos();
+    carregarSugestoes();
+    mostrar(querAdmin && ehAdmin ? 'admin' : 'busca');
+    $('#campo-busca').focus();
   })();
 
-  return { pedir, toast };
+  return { pedir, toast, buscar };
 })();
