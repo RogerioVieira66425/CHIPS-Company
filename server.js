@@ -91,6 +91,9 @@ function usuarioDaRequisicao(req) {
 }
 
 /* ---------- coletores e analise ---------- */
+// Token do agente coletor local (veja agente.js). Sem ele, a ingestao fica desligada.
+const COLETOR_TOKEN = String(process.env.COLETOR_TOKEN || '').trim();
+let cacheDiagnostico = { quando: 0, dados: null };
 const coletores = [
   require('./coletores/kabum.js'),
   require('./coletores/mercadolivre.js'),
@@ -237,6 +240,83 @@ async function coletarPrecos(userId, produto) {
 /* ---------- rotas ---------- */
 async function api(req, res, rota) {
   const metodo = req.method;
+
+  /* ----- diagnostico publico: as fontes respondem a partir deste servidor? ----- */
+  if (rota === '/api/diagnostico' && metodo === 'GET') {
+    const agora = Date.now();
+    if (cacheDiagnostico.dados && agora - cacheDiagnostico.quando < 5 * 60 * 1000) {
+      return json(res, 200, cacheDiagnostico.dados);
+    }
+    const fontes = [];
+    for (const coletor of coletores) {
+      if (!coletor.configurado()) {
+        fontes.push({ fonte: coletor.nome, ok: false, mensagem: 'Sem credenciais configuradas.' });
+        continue;
+      }
+      try {
+        const ofertas = await coletor.buscar('mouse gamer');
+        fontes.push({ fonte: coletor.nome, ok: true, mensagem: ofertas.length + ' oferta(s) na consulta de teste.' });
+      } catch (e) {
+        fontes.push({ fonte: coletor.nome, ok: false, mensagem: e.message });
+      }
+    }
+    cacheDiagnostico = { quando: agora, dados: { verificado_em: new Date().toISOString(), fontes } };
+    return json(res, 200, cacheDiagnostico.dados);
+  }
+
+  /* ----- ingestao pelo agente coletor local -----
+     O agente roda no computador do usuario (rede brasileira), consulta as lojas
+     e envia o resultado para ca. Autentica com o header X-Coletor-Token. */
+  if (rota.indexOf('/api/ingestao') === 0) {
+    if (!COLETOR_TOKEN) return json(res, 503, { erro: 'Ingestao desativada: defina COLETOR_TOKEN no servidor.' });
+    const enviado = String(req.headers['x-coletor-token'] || '');
+    if (enviado.length !== COLETOR_TOKEN.length ||
+        !crypto.timingSafeEqual(Buffer.from(enviado), Buffer.from(COLETOR_TOKEN))) {
+      return json(res, 401, { erro: 'Token do coletor invalido.' });
+    }
+
+    if (rota === '/api/ingestao/pendentes' && metodo === 'GET') {
+      const linhas = db.prepare('SELECT id, user_id, nome, termo FROM produtos ORDER BY id').all();
+      return json(res, 200, linhas);
+    }
+
+    if (rota === '/api/ingestao' && metodo === 'POST') {
+      const corpo = await lerCorpo(req);
+      const produto = db.prepare('SELECT * FROM produtos WHERE id = ?').get(Number(corpo.produto_id));
+      if (!produto) return json(res, 404, { erro: 'Produto nao encontrado.' });
+      const fonte = String(corpo.fonte || '').trim();
+      if (!fonte) return json(res, 400, { erro: 'Informe a fonte.' });
+
+      const ofertas = Array.isArray(corpo.ofertas) ? corpo.ofertas : [];
+      const agora = new Date().toISOString();
+      const coleta = db.prepare(
+        'INSERT INTO coletas (produto_id, user_id, fonte, executado_em, encontrados, erro) VALUES (?,?,?,?,?,?)'
+      ).run(produto.id, produto.user_id, fonte, agora, ofertas.length, String(corpo.erro || ''));
+
+      const inserir = db.prepare(
+        'INSERT INTO ofertas (coleta_id, produto_id, user_id, loja, titulo, preco, frete, preco_total, condicao, vendedor, reputacao, vendidos, parcelas, url, id_externo, manual, coletado_em) ' +
+        'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)'
+      );
+      let gravadas = 0;
+      ofertas.forEach((o) => {
+        const preco = num(o.preco);
+        const frete = num(o.frete) || 0;
+        if (!Number.isFinite(preco) || preco <= 0) return;
+        inserir.run(
+          Number(coleta.lastInsertRowid), produto.id, produto.user_id,
+          String(o.loja || fonte), String(o.titulo || ''), preco, frete, preco + frete,
+          o.condicao === 'usado' ? 'usado' : 'novo', String(o.vendedor || ''), String(o.reputacao || ''),
+          Number(o.vendidos) || 0, Number(o.parcelas) || 0, String(o.url || ''), String(o.id_externo || ''), agora
+        );
+        gravadas += 1;
+      });
+
+      db.prepare('UPDATE produtos SET atualizado_em = ? WHERE id = ?').run(agora, produto.id);
+      return json(res, 201, { ok: true, produto: produto.nome, fonte, gravadas });
+    }
+
+    return json(res, 404, { erro: 'Rota de ingestao nao encontrada.' });
+  }
 
   if (rota === '/api/registrar' && metodo === 'POST') {
     const { nome, email, senha } = await lerCorpo(req);

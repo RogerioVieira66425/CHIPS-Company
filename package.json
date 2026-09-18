@@ -5,7 +5,9 @@
   "private": true,
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "coletar": "node agente.js",
+    "token": "node agente.js --token"
   },
   "engines": {
     "node": ">=22.5"

@@ -69,6 +69,34 @@ intercambiáveis.
 Sem as credenciais o sistema continua funcionando: a coleta avisa "fonte não configurada"
 e você registra as ofertas manualmente — útil como plano B na apresentação.
 
+## Agente coletor local (contorna o bloqueio geografico)
+
+As lojas respondem normalmente a partir de uma rede brasileira, mas bloqueiam servidores de
+nuvem no exterior (o Render fica em Oregon, EUA): a KaBuM! devolve 403 quando a consulta parte
+de la. A solucao e separar quem coleta de quem analisa:
+
+```
+ Seu computador (IP brasileiro)            Render (servidor publico)
+ ----------------------------              -------------------------
+ node agente.js  --consulta as lojas-->    /api/ingestao  --> banco --> analise --> site
+```
+
+1. Gere um token:  `npm run token`
+2. No Render: *Environment* -> `COLETOR_TOKEN` = o token gerado -> *Save changes*
+3. No seu computador, rode a coleta:
+
+```
+set SERVIDOR=https://meus-investimentos-x7dn.onrender.com
+set COLETOR_TOKEN=o-mesmo-token
+npm run coletar
+```
+
+O agente busca os produtos cadastrados no servidor, consulta as lojas daqui e envia as ofertas.
+Agende esse comando no **Agendador de Tarefas do Windows** (uma vez por dia) e o historico de
+precos do TCC se forma sozinho.
+
+Para conferir quais fontes o servidor alcanca sozinho, abra `/api/diagnostico` no navegador.
+
 ## Telas
 
 - **Produtos** — lista do que você monitora, com melhor loja, menor preço, preço-alvo e última coleta.
@@ -105,6 +133,7 @@ troque para `plan: starter` e descomente o bloco `disk` + `DB_PATH` no `render.y
 | `server.js` | Servidor HTTP, autenticação, rotas da API e orquestração da coleta |
 | `db.js` | Banco SQLite e tabelas (`usuarios`, `sessoes`, `produtos`, `coletas`, `ofertas`) |
 | `analise.js` | Regra de decisão: comparação entre lojas e avaliação do momento de compra |
+| `agente.js` | Agente coletor local: consulta as lojas e envia ao servidor |
 | `coletores/kabum.js` | Coletor da API pública do catálogo da KaBuM! |
 | `coletores/mercadolivre.js` | Coletor da API oficial do Mercado Livre (aguardando liberação) |
 | `public/index.html` | Telas de login, produtos, comparação e administração |
