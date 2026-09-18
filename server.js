@@ -135,7 +135,7 @@ function listarProdutos(userId) {
   const produtos = db.prepare('SELECT * FROM produtos WHERE user_id = ? ORDER BY nome').all(userId);
   return produtos.map((p) => {
     const melhor = db.prepare(
-      'SELECT loja, preco_total, coletado_em FROM ofertas WHERE produto_id = ? ' +
+      'SELECT loja, preco_total, coletado_em, url, titulo FROM ofertas WHERE produto_id = ? ' +
       'AND coleta_id IN (SELECT c.id FROM coletas c WHERE c.produto_id = ? AND c.executado_em = ' +
     '  (SELECT MAX(c2.executado_em) FROM coletas c2 WHERE c2.produto_id = c.produto_id AND c2.fonte = c.fonte)) ' +
       'ORDER BY preco_total LIMIT 1'
@@ -148,6 +148,8 @@ function listarProdutos(userId) {
     return Object.assign({}, p, {
       menor_preco: melhor ? melhor.preco_total : 0,
       melhor_loja: melhor ? melhor.loja : '',
+      melhor_url: melhor ? melhor.url : '',
+      melhor_titulo: melhor ? melhor.titulo : '',
       ultima_coleta: melhor ? melhor.coletado_em : '',
       ofertas: total ? total.n : 0,
     });

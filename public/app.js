@@ -183,7 +183,18 @@ const App = (function () {
       tdCat.appendChild(el('span', 'etiqueta', p.categoria));
       tr.appendChild(tdCat);
 
-      tr.appendChild(celula(p.melhor_loja || '—'));
+      const tdLoja = el('td');
+      if (p.melhor_url) {
+        const a = el('a', 'link-externo', p.melhor_loja + ' ↗');
+        a.href = p.melhor_url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.title = 'Abrir a melhor oferta na loja';
+        tdLoja.appendChild(a);
+      } else {
+        tdLoja.textContent = p.melhor_loja || '—';
+      }
+      tr.appendChild(tdLoja);
 
       const abaixoAlvo = p.preco_alvo > 0 && p.menor_preco > 0 && p.menor_preco <= p.preco_alvo;
       tr.appendChild(celula(p.menor_preco ? dinheiro(p.menor_preco) : '—', 'dir ' + (abaixoAlvo ? 'positivo' : '')));
@@ -361,6 +372,16 @@ const App = (function () {
     if (melhor.condicao !== 'novo') detalhes.push('produto ' + melhor.condicao);
     if (melhor.parcelas > 0) detalhes.push('até ' + melhor.parcelas + 'x');
     esquerda.appendChild(el('small', 'neutro', detalhes.join(' · ')));
+
+    if (melhor.titulo) esquerda.appendChild(el('p', 'anuncio-titulo', melhor.titulo));
+
+    if (melhor.url) {
+      const comprar = el('a', 'botao primario comprar', 'Ir à loja e comprar ↗');
+      comprar.href = melhor.url;
+      comprar.target = '_blank';
+      comprar.rel = 'noopener noreferrer';
+      esquerda.appendChild(comprar);
+    }
     topo.appendChild(esquerda);
 
     const direita = el('div', 'veredito-momento');
@@ -415,7 +436,18 @@ const App = (function () {
       barra.style.width = (o.preco_total / maximo) * 100 + '%';
       trilho.appendChild(barra);
       li.appendChild(trilho);
-      li.appendChild(el('span', 'barra-valor', dinheiro(o.preco_total)));
+      const valor = el('span', 'barra-valor');
+      if (o.url) {
+        const a = el('a', 'link-externo', dinheiro(o.preco_total) + ' ↗');
+        a.href = o.url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.title = o.titulo || ('Abrir na ' + o.loja);
+        valor.appendChild(a);
+      } else {
+        valor.textContent = dinheiro(o.preco_total);
+      }
+      li.appendChild(valor);
       ul.appendChild(li);
     });
     destino.appendChild(ul);

@@ -97,6 +97,33 @@ precos do TCC se forma sozinho.
 
 Para conferir quais fontes o servidor alcanca sozinho, abra `/api/diagnostico` no navegador.
 
+## Como consultar as lojas sem ser bloqueado
+
+Testes feitos a partir de uma rede residencial brasileira (17/09/2026):
+
+| Caminho | Resultado | Quando usar |
+|---|---|---|
+| **API pública** (KaBuM!) | 200, JSON limpo | Sempre que a loja tiver uma. É o caminho mais estável e leve |
+| **API oficial com credencial** (Mercado Livre) | 403 para apps não liberados | Quando houver liberação do endpoint |
+| **HTML via `fetch`** (Pichau, Terabyte, Amazon) | 403 / 503 mesmo com cabeçalhos de navegador | Não funciona: as proteções exigem um navegador real |
+| **Navegador real** (Playwright/Puppeteer) | Carrega normalmente (verificado na Pichau) | Para as lojas acima, rodando no agente local |
+| **Lançamento manual** | Sempre funciona | Plano B garantido para a apresentação |
+
+Boas práticas já implementadas no agente e nos coletores, que evitam bloqueio e são o
+comportamento correto com quem fornece os dados:
+
+- **Cabeçalhos de navegador** (User-Agent, Accept-Language, Origin, Referer) em toda consulta.
+- **Pausa entre requisições** (`PAUSA_MS`, padrão 1,5 s) — nada de rajada.
+- **Uma consulta por termo**, mesmo quando o resultado vai para vários destinos.
+- **Baixa frequência**: uma coleta por dia já forma o histórico e não incomoda a loja.
+- **Sem paralelismo**: as consultas são sequenciais.
+- **Erro tratado, não insistido**: 403/503 viram mensagem explicativa, sem tentar de novo em loop.
+
+O que *não* fazer: girar proxies, falsificar IP ou contornar CAPTCHA. Além de violar os termos
+de uso das lojas, tornaria o trabalho indefensável na banca. Quando uma loja bloqueia
+deliberadamente, as saídas legítimas são a API oficial, o navegador real em volume baixo ou
+o registro manual.
+
 ## Telas
 
 - **Produtos** — lista do que você monitora, com melhor loja, menor preço, preço-alvo e última coleta.

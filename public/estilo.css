@@ -292,3 +292,7 @@ code { background: #0f141c; padding: 1px 5px; border-radius: 4px; }
 .aviso-fontes p { margin: 0; font-size: 13px; color: var(--texto-fraco); }
 .aviso-fontes .comando { background: #0b0f16; border: 1px solid var(--borda); padding: 8px 12px; border-radius: 8px; font-family: Consolas, monospace; justify-self: start; }
 .aviso-fontes small { color: var(--texto-fraco); font-size: 11px; }
+
+.comprar { display: inline-block; margin-top: 12px; text-decoration: none; }
+.anuncio-titulo { margin: 10px 0 0; font-size: 13px; color: var(--texto-fraco); max-width: 420px; }
+.barra-valor .link-externo { font-variant-numeric: tabular-nums; }

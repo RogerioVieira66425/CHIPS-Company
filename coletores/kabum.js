@@ -16,10 +16,9 @@ function normalizar(item) {
   const a = item.attributes || {};
   // price_with_discount é o preço à vista (boleto/pix); price é o "de".
   const preco = Number(a.price_with_discount) > 0 ? Number(a.price_with_discount) : Number(a.price) || 0;
-  const linkRelativo = a.product_link || '';
-  const url = linkRelativo
-    ? (linkRelativo.indexOf('http') === 0 ? linkRelativo : 'https://www.kabum.com.br' + (linkRelativo[0] === '/' ? '' : '/') + linkRelativo)
-    : 'https://www.kabum.com.br/produto/' + item.id;
+  // product_link e apenas o "slug" do produto: a URL valida e /produto/{id}/{slug}
+  const slug = String(a.product_link || '').replace(/^\//, '');
+  const url = 'https://www.kabum.com.br/produto/' + item.id + (slug ? '/' + slug : '');
 
   return {
     loja: NOME,
