@@ -27,16 +27,20 @@ const SERVIDORES = String(process.env.SERVIDOR || 'http://localhost:3000')
   .map((u) => u.trim().replace(/\/+$/, ''))
   .filter(Boolean);
 const TOKEN = String(process.env.COLETOR_TOKEN || '').trim();
-const PAUSA_MS = Number(process.env.PAUSA_MS) || 1500; // respeita as lojas entre consultas
+// cada consulta vai para uma loja diferente, entao a pausa entre elas pode ser curta
+const PAUSA_MS = Number(process.env.PAUSA_MS) || 600;
 
 /* O agente roda na maquina do usuario: pode usar o navegador local para as lojas
    que recusam requisicoes simples. O servidor publico usa so as fontes por API. */
 const coletores = [
-  require('./coletores/kabum.js'),
-  require('./coletores/pichau.js'),
-  require('./coletores/terabyte.js'),
-  require('./coletores/magalu.js'),
-  require('./coletores/mercadolivre.js'),
+  require('./coletores/kabum.js'),      // API publica
+  require('./coletores/pichau.js'),     // navegador
+  require('./coletores/terabyte.js'),   // navegador
+  require('./coletores/patoloco.js'),   // navegador
+  require('./coletores/setupninja.js'), // navegador
+  require('./coletores/amazon.js'),     // navegador
+  require('./coletores/magalu.js'),     // desligada: a loja bloqueia
+  require('./coletores/mercadolivre.js'), // desligada: exige liberacao da API
 ];
 
 if (process.argv.indexOf('--token') !== -1) {

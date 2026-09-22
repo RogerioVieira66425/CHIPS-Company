@@ -37,16 +37,31 @@ Projeto de TCC. Sem bibliotecas externas: só Node.js (o SQLite já vem embutido
 4. **Interface** — lista de produtos monitorados, tela de comparação com veredito, ranking
    por loja e gráfico do menor preço por dia.
 
-## Fontes de preço
+## Lojas consultadas
 
 | Loja | Como é consultada | Situação |
 |---|---|---|
 | **KaBuM!** | API pública do catálogo | Funcionando |
-| **Pichau** | Navegador local (CDP) | Funcionando |
-| **Terabyte** | Navegador local (CDP) | Funcionando |
-| Magazine Luiza | Navegador local (CDP) | Bloqueia acesso automatizado; desligada (`MAGALU_ATIVO=1` para testar) |
-| Mercado Livre | API oficial | Bloqueada: apps não liberados recebem 403 |
+| **Pichau** | Navegador local | Funcionando |
+| **Terabyte** | Navegador local | Funcionando |
+| **Patoloco** | Navegador local | Funcionando |
+| **Setup Ninja** | Navegador local | Funcionando |
+| **Amazon BR** | Navegador local | Funcionando |
+| Magazine Luiza | Navegador local | Bloqueia acesso automatizado; desligada (`MAGALU_ATIVO=1` para testar) |
+| Mercado Livre | API oficial | Bloqueada: apps não liberados recebem 403, e a busca no site exige login |
 | Qualquer loja | Lançamento manual na interface | Sempre disponível |
+
+Uma busca consulta as seis lojas ativas em cerca de 40 segundos. Exemplo real
+("mouse logitech g502"): 51 ofertas coletadas, 23 relevantes, e o produto encontrado em três
+lojas — KaBuM! R$ 257,39, Amazon R$ 267,34 e Pichau R$ 339,99.
+
+### Sobre o Mercado Livre
+
+Duas portas fechadas: a API oficial responde **403** para aplicações não liberadas (mesmo com
+credenciais válidas e token emitido), e a busca pelo site redireciona para
+`account-verification` — exige conta logada, inclusive num navegador real. Usar a sessão pessoal
+de alguém para raspagem violaria os termos de uso, então a loja fica disponível apenas pelo
+lançamento manual de ofertas.
 
 ### Navegador local, sem dependências
 
@@ -175,6 +190,9 @@ troque para `plan: starter` e descomente o bloco `disk` + `DB_PATH` no `render.y
 | `coletores/navegador.js` | Controla o Chrome local via DevTools Protocol (sem dependências) |
 | `coletores/kabum.js` | Coletor da API pública do catálogo da KaBuM! |
 | `coletores/pichau.js` | Coletor da Pichau (navegador local) |
+| `coletores/patoloco.js` | Coletor da Patoloco (navegador local) |
+| `coletores/setupninja.js` | Coletor da Setup Ninja (navegador local) |
+| `coletores/amazon.js` | Coletor da Amazon BR (navegador local) |
 | `coletores/terabyte.js` | Coletor da Terabyte (navegador local) |
 | `coletores/magalu.js` | Coletor do Magazine Luiza (desligado: a loja bloqueia) |
 | `coletores/mercadolivre.js` | Coletor da API oficial do Mercado Livre (aguardando liberação) |
