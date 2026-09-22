@@ -62,6 +62,32 @@ function filtrarRelevantes(ofertas, termo, minimo) {
   return { ofertas: aprovadas, corte };
 }
 
+/* Dois anuncios falam do mesmo produto? Compara as palavras dos titulos.
+   Serve para nao anunciar "economia" entre modelos diferentes. */
+// palavras de categoria/marketing nao distinguem um modelo de outro
+const PALAVRAS_GENERICAS = [
+  'teclado', 'mouse', 'mousepad', 'headset', 'fone', 'monitor', 'cadeira', 'gabinete',
+  'mecanico', 'mecanica', 'gamer', 'rgb', 'led', 'usb', 'fio', 'sem', 'com', 'wireless',
+  'bluetooth', 'preto', 'branco', 'dpi', 'botoes', 'switch', 'anti', 'ghosting', 'abnt2',
+  'pro', 'plus', 'rainbow', 'lightsync',
+];
+
+function parecidos(a, b) {
+  const palavras = (t) => new Set(
+    normalizar(t).split(' ').filter((x) =>
+      x.length >= 3 &&
+      PALAVRAS_IGNORADAS.indexOf(x) === -1 &&
+      PALAVRAS_GENERICAS.indexOf(x) === -1
+    )
+  );
+  const A = palavras(a);
+  const B = palavras(b);
+  if (!A.size || !B.size) return false;
+  let comuns = 0;
+  A.forEach((x) => { if (B.has(x)) comuns += 1; });
+  return comuns / Math.min(A.size, B.size) >= 0.6;
+}
+
 function mediana(valores) {
   if (!valores.length) return 0;
   const v = valores.slice().sort((a, b) => a - b);
@@ -94,11 +120,16 @@ function compararLojas(ofertas, opcoes) {
   const pior = ranking[ranking.length - 1];
   const economia = pior.preco_total - melhor.preco_total;
 
+  // As lojas podem ter devolvido modelos diferentes (comum em busca generica).
+  // Nesse caso nao faz sentido falar em "economia": seria comparar produtos distintos.
+  const mesmoProduto = ranking.length < 2 || ranking.every((o) => parecidos(melhor.titulo, o.titulo));
+
   return {
     ranking,
     melhor,
-    economia,
-    economia_pct: pior.preco_total > 0 ? (economia / pior.preco_total) * 100 : 0,
+    economia: mesmoProduto ? economia : 0,
+    economia_pct: mesmoProduto && pior.preco_total > 0 ? (economia / pior.preco_total) * 100 : 0,
+    mesmo_produto: mesmoProduto,
     // o mais barato nem sempre e o recomendado: avisamos quando diferem
     mais_barato: ranking.slice().sort((a, b) => a.preco_total - b.preco_total)[0],
   };
@@ -148,4 +179,4 @@ function avaliarMomento(precoAtual, historico) {
   return { status, titulo, texto, minimo, maximo, mediana: med, variacao_pct: variacao, dias: valores.length };
 }
 
-module.exports = { compararLojas, avaliarMomento, custoAjustado, mediana, filtrarRelevantes, aderencia, termosRelevantes };
+module.exports = { compararLojas, avaliarMomento, custoAjustado, mediana, filtrarRelevantes, aderencia, termosRelevantes, parecidos };

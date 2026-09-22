@@ -205,6 +205,11 @@ const App = (function () {
       cartao.appendChild(el('p', 'economia',
         'Comprando aqui em vez da loja mais cara você economiza ' + dinheiro(comparacao.economia) +
         ' (' + pctFmt(comparacao.economia_pct) + ').'));
+    } else if (comparacao.mesmo_produto === false) {
+      cartao.appendChild(el('p', 'dica',
+        'As lojas trouxeram modelos diferentes para esta busca, então não dá para falar em economia: ' +
+        'a lista abaixo mostra a opção mais barata de cada loja. Para comparar o mesmo produto, ' +
+        'busque pelo modelo exato (ex.: "redragon kumara k552").'));
     }
 
     const maisBarato = comparacao.mais_barato;
