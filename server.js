@@ -94,6 +94,10 @@ function usuarioDaRequisicao(req) {
 // Token do agente coletor local (veja agente.js). Sem ele, a ingestao fica desligada.
 const COLETOR_TOKEN = String(process.env.COLETOR_TOKEN || '').trim();
 let cacheDiagnostico = { quando: 0, dados: null };
+// Quando o agente local esta ativo, ele atende as buscas: tem mais lojas que o servidor.
+let ultimoSinalDoAgente = 0;
+const AGENTE_ATIVO_MS = 60000;
+const agenteAtivo = () => Date.now() - ultimoSinalDoAgente < AGENTE_ATIVO_MS;
 const coletores = [
   require('./coletores/kabum.js'),
   require('./coletores/mercadolivre.js'),
@@ -299,7 +303,14 @@ async function executarBuscaLocalmente(id, termo) {
   if (!algumaOk) return false;
 
   const todas = fontes.reduce((acc, f) => acc.concat(f.ofertas), []);
-  const resultado = { fontes, comparacao: analise.compararLojas(todas) };
+  const filtrado = analise.filtrarRelevantes(todas, termo);
+  const resultado = {
+    fontes,
+    comparacao: analise.compararLojas(filtrado.ofertas),
+    relevantes: filtrado.ofertas.length,
+    total_bruto: todas.length,
+    poucas_correspondencias: Boolean(filtrado.poucasCorrespondencias),
+  };
   db.prepare("UPDATE buscas SET status = 'pronta', resultado = ?, erro = '', origem = 'servidor', atualizado_em = ? WHERE id = ?")
     .run(JSON.stringify(resultado), new Date().toISOString(), id);
   return true;
@@ -345,6 +356,7 @@ async function api(req, res, rota) {
 
     /* fila de buscas pedidas pelos visitantes */
     if (rota === '/api/ingestao/buscas' && metodo === 'GET') {
+      ultimoSinalDoAgente = Date.now();
       const linhas = db.prepare(
         "SELECT id, termo FROM buscas WHERE status = 'pendente' ORDER BY id LIMIT 10"
       ).all();
@@ -364,8 +376,15 @@ async function api(req, res, rota) {
       const c = await lerCorpo(req);
       const fontes = Array.isArray(c.fontes) ? c.fontes : [];
       const todas = fontes.reduce((acc, f) => acc.concat(Array.isArray(f.ofertas) ? f.ofertas : []), []);
-      const encontrou = todas.length > 0;
-      const resultado = { fontes, comparacao: analise.compararLojas(todas) };
+      const filtrado = analise.filtrarRelevantes(todas, linha.termo);
+      const encontrou = filtrado.ofertas.length > 0;
+      const resultado = {
+        fontes,
+        comparacao: analise.compararLojas(filtrado.ofertas),
+        relevantes: filtrado.ofertas.length,
+        total_bruto: todas.length,
+        poucas_correspondencias: Boolean(filtrado.poucasCorrespondencias),
+      };
 
       db.prepare('UPDATE buscas SET status = ?, resultado = ?, erro = ?, origem = ?, atualizado_em = ? WHERE id = ?')
         .run(
@@ -503,10 +522,13 @@ async function api(req, res, rota) {
     ).run(t, agora, agora);
     const id = Number(info.lastInsertRowid);
 
-    // se este servidor alcanca as lojas, ja responde na hora
-    try {
-      await executarBuscaLocalmente(id, t);
-    } catch (e) { /* segue para a fila do agente */ }
+    // com agente ativo, a busca vai para a fila dele (mais lojas);
+    // sem agente, o proprio servidor tenta responder na hora
+    if (!agenteAtivo()) {
+      try {
+        await executarBuscaLocalmente(id, t);
+      } catch (e) { /* segue para a fila do agente */ }
+    }
 
     const linha = db.prepare('SELECT * FROM buscas WHERE id = ?').get(id);
     return json(res, linha.status === 'pronta' ? 200 : 202, formatarBusca(linha));

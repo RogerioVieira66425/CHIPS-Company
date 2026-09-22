@@ -142,7 +142,14 @@ const App = (function () {
   function renderResultado(busca) {
     const r = busca.resultado || {};
     const comparacao = r.comparacao || { ranking: [], melhor: null, economia: 0, economia_pct: 0 };
-    const ofertas = (r.fontes || []).reduce((acc, f) => acc.concat(f.ofertas || []), []);
+    // mostra apenas as ofertas que combinam com o que foi pesquisado
+    const termos = String(busca.termo || '').toLowerCase().normalize('NFD').replace(/[^a-z0-9 ]/g, '').split(' ').filter((t) => t.length >= 3 && t !== 'gamer');
+    const combina = (titulo) => {
+      if (!termos.length) return true;
+      const alvo = String(titulo || '').toLowerCase().normalize('NFD').replace(/[^a-z0-9 ]/g, '');
+      return termos.filter((t) => alvo.indexOf(t) !== -1).length / termos.length >= 0.7;
+    };
+    let ofertas = (r.fontes || []).reduce((acc, f) => acc.concat(f.ofertas || []), []).filter((o) => combina(o.titulo));
     ofertas.sort((a, b) => a.preco_total - b.preco_total);
 
     $('#resultado').classList.remove('oculto');

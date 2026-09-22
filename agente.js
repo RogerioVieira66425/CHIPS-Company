@@ -29,8 +29,13 @@ const SERVIDORES = String(process.env.SERVIDOR || 'http://localhost:3000')
 const TOKEN = String(process.env.COLETOR_TOKEN || '').trim();
 const PAUSA_MS = Number(process.env.PAUSA_MS) || 1500; // respeita as lojas entre consultas
 
+/* O agente roda na maquina do usuario: pode usar o navegador local para as lojas
+   que recusam requisicoes simples. O servidor publico usa so as fontes por API. */
 const coletores = [
   require('./coletores/kabum.js'),
+  require('./coletores/pichau.js'),
+  require('./coletores/terabyte.js'),
+  require('./coletores/magalu.js'),
   require('./coletores/mercadolivre.js'),
 ];
 

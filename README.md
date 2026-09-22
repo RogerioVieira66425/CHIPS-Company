@@ -39,29 +39,37 @@ Projeto de TCC. Sem bibliotecas externas: só Node.js (o SQLite já vem embutido
 
 ## Fontes de preço
 
-| Fonte | Como entra | Situação (testado em 17/09/2026) |
+| Loja | Como é consultada | Situação |
 |---|---|---|
-| **KaBuM!** | API pública do catálogo | **Funcionando**, sem credenciais |
-| Mercado Livre | API oficial (`/sites/MLB/search`) | **Bloqueada**: aplicações comuns recebem 403 |
-| Pichau, Terabyte, Magalu | HTML público | Respondem 403 a requisições fora do navegador |
-| Amazon BR | HTML público | Responde 503 (proteção anti-robô) |
+| **KaBuM!** | API pública do catálogo | Funcionando |
+| **Pichau** | Navegador local (CDP) | Funcionando |
+| **Terabyte** | Navegador local (CDP) | Funcionando |
+| Magazine Luiza | Navegador local (CDP) | Bloqueia acesso automatizado; desligada (`MAGALU_ATIVO=1` para testar) |
+| Mercado Livre | API oficial | Bloqueada: apps não liberados recebem 403 |
 | Qualquer loja | Lançamento manual na interface | Sempre disponível |
 
-### A restrição do Mercado Livre (limitação documentada do projeto)
+### Navegador local, sem dependências
 
-A integração com o Mercado Livre está implementada e a autenticação funciona: o app emite o
-token normalmente pelo fluxo *client credentials*. O que o Mercado Livre bloqueia é a consulta:
-o endpoint `/sites/MLB/search` passou a responder **403 forbidden** para aplicações que não foram
-liberadas, mesmo com token válido e permissão de leitura. Vários desenvolvedores relataram a
-mesma mudança em 2025, e a liberação exige pedido ao suporte / Developer Partner Program.
+Pichau e Terabyte recusam requisições HTTP simples (403), mesmo com cabeçalhos de navegador.
+A solução em `coletores/navegador.js` usa o **Chrome que já existe na máquina**, controlado pelo
+**Chrome DevTools Protocol** através do WebSocket nativo do Node — nenhuma biblioteca instalada.
 
-A busca em HTML público (`lista.mercadolivre.com.br`) também não serve de alternativa: o site
-devolve uma página de verificação de "tráfego suspeito" para requisições que não vêm de um navegador.
+Dois detalhes descobertos nos testes:
 
-O coletor continua no projeto e volta a funcionar sozinho no dia em que o acesso for liberado —
-basta as credenciais estarem configuradas. É bom material para a seção de limitações e decisões
-de projeto do TCC: mostra dependência de terceiros e o valor de uma arquitetura de coletores
-intercambiáveis.
+- **Modo headless é detectado**: a Pichau devolve "Site em Manutenção" para `--headless`. A janela
+  é aberta normalmente, mas posicionada fora da tela (`--window-position=-32000,-32000`).
+- Cada consulta abre uma aba nova e a fecha ao terminar; o navegador fica aberto entre as buscas.
+
+### Relevância: não comparar produtos diferentes
+
+As lojas completam a busca com produtos parecidos. Procurando "teclado redragon kumara", a
+Terabyte devolveu um "Rise Mode G1" de R$ 39,99 — e, sem tratamento, o sistema recomendaria
+esse teclado, que não é o que a pessoa quer.
+
+`analise.filtrarRelevantes()` resolve isso: normaliza o texto (minúsculas, sem acento), separa os
+termos da busca com 3+ letras e exige que **70% deles apareçam no título do anúncio**. Se nenhum
+anúncio passar, devolve os cinco mais parecidos em vez de uma lista vazia. No teste real: 36
+ofertas coletadas, 24 relevantes, e o falso positivo de R$ 39,99 eliminado.
 
 ### Credenciais do Mercado Livre
 1. Acesse https://developers.mercadolivre.com.br → *Suas aplicações* → **Criar aplicação**.
@@ -164,7 +172,11 @@ troque para `plan: starter` e descomente o bloco `disk` + `DB_PATH` no `render.y
 | `db.js` | Banco SQLite e tabelas (`usuarios`, `sessoes`, `produtos`, `coletas`, `ofertas`) |
 | `analise.js` | Regra de decisão: comparação entre lojas e avaliação do momento de compra |
 | `agente.js` | Agente coletor local: consulta as lojas e envia ao servidor |
+| `coletores/navegador.js` | Controla o Chrome local via DevTools Protocol (sem dependências) |
 | `coletores/kabum.js` | Coletor da API pública do catálogo da KaBuM! |
+| `coletores/pichau.js` | Coletor da Pichau (navegador local) |
+| `coletores/terabyte.js` | Coletor da Terabyte (navegador local) |
+| `coletores/magalu.js` | Coletor do Magazine Luiza (desligado: a loja bloqueia) |
 | `coletores/mercadolivre.js` | Coletor da API oficial do Mercado Livre (aguardando liberação) |
 | `public/index.html` | Telas de login, produtos, comparação e administração |
 | `public/app.js` | Lógica da interface, gráfico de histórico e chamadas à API |

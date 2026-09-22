@@ -17,6 +17,51 @@ function custoAjustado(oferta) {
   return oferta.preco_total * fator;
 }
 
+/* ---------- relevancia ----------
+   As lojas completam a busca com produtos parecidos: procurar "redragon kumara"
+   traz teclados de outras marcas. Sem este filtro o sistema compararia produtos
+   diferentes e recomendaria o mais barato de todos, que nao e o que a pessoa quer. */
+const PALAVRAS_IGNORADAS = ['de', 'da', 'do', 'para', 'com', 'e', 'a', 'o', 'em', 'gamer'];
+
+function normalizar(texto) {
+  return String(texto || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function termosRelevantes(termo) {
+  return normalizar(termo)
+    .split(' ')
+    .filter((t) => t.length >= 3 && PALAVRAS_IGNORADAS.indexOf(t) === -1);
+}
+
+/* Fracao dos termos da busca presentes no titulo do anuncio. */
+function aderencia(titulo, termos) {
+  if (!termos.length) return 1;
+  const alvo = normalizar(titulo);
+  const achados = termos.filter((t) => alvo.indexOf(t) !== -1).length;
+  return achados / termos.length;
+}
+
+function filtrarRelevantes(ofertas, termo, minimo) {
+  const termos = termosRelevantes(termo);
+  if (!termos.length) return { ofertas, corte: 0 };
+
+  const corte = typeof minimo === 'number' ? minimo : 0.7;
+  const comNota = ofertas.map((o) => Object.assign({}, o, { aderencia: aderencia(o.titulo, termos) }));
+  const aprovadas = comNota.filter((o) => o.aderencia >= corte);
+
+  // se nada passou, devolve as mais parecidas em vez de uma lista vazia
+  if (!aprovadas.length) {
+    const melhores = comNota.sort((a, b) => b.aderencia - a.aderencia).slice(0, 5).filter((o) => o.aderencia > 0);
+    return { ofertas: melhores, corte, poucasCorrespondencias: true };
+  }
+  return { ofertas: aprovadas, corte };
+}
+
 function mediana(valores) {
   if (!valores.length) return 0;
   const v = valores.slice().sort((a, b) => a - b);
@@ -103,4 +148,4 @@ function avaliarMomento(precoAtual, historico) {
   return { status, titulo, texto, minimo, maximo, mediana: med, variacao_pct: variacao, dias: valores.length };
 }
 
-module.exports = { compararLojas, avaliarMomento, custoAjustado, mediana };
+module.exports = { compararLojas, avaliarMomento, custoAjustado, mediana, filtrarRelevantes, aderencia, termosRelevantes };
