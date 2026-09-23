@@ -745,7 +745,6 @@ const App = (function () {
     if (querAdmin && !usuarioAtual) {
       $('#tela-login').classList.remove('oculto');
       document.querySelector('header').classList.add('oculto');
-      document.querySelector('.rodape').classList.add('oculto');
       return;
     }
 
