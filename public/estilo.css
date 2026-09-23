@@ -480,3 +480,45 @@ body:not(.capa) #fundo-gamer { opacity: 0; }
 
 /* o conteudo fica sempre acima da animacao */
 header.topo, main.conteudo, .rodape-site, .tela-login { position: relative; z-index: 1; }
+
+/* ---------- entrada da capa: os elementos surgem em sequencia ---------- */
+@keyframes surgir {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes surgirEscala {
+  from { opacity: 0; transform: translateY(18px) scale(.97); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes aparecer {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes descerMarca {
+  from { opacity: 0; transform: translateX(-12px); }
+  to   { opacity: 1; transform: none; }
+}
+
+body.capa .heroi h1      { animation: surgir .75s cubic-bezier(.2,.75,.3,1) both; }
+body.capa .heroi .sub    { animation: surgir .75s cubic-bezier(.2,.75,.3,1) .12s both; }
+body.capa .caixa-busca   { animation: surgirEscala .8s cubic-bezier(.2,.75,.3,1) .24s both; }
+body.capa #frase         { animation: surgir .7s ease .55s both; }
+body.capa #sugestoes     { animation: surgir .7s ease .7s both; }
+body.capa #fundo-gamer   { animation: aparecer 1.6s ease .1s both; }
+.marca-empresa           { animation: descerMarca .7s cubic-bezier(.2,.75,.3,1) both; }
+.rodape-site             { animation: aparecer 1s ease .8s both; }
+
+/* o campo de busca ganha foco sozinho: um leve destaque ao chegar */
+@keyframes respirar {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(232, 37, 63, 0); }
+  50%      { box-shadow: 0 0 22px 0 rgba(232, 37, 63, .22); }
+}
+body.capa .caixa-busca .botao.primario { animation: respirar 2.8s ease-in-out 1.2s 2; }
+
+@media (prefers-reduced-motion: reduce) {
+  body.capa .heroi h1, body.capa .heroi .sub, body.capa .caixa-busca,
+  body.capa #frase, body.capa #sugestoes, body.capa #fundo-gamer,
+  .marca-empresa, .rodape-site, body.capa .caixa-busca .botao.primario {
+    animation: none;
+  }
+}
