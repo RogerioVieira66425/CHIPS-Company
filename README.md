@@ -171,6 +171,42 @@ O `render.yaml` está no plano **free**, então:
 Para o TCC o histórico é o coração do trabalho: antes de começar a coletar dados de verdade,
 troque para `plan: starter` e descomente o bloco `disk` + `DB_PATH` no `render.yaml`.
 
+## Rotinas automáticas
+
+| Arquivo | O que faz |
+|---|---|
+| `INICIAR.bat` | Sobe o sistema local em http://localhost:3000 |
+| `ATENDER-BUSCAS.bat` | Agente em modo serviço: responde as buscas dos visitantes do site público |
+| `COLETA-DIARIA.bat` | Coleta os preços dos produtos acompanhados e grava no histórico |
+
+A coleta diária está agendada no Windows para rodar todo dia às 09:00
+(tarefa `ComparadorPrecos-ColetaDiaria`). É ela que constrói a série temporal de preços.
+
+Para conferir, alterar o horário ou remover:
+
+```
+schtasks /Query /TN "ComparadorPrecos-ColetaDiaria"
+schtasks /Change /TN "ComparadorPrecos-ColetaDiaria" /ST 20:00
+schtasks /Delete /TN "ComparadorPrecos-ColetaDiaria" /F
+```
+
+## Desempenho e métricas
+
+As lojas são consultadas **em paralelo**: uma busca completa leva cerca de 18 segundos
+(eram 45 quando era uma loja por vez). A tela **Métricas** mostra, a partir das buscas reais:
+número de buscas, tempo médio e mediano, taxa de sucesso e tempo de resposta de cada loja,
+quantas ofertas foram descartadas pelo filtro de relevância e os termos mais procurados —
+material direto para o capítulo de resultados.
+
+### Frete por CEP (em aberto)
+
+A infraestrutura existe (`coletores/frete.js`): o agente abre a página da oferta, digita o CEP
+com eventos de teclado reais do Chrome e lê o bloco de entrega. Funciona quando a página é
+operada manualmente, mas as lojas não disparam o cálculo de frete para o navegador automatizado —
+testado na KaBuM!, Pichau e Terabyte, com digitação caractere a caractere, clique real de mouse e
+janela visível. Por isso o frete continua entrando como zero (ou pelo lançamento manual), e o
+sistema deixa claro na tela quando o valor é apenas o preço do produto.
+
 ## Segurança
 
 - Senhas com `scrypt` + salt aleatório; nunca em texto puro.

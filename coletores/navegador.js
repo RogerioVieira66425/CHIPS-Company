@@ -59,7 +59,7 @@ async function abrirDeVerdade() {
   // Sem --headless: varias lojas detectam o modo headless e devolvem pagina de
   // manutencao. A janela abre fora da tela, entao nao atrapalha quem esta usando o PC.
   const processo = spawn(CHROME, [
-    '--window-position=-32000,-32000',
+    process.env.JANELA_VISIVEL === '1' ? '--window-position=40,40' : '--window-position=-32000,-32000',
     '--remote-debugging-port=0',
     '--user-data-dir=' + perfil,
     '--no-first-run',
@@ -102,7 +102,7 @@ function fechar() {
 }
 
 /* Conversa CDP com uma aba: navega ate a url e roda o script de extracao. */
-function comAba(wsUrl, url, script, esperaMs, visitarAntes) {
+function comAba(wsUrl, url, script, esperaMs, visitarAntes, interacao) {
   return new Promise((resolve, reject) => {
     let visitaPendente = Boolean(visitarAntes);
     const socket = new WebSocket(wsUrl);
@@ -142,6 +142,68 @@ function comAba(wsUrl, url, script, esperaMs, visitarAntes) {
         }
         try {
           await esperar(esperaMs || 2500); // deixa o JS da loja montar a lista
+
+          /* Interacao opcional: digitar de verdade num campo (CEP, por exemplo).
+             Eventos sinteticos de teclado sao ignorados por varias lojas; aqui
+             o texto entra pelo proprio Chrome, como se a pessoa tivesse digitado. */
+          if (interacao) {
+            const foco = await enviar('Runtime.evaluate', {
+              expression: interacao.preparar,
+              returnByValue: true,
+              awaitPromise: true,
+            });
+            const achou = foco && foco.result && foco.result.value;
+            if (achou) {
+              /* Digita caractere por caractere, como uma pessoa: varias lojas so
+                 calculam o frete quando recebem os eventos de tecla de verdade. */
+              for (const ch of String(interacao.texto || '')) {
+                await enviar('Input.dispatchKeyEvent', {
+                  type: 'keyDown', text: ch, unmodifiedText: ch, key: ch,
+                  windowsVirtualKeyCode: ch.charCodeAt(0), nativeVirtualKeyCode: ch.charCodeAt(0),
+                });
+                await enviar('Input.dispatchKeyEvent', {
+                  type: 'keyUp', key: ch,
+                  windowsVirtualKeyCode: ch.charCodeAt(0), nativeVirtualKeyCode: ch.charCodeAt(0),
+                });
+                await esperar(60);
+              }
+              await esperar(600);
+              if (interacao.enter) {
+                for (const tipo of ['keyDown', 'keyUp']) {
+                  await enviar('Input.dispatchKeyEvent', {
+                    type: tipo, key: 'Enter', code: 'Enter',
+                    windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
+                  });
+                }
+              }
+              await esperar(interacao.esperaDepoisMs || 1500);
+
+              /* Clique real (mouse do proprio Chrome): varias lojas ignoram
+                 element.click() feito por JavaScript, mas obedecem este. */
+              if (interacao.clicar) {
+                const pos = await enviar('Runtime.evaluate', {
+                  expression: interacao.clicar,
+                  returnByValue: true,
+                  awaitPromise: true,
+                });
+                const p = pos && pos.result && pos.result.value;
+                if (p && typeof p.x === 'number') {
+                  for (const tipo of ['mousePressed', 'mouseReleased']) {
+                    await enviar('Input.dispatchMouseEvent', {
+                      type: tipo, x: Math.round(p.x), y: Math.round(p.y),
+                      button: 'left', clickCount: 1,
+                    });
+                  }
+                  await esperar(1200);
+                }
+              }
+
+              if (interacao.depois) {
+                await enviar('Runtime.evaluate', { expression: interacao.depois, returnByValue: true, awaitPromise: true });
+              }
+            }
+          }
+
           const r = await enviar('Runtime.evaluate', {
             expression: script,
             returnByValue: true,
@@ -192,7 +254,7 @@ async function extrair(url, script, opcoes) {
   if (!aba || !aba.webSocketDebuggerUrl) throw new Error('Nao consegui abrir uma aba no navegador.');
 
   try {
-    return await comAba(aba.webSocketDebuggerUrl, url, script, o.esperaMs, o.visitarAntes);
+    return await comAba(aba.webSocketDebuggerUrl, url, script, o.esperaMs, o.visitarAntes, o.interacao);
   } finally {
     fetch(endereco + '/json/close/' + aba.id).catch(() => {});
   }
