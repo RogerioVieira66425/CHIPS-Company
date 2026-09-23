@@ -80,15 +80,12 @@ input:focus, select:focus { outline: 2px solid var(--destaque); outline-offset: 
   padding: 14px 24px;
   position: sticky; top: 0; z-index: 5;
 
-  /* acabamento de metal escovado preto */
-  background:
-    repeating-linear-gradient(90deg, rgba(255,255,255,.022) 0 1px, transparent 1px 3px),
-    linear-gradient(180deg, #2b2c2f 0%, #171719 38%, #0c0c0d 62%, #1a1b1e 100%);
-  border-bottom: 1px solid #000;
+  /* preto liso, com um fio de luz na borda de cima */
+  background: #0a0a0b;
+  border-bottom: 1px solid #191a1d;
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.07),
-    inset 0 -1px 0 rgba(0,0,0,.6),
-    0 2px 10px rgba(0,0,0,.45);
+    inset 0 1px 0 rgba(255,255,255,.04),
+    0 4px 14px rgba(0,0,0,.35);
 }
 .topo-dir { display: flex; align-items: center; gap: 12px; }
 .ola { color: var(--texto-fraco); font-size: 13px; }
@@ -393,15 +390,10 @@ main.conteudo { flex: 1 0 auto; }
   flex: none;
   margin-top: 32px;
 
-  /* mesmo metal escovado do topo, espelhado */
-  background:
-    repeating-linear-gradient(90deg, rgba(255,255,255,.022) 0 1px, transparent 1px 3px),
-    linear-gradient(180deg, #1a1b1e 0%, #0c0c0d 38%, #171719 62%, #2b2c2f 100%);
-  border-top: 1px solid #000;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.07),
-    inset 0 -1px 0 rgba(0,0,0,.6),
-    0 -2px 10px rgba(0,0,0,.45);
+  /* mesmo preto liso do topo */
+  background: #0a0a0b;
+  border-top: 1px solid #191a1d;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
 }
 
 
@@ -434,7 +426,4 @@ body.capa .rodape-site { margin-top: 0; }
   color: #e9edf5;
   font-weight: 700;
   letter-spacing: 1px;
-  text-shadow: 0 1px 0 rgba(0,0,0,.8);
 }
-.rodape-frase { text-shadow: 0 1px 0 rgba(0,0,0,.7); }
-.marca.pequena { text-shadow: 0 1px 0 rgba(0,0,0,.7); }
