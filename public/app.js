@@ -76,9 +76,14 @@ const App = (function () {
     window.scrollTo({ top: 0 });
   }
 
+  /* O visitante ve so a busca: o topo fica limpo.
+     Quem administra ganha o menu para circular entre as telas.
+     As metricas continuam acessiveis pelo endereco /metricas. */
   function renderMenu() {
     const menu = $('#menu');
     menu.innerHTML = '';
+    if (!ehAdmin) return;
+
     const botao = (rotulo, vista) => {
       const b = el('button', 'item-menu' + (vistaAtual === vista ? ' ativo' : ''), rotulo);
       b.addEventListener('click', () => mostrar(vista));
@@ -86,7 +91,7 @@ const App = (function () {
     };
     menu.appendChild(botao('Buscar', 'busca'));
     menu.appendChild(botao('Métricas', 'metricas'));
-    if (ehAdmin) menu.appendChild(botao('⚙️ Admin', 'admin'));
+    menu.appendChild(botao('⚙️ Admin', 'admin'));
   }
 
   /* ================= BUSCA PUBLICA ================= */
@@ -733,7 +738,9 @@ const App = (function () {
       ehAdmin = false;
     }
 
-    const querAdmin = location.pathname.replace(/\/+$/, '') === '/admin';
+    const caminho = location.pathname.replace(/\/+$/, '');
+    const querAdmin = caminho === '/admin';
+    const querMetricas = caminho === '/metricas';
 
     if (querAdmin && !usuarioAtual) {
       $('#tela-login').classList.remove('oculto');
@@ -748,7 +755,7 @@ const App = (function () {
 
     await carregarProdutos();
     carregarSugestoes();
-    mostrar(querAdmin && ehAdmin ? 'admin' : 'busca');
+    mostrar(querAdmin && ehAdmin ? 'admin' : querMetricas ? 'metricas' : 'busca');
     $('#campo-busca').focus();
   })();
 
