@@ -32,6 +32,9 @@ const App = (function () {
   let usuarioAtual = null;
   let ehAdmin = false;
   let vistaAtual = 'busca';
+  let ofertasDaBusca = [];   // resultado completo da ultima busca
+  let pagina = 1;
+  const POR_PAGINA = 10;
 
   /* ---------- utilitarios ---------- */
   let temporizadorToast;
@@ -108,6 +111,9 @@ const App = (function () {
   async function buscar(termo) {
     $('#campo-busca').value = termo;
     $('#resultado').classList.add('oculto');
+    // a capa centralizada da lugar ao layout com rolagem
+    $('#vista-busca').classList.remove('centralizada');
+    pagina = 1;
     estado('Procurando "' + termo + '" nas lojas...', true);
 
     let busca;
@@ -173,7 +179,51 @@ const App = (function () {
       });
     }
 
-    renderOfertas($('#tbody-ofertas'), ofertas, $('#vazio-ofertas'));
+    ofertasDaBusca = ofertas;
+    pagina = 1;
+    renderPagina();
+  }
+
+  /* Mostra uma pagina da lista de ofertas e os controles de navegacao. */
+  function renderPagina() {
+    const total = ofertasDaBusca.length;
+    const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
+    if (pagina > paginas) pagina = paginas;
+
+    const inicio = (pagina - 1) * POR_PAGINA;
+    renderOfertas($('#tbody-ofertas'), ofertasDaBusca.slice(inicio, inicio + POR_PAGINA), $('#vazio-ofertas'), inicio);
+
+    const caixa = $('#paginacao');
+    caixa.innerHTML = '';
+    caixa.classList.toggle('oculto', total <= POR_PAGINA);
+    if (total <= POR_PAGINA) return;
+
+    const irPara = (n) => {
+      pagina = Math.min(paginas, Math.max(1, n));
+      renderPagina();
+      $('#resultado').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
+    const anterior = el('button', 'botao', '← Anterior');
+    anterior.disabled = pagina === 1;
+    anterior.addEventListener('click', () => irPara(pagina - 1));
+    caixa.appendChild(anterior);
+
+    const numeros = el('div', 'numeros');
+    for (let n = 1; n <= paginas; n += 1) {
+      const b = el('button', 'num' + (n === pagina ? ' ativa' : ''), String(n));
+      b.addEventListener('click', () => irPara(n));
+      numeros.appendChild(b);
+    }
+    caixa.appendChild(numeros);
+
+    const proxima = el('button', 'botao', 'Próxima →');
+    proxima.disabled = pagina === paginas;
+    proxima.addEventListener('click', () => irPara(pagina + 1));
+    caixa.appendChild(proxima);
+
+    caixa.appendChild(el('span', 'pagina-info',
+      'mostrando ' + (inicio + 1) + '–' + Math.min(inicio + POR_PAGINA, total) + ' de ' + total + ' ofertas'));
   }
 
   function cartaoMelhor(comparacao, busca) {
@@ -250,11 +300,13 @@ const App = (function () {
     return ul;
   }
 
-  function renderOfertas(tbody, ofertas, avisoVazio) {
+  function renderOfertas(tbody, ofertas, avisoVazio, deslocamento) {
+    const base = deslocamento || 0;
     tbody.innerHTML = '';
     if (avisoVazio) avisoVazio.classList.toggle('oculto', ofertas.length > 0);
 
-    ofertas.forEach((o, i) => {
+    ofertas.forEach((o, indice) => {
+      const i = base + indice; // posicao na lista inteira, nao so na pagina
       const tr = el('tr', i === 0 ? 'melhor-linha' : '');
       tr.appendChild(celula(o.loja, 'ticker'));
 

@@ -329,3 +329,28 @@ code { background: #0f141c; padding: 1px 5px; border-radius: 4px; }
 }
 .mini-botao:hover { border-color: var(--destaque); }
 #resultado { display: grid; gap: 18px; }
+
+/* ---------- tela inicial: busca centralizada na janela ---------- */
+.conteudo.centralizada {
+  min-height: calc(100vh - 150px);
+  align-content: center;
+}
+.conteudo.centralizada .heroi { padding-top: 0; }
+/* a lista de acompanhados so entra na rolagem depois da dobra */
+.conteudo.centralizada #monitorados { display: none; }
+
+/* ---------- paginacao ---------- */
+.paginacao {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--borda);
+}
+.paginacao .pagina-info { color: var(--texto-fraco); font-size: 13px; }
+.paginacao .botao { padding: 6px 14px; font-size: 13px; }
+.paginacao .botao:disabled { opacity: .4; cursor: default; border-color: var(--borda); }
+.paginacao .numeros { display: flex; gap: 4px; }
+.paginacao .num {
+  background: #0f141c; border: 1px solid var(--borda); color: var(--texto-fraco);
+  border-radius: 6px; min-width: 30px; padding: 5px 8px; cursor: pointer; font: inherit; font-size: 13px;
+}
+.paginacao .num:hover { border-color: var(--destaque); color: var(--texto); }
+.paginacao .num.ativa { background: var(--destaque); border-color: var(--destaque); color: #fff; }
