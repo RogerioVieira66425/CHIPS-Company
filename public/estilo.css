@@ -332,10 +332,13 @@ code { background: #0f141c; padding: 1px 5px; border-radius: 4px; }
 
 /* ---------- tela inicial: busca centralizada na janela ---------- */
 .conteudo.centralizada {
-  min-height: calc(100vh - 150px);
+  /* 62px e a altura do topo: o restante da janela centraliza a busca */
+  min-height: calc(100vh - 62px);
   align-content: center;
+  padding-top: 0;
+  padding-bottom: 0;
 }
-.conteudo.centralizada .heroi { padding-top: 0; }
+.conteudo.centralizada .heroi { padding: 0; }
 /* a lista de acompanhados so entra na rolagem depois da dobra */
 .conteudo.centralizada #monitorados { display: none; }
 
