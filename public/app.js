@@ -94,6 +94,36 @@ const App = (function () {
     menu.appendChild(botao('⚙️ Admin', 'admin'));
   }
 
+  /* ---------- frase da capa: muda a cada visita ---------- */
+  const FRASES = [
+    'Farme desconto, não arrependimento.',
+    'Preço cheio é dano no bolso. Compare antes do clique.',
+    'Não pague preço de boss final em item de fase 1.',
+    'Seu setup merece o melhor loot pelo menor preço.',
+    'Antes de comprar, scaneie o mapa inteiro.',
+    'Aqui o desconto não é drop raro: é garantido na comparação.',
+    'Upgrade no setup, downgrade no preço.',
+    'Missão: achar o menor preço. Recompensa: seu dinheiro de volta no bolso.',
+  ];
+
+  function escreverFrase() {
+    const alvo = $('#frase');
+    if (!alvo) return;
+    const texto = FRASES[Math.floor(Math.random() * FRASES.length)];
+
+    // efeito de digitação, como um terminal
+    alvo.textContent = '';
+    const cursor = el('span', 'cursor', '\u00a0');
+    alvo.appendChild(cursor);
+
+    let i = 0;
+    const tique = setInterval(() => {
+      if (i >= texto.length) { clearInterval(tique); setTimeout(() => cursor.remove(), 1800); return; }
+      cursor.before(document.createTextNode(texto[i]));
+      i += 1;
+    }, 32);
+  }
+
   /* ================= BUSCA PUBLICA ================= */
   function estado(texto, carregando) {
     const caixa = $('#estado-busca');
@@ -754,6 +784,7 @@ const App = (function () {
 
     await carregarProdutos();
     carregarSugestoes();
+    escreverFrase();
     mostrar(querAdmin && ehAdmin ? 'admin' : querMetricas ? 'metricas' : 'busca');
     $('#campo-busca').focus();
   })();

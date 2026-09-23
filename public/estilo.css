@@ -357,3 +357,20 @@ code { background: #0f141c; padding: 1px 5px; border-radius: 4px; }
 }
 .paginacao .num:hover { border-color: var(--destaque); color: var(--texto); }
 .paginacao .num.ativa { background: var(--destaque); border-color: var(--destaque); color: #fff; }
+
+/* ---------- frase da capa ---------- */
+.frase {
+  margin: 18px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--destaque);
+  letter-spacing: .2px;
+}
+.frase .cursor {
+  display: inline-block;
+  width: 9px;
+  margin-left: 2px;
+  background: var(--destaque);
+  animation: piscar 1.1s steps(1) infinite;
+}
+@keyframes piscar { 50% { opacity: 0; } }
