@@ -447,3 +447,6 @@ body.capa .rodape-site { margin-top: 0; }
 @media (max-width: 520px) {
   .marca-tipo { display: none; }
 }
+
+.rodape-copy { opacity: .75; margin-right: 2px; }
+.rodape-frase b { margin: 0 2px; }
