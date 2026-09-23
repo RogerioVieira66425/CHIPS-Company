@@ -332,8 +332,6 @@ code { background: #0f141c; padding: 1px 5px; border-radius: 4px; }
 
 /* ---------- tela inicial: busca centralizada na janela ---------- */
 .conteudo.centralizada {
-  /* 62px e a altura do topo: o restante da janela centraliza a busca */
-  min-height: calc(100vh - 62px);
   align-content: center;
   padding-top: 0;
   padding-bottom: 0;
@@ -374,3 +372,53 @@ code { background: #0f141c; padding: 1px 5px; border-radius: 4px; }
   animation: piscar 1.1s steps(1) infinite;
 }
 @keyframes piscar { 50% { opacity: 0; } }
+
+/* ---------- estrutura: rodape sempre no fim ---------- */
+body { display: flex; flex-direction: column; min-height: 100vh; }
+main.conteudo { flex: 1 0 auto; }
+.tela-login { flex: 1 0 auto; }
+
+/* ---------- rodape ---------- */
+.rodape-site {
+  flex: none;
+  border-top: 1px solid var(--borda);
+  background: linear-gradient(180deg, transparent, #0b0f16);
+  margin-top: 32px;
+}
+.rodape-conteudo {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.rodape-marca { display: flex; align-items: center; gap: 10px; }
+.rodape-logo { font-size: 20px; filter: saturate(.9); }
+.rodape-marca b { display: block; font-size: 14px; letter-spacing: .2px; }
+.rodape-marca small { display: block; color: var(--texto-fraco); font-size: 11px; margin-top: 2px; }
+
+.rodape-lojas {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.rodape-lojas li {
+  font-size: 11px; color: var(--texto-fraco);
+  border: 1px solid var(--borda); border-radius: 20px; padding: 3px 10px;
+  background: #0f141c;
+}
+
+.rodape-links { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--texto-fraco); }
+.rodape-links a { color: var(--texto-fraco); text-decoration: none; border-bottom: 1px solid transparent; }
+.rodape-links a:hover { color: var(--destaque); border-bottom-color: var(--destaque); }
+.rodape-ponto { opacity: .5; }
+
+@media (max-width: 760px) {
+  .rodape-conteudo { justify-content: center; text-align: center; gap: 14px; }
+  .rodape-lojas { justify-content: center; }
+}
+
+/* na capa o rodape encosta no fim sem empurrar a busca do centro */
+body.capa .rodape-site { margin-top: 0; }

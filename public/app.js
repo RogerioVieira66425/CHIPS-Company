@@ -148,6 +148,7 @@ const App = (function () {
     $('#resultado').classList.add('oculto');
     // a capa centralizada da lugar ao layout com rolagem
     $('#vista-busca').classList.remove('centralizada');
+    document.body.classList.remove('capa');
     pagina = 1;
     estado('Procurando "' + termo + '" nas lojas...', true);
 
@@ -781,6 +782,8 @@ const App = (function () {
     document.querySelectorAll('.so-admin').forEach((e) => e.classList.toggle('oculto', !ehAdmin));
     $('#btn-sair').classList.toggle('oculto', !usuarioAtual);
     $('#ola').textContent = usuarioAtual ? usuarioAtual.nome : '';
+
+    if ($('#vista-busca').classList.contains('centralizada')) document.body.classList.add('capa');
 
     await carregarProdutos();
     carregarSugestoes();
