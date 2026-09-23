@@ -450,3 +450,20 @@ body.capa .rodape-site { margin-top: 0; }
 
 .rodape-copy { opacity: .75; margin-right: 2px; }
 .rodape-frase b { margin: 0 2px; }
+
+/* ---------- fundo animado da capa ---------- */
+#fundo-gamer {
+  position: fixed;
+  inset: 53px 0 0 0;          /* comeca abaixo do topo */
+  width: 100%;
+  height: calc(100vh - 53px);
+  z-index: 0;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity .6s ease;
+}
+/* depois da busca o fundo some, para nao competir com os resultados */
+body:not(.capa) #fundo-gamer { opacity: 0; }
+
+/* o conteudo fica sempre acima da animacao */
+header.topo, main.conteudo, .rodape-site, .tela-login { position: relative; z-index: 1; }

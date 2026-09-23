@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="/estilo.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
 </head>
-<body>
+<body class="capa">
 
 <header class="topo">
   <div class="marca-empresa">
@@ -22,6 +22,8 @@
 </header>
 
 <!-- ---------- BUSCA PÚBLICA ---------- -->
+<canvas id="fundo-gamer" aria-hidden="true"></canvas>
+
 <main id="vista-busca" class="conteudo centralizada">
   <section class="heroi">
     <h1>Onde está mais barato?</h1>
@@ -241,5 +243,6 @@
 
 <div id="toast" class="toast oculto"></div>
 <script src="/app.js"></script>
+<script src="/fundo.js"></script>
 </body>
 </html>

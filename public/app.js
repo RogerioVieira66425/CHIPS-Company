@@ -783,7 +783,7 @@ const App = (function () {
     $('#btn-sair').classList.toggle('oculto', !usuarioAtual);
     $('#ola').textContent = usuarioAtual ? usuarioAtual.nome : '';
 
-    if ($('#vista-busca').classList.contains('centralizada')) document.body.classList.add('capa');
+
 
     await carregarProdutos();
     carregarSugestoes();
