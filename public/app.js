@@ -65,8 +65,10 @@ const App = (function () {
     vistaAtual = vista;
     $('#vista-busca').classList.toggle('oculto', vista !== 'busca');
     $('#vista-detalhe').classList.toggle('oculto', vista !== 'detalhe');
+    $('#vista-metricas').classList.toggle('oculto', vista !== 'metricas');
     $('#vista-admin').classList.toggle('oculto', vista !== 'admin');
     if (vista === 'admin') carregarAdmin().catch((e) => toast(e.message, true));
+    if (vista === 'metricas') carregarMetricas().catch((e) => toast(e.message, true));
     renderMenu();
     window.scrollTo({ top: 0 });
   }
@@ -80,6 +82,7 @@ const App = (function () {
       return b;
     };
     menu.appendChild(botao('Buscar', 'busca'));
+    menu.appendChild(botao('Métricas', 'metricas'));
     if (ehAdmin) menu.appendChild(botao('⚙️ Admin', 'admin'));
   }
 
@@ -475,6 +478,84 @@ const App = (function () {
     destino.appendChild(svg);
     destino.appendChild(el('p', 'dica', 'Cada ponto é o menor preço observado naquele dia, somando todas as lojas.'));
   }
+
+  /* ================= METRICAS ================= */
+  const segundos = (v) => (Number(v) || 0).toFixed(1).replace('.', ',') + 's';
+
+  async function carregarMetricas() {
+    const m = await pedir('/api/metricas');
+
+    $('#met-buscas').textContent = m.buscas_total;
+    $('#met-buscas-sub').textContent = m.buscas_prontas + ' concluídas nas últimas ' + m.buscas_analisadas;
+
+    $('#met-tempo').textContent = segundos(m.tempo_medio_s);
+    $('#met-tempo-sub').textContent = 'mediana ' + segundos(m.tempo_mediano_s);
+
+    $('#met-ofertas').textContent = m.ofertas_brutas;
+    $('#met-ofertas-sub').textContent = m.ofertas_relevantes + ' relevantes · ' +
+      (Number(m.descartadas_pct) || 0).toFixed(0) + '% descartadas por relevância';
+
+    $('#met-historico').textContent = m.ofertas_historico;
+    $('#met-historico-sub').textContent = m.produtos_monitorados + ' produto(s) acompanhado(s)';
+
+    const tb = $('#tbody-metricas');
+    tb.innerHTML = '';
+    m.lojas.forEach((l) => {
+      const tr = el('tr');
+      tr.appendChild(celula(l.loja, 'ticker'));
+      tr.appendChild(celula(String(l.consultas), 'dir'));
+      const taxa = (Number(l.taxa_sucesso) || 0).toFixed(0) + '%';
+      tr.appendChild(celula(taxa, 'dir ' + (l.taxa_sucesso >= 80 ? 'positivo' : l.taxa_sucesso >= 50 ? '' : 'negativo')));
+      tr.appendChild(celula(String(l.ofertas), 'dir'));
+      tr.appendChild(celula((Number(l.media_ofertas) || 0).toFixed(1).replace('.', ','), 'dir'));
+      tr.appendChild(celula(segundos(l.tempo_medio_s), 'dir'));
+      const tdErro = el('td', 'neutro', l.ultimo_erro ? l.ultimo_erro.slice(0, 48) + '…' : '—');
+      tdErro.title = l.ultimo_erro || '';
+      tr.appendChild(tdErro);
+      tb.appendChild(tr);
+    });
+
+    const tt = $('#tbody-termos');
+    tt.innerHTML = '';
+    m.termos.forEach((t) => {
+      const tr = el('tr');
+      const td = el('td');
+      const b = el('button', 'link-produto', t.termo);
+      b.addEventListener('click', () => { mostrar('busca'); buscar(t.termo); });
+      td.appendChild(b);
+      tr.appendChild(td);
+      tr.appendChild(celula(String(t.vezes), 'dir'));
+      tt.appendChild(tr);
+    });
+
+    desenharBarrasDia(m.por_dia);
+  }
+
+  function desenharBarrasDia(dias) {
+    const destino = $('#met-grafico');
+    destino.innerHTML = '';
+    if (!dias || !dias.length) {
+      destino.appendChild(el('p', 'vazio', 'Ainda não há buscas registradas.'));
+      return;
+    }
+    const maximo = Math.max(...dias.map((d) => d.buscas));
+    const ul = el('ul', 'barras');
+    dias.forEach((d) => {
+      const li = el('li');
+      li.appendChild(el('span', 'barra-rotulo', d.dia.slice(5).split('-').reverse().join('/')));
+      const trilho = el('div', 'barra-trilho');
+      const barra = el('div', 'barra');
+      barra.style.width = (d.buscas / maximo) * 100 + '%';
+      trilho.appendChild(barra);
+      li.appendChild(trilho);
+      li.appendChild(el('span', 'barra-valor', String(d.buscas)));
+      ul.appendChild(li);
+    });
+    destino.appendChild(ul);
+  }
+
+  const btnMetricas = $('#met-atualizar');
+  if (btnMetricas) btnMetricas.addEventListener('click', () => carregarMetricas().catch((e) => toast(e.message, true)));
 
   /* ================= ADMINISTRACAO ================= */
   async function coletar(id, botao) {

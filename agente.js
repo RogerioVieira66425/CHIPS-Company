@@ -124,22 +124,8 @@ async function principal() {
   const resultados = new Map();
   for (const termo of termos) {
     console.log('  "' + termo + '"');
-    const porFonte = [];
-    for (const coletor of coletores) {
-      if (!coletor.configurado()) continue;
-      let ofertas = [];
-      let erro = '';
-      try {
-        ofertas = await coletor.buscar(termo);
-        console.log('     - ' + coletor.nome + ': ' + ofertas.length + ' oferta(s)');
-      } catch (e) {
-        erro = e.message;
-        console.log('     - ' + coletor.nome + ': ' + erro.slice(0, 100));
-      }
-      porFonte.push({ fonte: coletor.nome, ofertas, erro });
-      await espera(PAUSA_MS);
-    }
-    resultados.set(termo, porFonte);
+    resultados.set(termo, await consultarTodas(termo));
+    await espera(PAUSA_MS);
   }
 
   // 4) envia o mesmo resultado para cada destino, usando o id de produto de la
@@ -167,6 +153,28 @@ async function principal() {
   console.log('\n  Concluido: ' + gravadasTotal + ' gravacao(oes) em ' + destinos.length + ' destino(s).\n');
 }
 
+/* Consulta todas as lojas EM PARALELO e mede quanto cada uma levou.
+   Sao sites diferentes, entao a consulta simultanea nao sobrecarrega ninguem. */
+async function consultarTodas(termo) {
+  const tarefas = coletores.map(async (coletor) => {
+    if (!coletor.configurado()) {
+      return { fonte: coletor.nome, erro: 'Fonte nao configurada.', ofertas: [], ms: 0 };
+    }
+    const inicio = Date.now();
+    try {
+      const ofertas = await coletor.buscar(termo);
+      const ms = Date.now() - inicio;
+      console.log('      ' + coletor.nome.padEnd(15) + ofertas.length + ' oferta(s) em ' + (ms / 1000).toFixed(1) + 's');
+      return { fonte: coletor.nome, erro: '', ofertas, ms };
+    } catch (e) {
+      const ms = Date.now() - inicio;
+      console.log('      ' + coletor.nome.padEnd(15) + 'erro: ' + e.message.slice(0, 70));
+      return { fonte: coletor.nome, erro: e.message, ofertas: [], ms };
+    }
+  });
+  return Promise.all(tarefas);
+}
+
 /* ---------- modo servico: atende as buscas pedidas no site publico ---------- */
 async function atenderBuscas() {
   for (const servidor of SERVIDORES) {
@@ -179,24 +187,16 @@ async function atenderBuscas() {
 
     for (const busca of pendentes) {
       console.log('  [' + new Date().toLocaleTimeString('pt-BR') + '] busca de visitante: "' + busca.termo + '"');
-      const fontes = [];
-      for (const coletor of coletores) {
-        if (!coletor.configurado()) {
-          fontes.push({ fonte: coletor.nome, erro: 'Fonte nao configurada.', ofertas: [] });
-          continue;
-        }
-        try {
-          const ofertas = await coletor.buscar(busca.termo);
-          fontes.push({ fonte: coletor.nome, erro: '', ofertas });
-          console.log('      ' + coletor.nome + ': ' + ofertas.length + ' oferta(s)');
-        } catch (e) {
-          fontes.push({ fonte: coletor.nome, erro: e.message, ofertas: [] });
-          console.log('      ' + coletor.nome + ': ' + e.message.slice(0, 80));
-        }
-        await espera(PAUSA_MS);
-      }
+      const inicio = Date.now();
+      const fontes = await consultarTodas(busca.termo);
+      const duracao = Date.now() - inicio;
+      console.log('      total: ' + fontes.reduce((t, f) => t + f.ofertas.length, 0) + ' oferta(s) em ' + (duracao / 1000).toFixed(1) + 's');
+
       try {
-        await pedir(servidor, '/api/ingestao/buscas/' + busca.id, { method: 'POST', body: { fontes } });
+        await pedir(servidor, '/api/ingestao/buscas/' + busca.id, {
+          method: 'POST',
+          body: { fontes, duracao_ms: duracao },
+        });
       } catch (e) {
         console.log('      nao consegui devolver o resultado: ' + e.message);
       }

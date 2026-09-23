@@ -72,7 +72,29 @@ const PALAVRAS_GENERICAS = [
   'pro', 'plus', 'rainbow', 'lightsync',
 ];
 
+/* Codigo do modelo: token que mistura letra e numero (g502, k552, m724, k552rgb).
+   E o que realmente identifica o produto entre lojas diferentes. */
+function codigosDoTitulo(titulo) {
+  return new Set(
+    normalizar(titulo)
+      .split(' ')
+      .filter((t) => t.length >= 3 && /[a-z]/.test(t) && /\d/.test(t))
+  );
+}
+
 function parecidos(a, b) {
+  const ca = codigosDoTitulo(a);
+  const cb = codigosDoTitulo(b);
+  if (ca.size && cb.size) {
+    // um dos codigos precisa aparecer nos dois (ou um conter o outro: k552 e k552rgb)
+    for (const x of ca) {
+      for (const y of cb) {
+        if (x === y || x.indexOf(y) === 0 || y.indexOf(x) === 0) return true;
+      }
+    }
+    return false;
+  }
+
   const palavras = (t) => new Set(
     normalizar(t).split(' ').filter((x) =>
       x.length >= 3 &&

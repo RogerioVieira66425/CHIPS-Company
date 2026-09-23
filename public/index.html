@@ -137,6 +137,51 @@
   </section>
 </main>
 
+<!-- ---------- MÉTRICAS (público: dados do TCC) ---------- -->
+<main id="vista-metricas" class="conteudo oculto">
+  <div class="cabecalho-tela">
+    <div>
+      <h1>Métricas do sistema</h1>
+      <p class="sub">Dados de operação dos coletores — base para o capítulo de resultados do TCC.</p>
+    </div>
+    <button id="met-atualizar" class="botao">Atualizar</button>
+  </div>
+
+  <section class="kpis">
+    <article class="kpi"><h3>Buscas realizadas</h3><strong id="met-buscas">0</strong><span id="met-buscas-sub" class="variacao neutro"></span></article>
+    <article class="kpi"><h3>Tempo médio por busca</h3><strong id="met-tempo">—</strong><span id="met-tempo-sub" class="variacao neutro"></span></article>
+    <article class="kpi"><h3>Ofertas coletadas</h3><strong id="met-ofertas">0</strong><span id="met-ofertas-sub" class="variacao neutro"></span></article>
+    <article class="kpi"><h3>Histórico acumulado</h3><strong id="met-historico">0</strong><span id="met-historico-sub" class="variacao neutro"></span></article>
+  </section>
+
+  <section class="painel">
+    <h2>Desempenho por loja</h2>
+    <table class="tabela">
+      <thead>
+        <tr>
+          <th>Loja</th><th class="dir">Consultas</th><th class="dir">Sucesso</th>
+          <th class="dir">Ofertas</th><th class="dir">Média/busca</th><th class="dir">Tempo médio</th><th>Último erro</th>
+        </tr>
+      </thead>
+      <tbody id="tbody-metricas"></tbody>
+    </table>
+  </section>
+
+  <div class="grade">
+    <section class="painel">
+      <h2>Buscas por dia</h2>
+      <div id="met-grafico"></div>
+    </section>
+    <section class="painel">
+      <h2>Termos mais buscados</h2>
+      <table class="tabela">
+        <thead><tr><th>Termo</th><th class="dir">Vezes</th></tr></thead>
+        <tbody id="tbody-termos"></tbody>
+      </table>
+    </section>
+  </div>
+</main>
+
 <!-- ---------- ADMINISTRAÇÃO (só com login, via /admin) ---------- -->
 <main id="vista-admin" class="conteudo oculto">
   <div class="cabecalho-tela">

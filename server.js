@@ -283,24 +283,23 @@ function buscaRecente(termo) {
 
 /* Tenta executar aqui mesmo. Devolve true quando conseguiu falar com alguma loja. */
 async function executarBuscaLocalmente(id, termo) {
-  const fontes = [];
-  let algumaOk = false;
+  const inicio = Date.now();
 
-  for (const coletor of coletores) {
+  // as lojas sao consultadas ao mesmo tempo: sao sites diferentes
+  const fontes = await Promise.all(coletores.map(async (coletor) => {
     if (!coletor.configurado()) {
-      fontes.push({ fonte: coletor.nome, erro: 'Fonte nao configurada.', ofertas: [] });
-      continue;
+      return { fonte: coletor.nome, erro: 'Fonte nao configurada.', ofertas: [], ms: 0 };
     }
+    const t = Date.now();
     try {
-      const ofertas = await coletor.buscar(termo);
-      fontes.push({ fonte: coletor.nome, erro: '', ofertas });
-      algumaOk = true;
+      return { fonte: coletor.nome, erro: '', ofertas: await coletor.buscar(termo), ms: Date.now() - t };
     } catch (e) {
-      fontes.push({ fonte: coletor.nome, erro: e.message, ofertas: [] });
+      return { fonte: coletor.nome, erro: e.message, ofertas: [], ms: Date.now() - t };
     }
-  }
+  }));
 
-  if (!algumaOk) return false;
+  if (!fontes.some((f) => !f.erro)) return false;
+  const duracao = Date.now() - inicio;
 
   const todas = fontes.reduce((acc, f) => acc.concat(f.ofertas), []);
   const filtrado = analise.filtrarRelevantes(todas, termo);
@@ -310,10 +309,102 @@ async function executarBuscaLocalmente(id, termo) {
     relevantes: filtrado.ofertas.length,
     total_bruto: todas.length,
     poucas_correspondencias: Boolean(filtrado.poucasCorrespondencias),
+    duracao_ms: duracao,
   };
   db.prepare("UPDATE buscas SET status = 'pronta', resultado = ?, erro = '', origem = 'servidor', atualizado_em = ? WHERE id = ?")
     .run(JSON.stringify(resultado), new Date().toISOString(), id);
   return true;
+}
+
+/* ---------- metricas de operacao (capitulo de resultados do TCC) ---------- */
+function calcularMetricas() {
+  const buscas = db.prepare(
+    "SELECT termo, status, origem, resultado, criado_em, atualizado_em FROM buscas ORDER BY id DESC LIMIT 500"
+  ).all();
+
+  const porLoja = new Map();
+  const duracoes = [];
+  let ofertasBrutas = 0;
+  let ofertasRelevantes = 0;
+  let prontas = 0;
+
+  const registrar = (loja) => {
+    if (!porLoja.has(loja)) {
+      porLoja.set(loja, { loja, consultas: 0, sucessos: 0, falhas: 0, ofertas: 0, ms_total: 0, ultimo_erro: '' });
+    }
+    return porLoja.get(loja);
+  };
+
+  buscas.forEach((b) => {
+    if (b.status === 'pronta') prontas += 1;
+    let r = null;
+    try { r = b.resultado ? JSON.parse(b.resultado) : null; } catch { r = null; }
+    if (!r) return;
+
+    if (r.duracao_ms) duracoes.push(r.duracao_ms);
+    ofertasBrutas += Number(r.total_bruto) || 0;
+    ofertasRelevantes += Number(r.relevantes) || 0;
+
+    (r.fontes || []).forEach((f) => {
+      // fonte sem credencial/desligada nao conta como consulta
+      if (/nao configurada/i.test(f.erro || '')) return;
+      const reg = registrar(f.fonte);
+      reg.consultas += 1;
+      reg.ms_total += Number(f.ms) || 0;
+      if (f.erro) {
+        reg.falhas += 1;
+        reg.ultimo_erro = f.erro.slice(0, 120);
+      } else {
+        reg.sucessos += 1;
+        reg.ofertas += (f.ofertas || []).length;
+      }
+    });
+  });
+
+  const lojas = [...porLoja.values()]
+    .map((l) => ({
+      loja: l.loja,
+      consultas: l.consultas,
+      sucessos: l.sucessos,
+      falhas: l.falhas,
+      taxa_sucesso: l.consultas ? (l.sucessos / l.consultas) * 100 : 0,
+      ofertas: l.ofertas,
+      media_ofertas: l.sucessos ? l.ofertas / l.sucessos : 0,
+      tempo_medio_s: l.consultas ? l.ms_total / l.consultas / 1000 : 0,
+      ultimo_erro: l.ultimo_erro,
+    }))
+    .sort((a, b) => b.ofertas - a.ofertas);
+
+  const ordenadas = duracoes.slice().sort((a, b) => a - b);
+  const mediana = ordenadas.length
+    ? (ordenadas.length % 2
+      ? ordenadas[(ordenadas.length - 1) / 2]
+      : (ordenadas[ordenadas.length / 2 - 1] + ordenadas[ordenadas.length / 2]) / 2)
+    : 0;
+
+  const porDia = db.prepare(
+    "SELECT substr(criado_em, 1, 10) AS dia, COUNT(*) AS buscas FROM buscas GROUP BY dia ORDER BY dia DESC LIMIT 30"
+  ).all().reverse();
+
+  const termos = db.prepare(
+    "SELECT termo, COUNT(*) AS vezes FROM buscas GROUP BY termo ORDER BY vezes DESC, MAX(id) DESC LIMIT 10"
+  ).all();
+
+  return {
+    buscas_total: db.prepare('SELECT COUNT(*) AS n FROM buscas').get().n,
+    buscas_analisadas: buscas.length,
+    buscas_prontas: prontas,
+    tempo_medio_s: duracoes.length ? duracoes.reduce((a, b) => a + b, 0) / duracoes.length / 1000 : 0,
+    tempo_mediano_s: mediana / 1000,
+    ofertas_brutas: ofertasBrutas,
+    ofertas_relevantes: ofertasRelevantes,
+    descartadas_pct: ofertasBrutas ? ((ofertasBrutas - ofertasRelevantes) / ofertasBrutas) * 100 : 0,
+    lojas,
+    por_dia: porDia,
+    termos,
+    produtos_monitorados: db.prepare('SELECT COUNT(*) AS n FROM produtos').get().n,
+    ofertas_historico: db.prepare('SELECT COUNT(*) AS n FROM ofertas').get().n,
+  };
 }
 
 /* ---------- rotas ---------- */
@@ -384,6 +475,7 @@ async function api(req, res, rota) {
         relevantes: filtrado.ofertas.length,
         total_bruto: todas.length,
         poucas_correspondencias: Boolean(filtrado.poucasCorrespondencias),
+        duracao_ms: Number(c.duracao_ms) || 0,
       };
 
       db.prepare('UPDATE buscas SET status = ?, resultado = ?, erro = ?, origem = ?, atualizado_em = ? WHERE id = ?')
@@ -539,6 +631,10 @@ async function api(req, res, rota) {
     const linha = db.prepare('SELECT * FROM buscas WHERE id = ?').get(Number(mBusca[1]));
     if (!linha) return json(res, 404, { erro: 'Busca nao encontrada.' });
     return json(res, 200, formatarBusca(linha));
+  }
+
+  if (rota === '/api/metricas' && metodo === 'GET') {
+    return json(res, 200, calcularMetricas());
   }
 
   if (rota === '/api/buscas/populares' && metodo === 'GET') {

@@ -36,13 +36,22 @@ function acharChrome() {
 const CHROME = acharChrome();
 const disponivel = () => Boolean(CHROME);
 
-let navegador = null; // { processo, endereco }
+let navegador = null;     // { processo, endereco, perfil }
+let abrindo = null;       // promessa em andamento: evita abrir varios Chromes de uma vez
 
 function esperar(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
 async function abrirNavegador() {
+  if (navegador) return navegador;
+  // com consultas em paralelo, varias chamadas chegam juntas: todas esperam a mesma abertura
+  if (abrindo) return abrindo;
+  abrindo = abrirDeVerdade().finally(() => { abrindo = null; });
+  return abrindo;
+}
+
+async function abrirDeVerdade() {
   if (navegador) return navegador;
   if (!CHROME) throw new Error('Chrome nao encontrado nesta maquina (defina CHROME_PATH).');
 
