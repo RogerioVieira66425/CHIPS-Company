@@ -522,3 +522,39 @@ body.capa .caixa-busca .botao.primario { animation: respirar 2.8s ease-in-out 1.
     animation: none;
   }
 }
+
+/* ---------- video de fundo da capa ---------- */
+#fundo-video {
+  position: fixed;
+  inset: 53px 0 0 0;
+  width: 100%;
+  height: calc(100vh - 53px);
+  object-fit: cover;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;                     /* so aparece quando o video comeca a tocar */
+  transition: opacity 1s ease;
+}
+#fundo-video.tocando { opacity: 1; }
+
+/* veu por cima do video: mantem o texto legivel */
+#fundo-veu {
+  position: fixed;
+  inset: 53px 0 0 0;
+  height: calc(100vh - 53px);
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1s ease;
+  background:
+    radial-gradient(60% 55% at 50% 45%, rgba(8,10,16,.82) 0%, rgba(8,10,16,.55) 45%, rgba(8,10,16,.25) 100%),
+    linear-gradient(180deg, rgba(8,10,16,.75) 0%, rgba(8,10,16,.3) 30%, rgba(8,10,16,.45) 75%, rgba(8,10,16,.85) 100%);
+}
+body.capa #fundo-veu.ativo { opacity: 1; }
+
+/* quando o video toca, a animacao em canvas sai de cena */
+body.com-video #fundo-gamer { display: none; }
+
+/* fora da capa, video e veu somem junto com o resto */
+body:not(.capa) #fundo-video,
+body:not(.capa) #fundo-veu { opacity: 0; }

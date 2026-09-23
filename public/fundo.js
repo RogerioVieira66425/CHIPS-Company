@@ -1,4 +1,35 @@
 'use strict';
+/* Fundo da capa.
+   -------------------------------------------------------------------------
+   Preferencia: o video fundo-gamer.mp4. Se ele nao carregar (rede lenta,
+   formato nao suportado, autoplay bloqueado), entra a cena synthwave
+   desenhada em canvas, que nao depende de arquivo nenhum. */
+
+(function () {
+  const video = document.getElementById('fundo-video');
+  const veu = document.getElementById('fundo-veu');
+  if (!video) return;
+
+  const mostrarVeu = () => veu && veu.classList.add('ativo');
+
+  const assumirVideo = () => {
+    video.classList.add('tocando');
+    document.body.classList.add('com-video');
+    mostrarVeu();
+  };
+
+  video.addEventListener('playing', assumirVideo, { once: true });
+  video.addEventListener('error', mostrarVeu, { once: true });
+
+  // alguns navegadores so liberam o autoplay apos um gesto: tenta de novo no primeiro toque
+  const tentar = () => video.play().catch(() => {});
+  tentar();
+  window.addEventListener('pointerdown', tentar, { once: true });
+
+  // sem video em 4s, segue com a cena em canvas
+  setTimeout(() => { if (!video.classList.contains('tocando')) mostrarVeu(); }, 4000);
+})();
+
 /* Cena animada da capa: synthwave gamer.
    -------------------------------------------------------------------------
    Sol neon fatiado, grade em perspectiva correndo para o horizonte, campo de

@@ -149,6 +149,10 @@ const App = (function () {
     // a capa centralizada da lugar ao layout com rolagem
     $('#vista-busca').classList.remove('centralizada');
     document.body.classList.remove('capa');
+
+    // o video de fundo para de tocar fora da capa: economiza processamento
+    const video = $('#fundo-video');
+    if (video) { try { video.pause(); } catch (e) { /* sem problema */ } }
     pagina = 1;
     estado('Procurando "' + termo + '" nas lojas...', true);
 
