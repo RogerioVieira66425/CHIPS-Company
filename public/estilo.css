@@ -746,6 +746,17 @@ body {
   background: rgba(215,25,47,.22); filter: blur(40px);
 }
 .hero > * { position: relative; z-index: 1; }
+/* marca da loja, sobre uma placa branca para servir a qualquer logotipo */
+.hero-logo {
+  position: absolute; top: 28px; right: 28px; z-index: 2;
+  display: flex; align-items: center; justify-content: center;
+  min-width: 96px; max-width: 45%; height: 46px; padding: 8px 14px;
+  background: #fff; border-radius: 14px;
+  box-shadow: 0 8px 24px -12px rgba(0,0,0,.6);
+}
+.hero-logo img { max-width: 100%; max-height: 100%; display: block; }
+.hero-logo.sem-marca { font-size: 14px; font-weight: 800; color: var(--ink); letter-spacing: -.01em; }
+.hero .chips { padding-right: 150px; }
 .chips { display: flex; gap: 8px; flex-wrap: wrap; }
 .tag {
   display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px;
@@ -962,6 +973,8 @@ body {
   .intro h1 { font-size: 32px; }
   .hero { padding: 24px; }
   .hero-price { font-size: 48px; }
+  .hero-logo { top: 20px; right: 20px; height: 38px; min-width: 80px; }
+  .hero .chips { padding-right: 110px; }
   .tile { padding: 22px 20px; }
   .rank-row { grid-template-columns: 22px 70px minmax(0,1fr) 82px; }
   .rank-diff { display: none; }

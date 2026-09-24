@@ -289,6 +289,25 @@ const App = (function () {
   };
   const corDaLoja = (loja) => COR_LOJA[loja] || '#0d0f12';
 
+  /* Marca da loja: public/lojas/<nome-da-loja>.svg. Sem arquivo, o cartao
+     escreve o nome da loja no lugar da imagem. */
+  const arquivoDaMarca = (loja) => '/lojas/' + String(loja || '').toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.svg';
+
+  function marcaDaLoja(loja) {
+    const caixa = el('div', 'hero-logo');
+    const img = document.createElement('img');
+    img.src = arquivoDaMarca(loja);
+    img.alt = loja || '';
+    img.addEventListener('error', () => {
+      caixa.classList.add('sem-marca');
+      caixa.textContent = loja || '';
+    });
+    caixa.appendChild(img);
+    return caixa;
+  }
+
   const ICONE_CHECK = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">' +
     '<path d="m2.5 6.2 2.3 2.3 4.7-5" fill="none" stroke="currentColor" stroke-width="2" ' +
     'stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -501,13 +520,15 @@ const App = (function () {
     }
 
     const melhor = comparacao.melhor;
+    caixa.appendChild(marcaDaLoja(melhor.loja));
+
     const chips = el('div', 'chips');
     const selo = el('span', 'tag tag-glow');
     selo.innerHTML = ICONE_CHECK;
     selo.appendChild(document.createTextNode(
       comparacao.mais_barato === melhor ? t('res.menorPreco') : t('res.maisVantajoso')));
     chips.appendChild(selo);
-    chips.appendChild(el('span', 'tag tag-ghost', melhor.loja));
+    // o nome da loja ja aparece na marca, no canto do cartao
     caixa.appendChild(chips);
 
     const preco = el('div', 'hero-price num');
