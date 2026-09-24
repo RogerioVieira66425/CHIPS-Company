@@ -742,15 +742,20 @@ body {
 .hero-logo {
   position: absolute; top: 28px; right: 28px; z-index: 2;
   display: flex; align-items: center; justify-content: center;
-  max-width: 45%; height: 50px; padding: 9px 14px;
+  width: 152px; height: 52px; padding: 9px 14px;   /* mesma placa para toda loja */
   background: #fff; border-radius: 14px;
   box-shadow: 0 8px 24px -12px rgba(0,0,0,.6);
 }
-.hero-logo img { height: 100%; width: auto; max-width: 160px; display: block; object-fit: contain; }
+/* o logotipo se ajusta dentro da placa, seja largo (Terabyte) ou quase
+   quadrado (Setup Ninja), sem nunca mudar o tamanho dela */
+.hero-logo img { max-width: 100%; max-height: 100%; display: block; object-fit: contain; }
 /* marca clara sobre fundo escuro: a placa vira escura para nao emoldurar */
-.hero-logo.escura { background: #0f0f11; box-shadow: none; }
+.hero-logo.escura {
+  background: #1b1c20; box-shadow: none;
+  border: 1px solid rgba(255,255,255,.14);   /* a placa continua visivel no cartao preto */
+}
 .hero-logo.sem-marca { font-size: 14px; font-weight: 800; color: var(--ink); letter-spacing: -.01em; }
-.hero .chips { padding-right: 150px; }
+.hero .chips { padding-right: 168px; }
 .chips { display: flex; gap: 8px; flex-wrap: wrap; }
 .tag {
   display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px;
@@ -967,8 +972,8 @@ body {
   .intro h1 { font-size: 32px; }
   .hero { padding: 24px; }
   .hero-price { font-size: 48px; }
-  .hero-logo { top: 20px; right: 20px; height: 40px; }
-  .hero .chips { padding-right: 110px; }
+  .hero-logo { top: 20px; right: 20px; width: 118px; height: 42px; padding: 7px 10px; }
+  .hero .chips { padding-right: 126px; }
   .tile { padding: 22px 20px; }
   .rank-row { grid-template-columns: 22px 70px minmax(0,1fr) 82px; }
   .rank-diff { display: none; }
