@@ -47,8 +47,21 @@ async function abrirNavegador() {
   if (navegador) return navegador;
   // com consultas em paralelo, varias chamadas chegam juntas: todas esperam a mesma abertura
   if (abrindo) return abrindo;
-  abrindo = abrirDeVerdade().finally(() => { abrindo = null; });
+  abrindo = comSegundaChance().finally(() => { abrindo = null; });
   return abrindo;
+}
+
+/* A primeira abertura as vezes morre no meio do caminho - antivirus olhando o
+   processo, uma instancia anterior ainda encerrando. Como isso derrubaria as
+   cinco lojas que dependem do navegador, vale uma segunda tentativa. */
+async function comSegundaChance() {
+  try {
+    return await abrirDeVerdade();
+  } catch (e) {
+    navegador = null;
+    await esperar(1500);
+    return abrirDeVerdade();
+  }
 }
 
 async function abrirDeVerdade() {
@@ -82,7 +95,12 @@ async function abrirDeVerdade() {
       if (m) { clearTimeout(tempo); resolve('http://' + m[1]); }
     });
     processo.on('error', (e) => { clearTimeout(tempo); reject(e); });
-    processo.on('exit', () => { clearTimeout(tempo); reject(new Error('Chrome encerrou sozinho.')); });
+    processo.on('exit', (codigo) => {
+      clearTimeout(tempo);
+      // o que o Chrome escreveu antes de sair explica a causa
+      const motivo = saida.trim().split(/\r?\n/).pop();
+      reject(new Error('Chrome encerrou sozinho (codigo ' + codigo + ')' + (motivo ? ': ' + motivo.slice(0, 120) : '.')));
+    });
   });
 
   navegador = { processo, endereco, perfil };
