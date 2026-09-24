@@ -17,6 +17,8 @@ const I18N = (function () {
       'busca.recentes': 'Buscas recentes:',
 
       'res.eyebrow': 'Resultado da busca',
+      'origem.servidor': 'servidor',
+      'origem.agente': 'agente coletor',
       'insight.economia': 'Comprando na {lojaMin} em vez da {lojaMax} você economiza {dif} — {pct} do valor mais caro.',
       'insight.variacao': 'O menor preço de cada loja vai de {min} na {lojaMin} a {max} na {lojaMax} — {dif} de diferença, ainda que sejam modelos diferentes.',
       'insight.mediana': 'A oferta recomendada está {pct} abaixo da mediana das {n} ofertas ({mediana}).',
@@ -126,6 +128,8 @@ const I18N = (function () {
       'busca.recentes': 'Recent searches:',
 
       'res.eyebrow': 'Search result',
+      'origem.servidor': 'server',
+      'origem.agente': 'collector agent',
       'insight.economia': 'Buying at {lojaMin} instead of {lojaMax} saves you {dif} — {pct} of the most expensive price.',
       'insight.variacao': 'The cheapest price in each store ranges from {min} at {lojaMin} to {max} at {lojaMax} — {dif} apart, although they are different models.',
       'insight.mediana': 'The recommended offer is {pct} below the median of the {n} offers ({mediana}).',
@@ -235,6 +239,8 @@ const I18N = (function () {
       'busca.recentes': 'Búsquedas recientes:',
 
       'res.eyebrow': 'Resultado de la búsqueda',
+      'origem.servidor': 'servidor',
+      'origem.agente': 'agente recolector',
       'insight.economia': 'Comprando en {lojaMin} en vez de {lojaMax} ahorras {dif} — {pct} del valor más caro.',
       'insight.variacao': 'El precio más bajo de cada tienda va de {min} en {lojaMin} a {max} en {lojaMax} — {dif} de diferencia, aunque sean modelos distintos.',
       'insight.mediana': 'La oferta recomendada está {pct} por debajo de la mediana de las {n} ofertas ({mediana}).',

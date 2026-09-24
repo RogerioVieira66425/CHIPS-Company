@@ -373,8 +373,10 @@ const App = (function () {
     titulo.appendChild(el('em', '', '“' + (busca.termo || '') + '”'));
 
     const lojas = new Set(ofertasDaBusca.map((o) => o.loja)).size;
+    // "servidor" e "agente" tambem sao palavras da interface, nao dados
+    const origem = busca.origem ? t('origem.' + busca.origem) : '';
     $('#res-meta').textContent = t('res.meta', { lojas, data: dataHora(busca.atualizado_em) }) +
-      (busca.origem ? t('veredito.origem', { origem: busca.origem }) : '');
+      (busca.origem ? t('veredito.origem', { origem: origem || busca.origem }) : '');
   }
 
   /* ---------- barra de filtros: lojas, preco, ordem, marca e categoria ---------- */
@@ -1336,6 +1338,8 @@ const App = (function () {
   document.addEventListener('idioma-mudou', () => {
     escreverFrase();
     carregarSugestoes();
+    // o titulo e a linha de data tambem sao texto montado por aqui
+    if (buscaAtual) montarIntro(buscaAtual);
     if (ofertasDaBusca.length) { montarFiltros(); aplicarFiltros(); }
     if (detalhe) renderDetalhe();
   });
