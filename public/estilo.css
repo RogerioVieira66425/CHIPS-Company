@@ -106,9 +106,9 @@ input:focus, select:focus { outline: 2px solid var(--acao); outline-offset: -1px
      width: 100% e obrigatorio porque o body e flex por causa do rodape: sem isso
      o bloco encolhe ate o tamanho do conteudo. */
   width: 100%;
-  max-width: min(1560px, 94vw);
+  max-width: none;            /* os resultados ocupam a janela inteira */
   margin: 0 auto;
-  padding: 22px 24px 60px;
+  padding: 22px 28px 60px;
   display: grid;
   gap: 18px;
 }
@@ -690,7 +690,7 @@ body.com-resultado .conteudo { padding-top: 22px; }
 
 /* a capa mantem largura de leitura; os resultados usam a tela toda */
 .conteudo.centralizada { max-width: 1180px; width: 100%; }
-.rodape-conteudo, .rodape-frase { max-width: min(1560px, 94vw); margin-left: auto; margin-right: auto; }
+.rodape-frase { max-width: none; }
 
 /* o carregamento ocupa a largura da area de resultados */
 .estado-busca { width: 100%; }
