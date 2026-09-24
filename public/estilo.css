@@ -391,19 +391,6 @@ main.conteudo { flex: 1 0 auto; }
 
 /* na capa o rodape encosta no fim sem empurrar a busca do centro */
 body.capa .rodape-site { margin-top: 0; }
-/* ---------- fundo animado da capa ---------- */
-#fundo-gamer {
-  position: fixed;
-  inset: 72px 0 0 0;          /* comeca abaixo do topo de 72px */
-  width: 100%;
-  height: calc(100vh - 72px);
-  z-index: 0;
-  pointer-events: none;
-  opacity: 1;
-  transition: opacity .6s ease;
-}
-/* depois da busca o fundo some, para nao competir com os resultados */
-body:not(.capa) #fundo-gamer { opacity: 0; }
 
 /* o conteudo fica sempre acima da animacao */
 header.top, main.conteudo, .rodape-site, .tela-login { position: relative; z-index: 1; }
@@ -428,7 +415,6 @@ body.capa .heroi .sub    { animation: surgir .75s cubic-bezier(.2,.75,.3,1) .12s
 body.capa .caixa-busca   { animation: surgirEscala .8s cubic-bezier(.2,.75,.3,1) .24s both; }
 body.capa #frase         { animation: surgir .7s ease .55s both; }
 body.capa #sugestoes     { animation: surgir .7s ease .7s both; }
-body.capa #fundo-gamer   { animation: aparecer 1.6s ease .1s both; }
 .rodape-site             { animation: aparecer 1s ease .8s both; }
 
 /* o campo de busca ganha foco sozinho: um leve destaque ao chegar */
@@ -440,10 +426,18 @@ body.capa .caixa-busca .botao.primario { animation: respirar 2.8s ease-in-out 1.
 
 @media (prefers-reduced-motion: reduce) {
   body.capa .heroi h1, body.capa .heroi .sub, body.capa .caixa-busca,
-  body.capa #frase, body.capa #sugestoes, body.capa #fundo-gamer,
+  body.capa #frase, body.capa #sugestoes,
   .rodape-site, body.capa .caixa-busca .botao.primario {
     animation: none;
   }
+}
+
+/* enquanto o video nao comeca a tocar, a capa fica no preto da marca com
+   um brilho vermelho: nenhum outro fundo aparece no lugar dele */
+body.capa {
+  background:
+    radial-gradient(72% 55% at 50% 42%, rgba(210, 31, 55, .20) 0%, rgba(10, 10, 11, 0) 62%),
+    linear-gradient(180deg, #0a0a0b 0%, #15151a 55%, #0a0a0b 100%);
 }
 
 /* ---------- video de fundo da capa ---------- */
@@ -475,9 +469,6 @@ body.capa .caixa-busca .botao.primario { animation: respirar 2.8s ease-in-out 1.
     linear-gradient(180deg, rgba(8,10,16,.48) 0%, rgba(8,10,16,.10) 30%, rgba(8,10,16,.18) 75%, rgba(8,10,16,.55) 100%);
 }
 body.capa #fundo-veu.ativo { opacity: 1; }
-
-/* quando o video toca, a animacao em canvas sai de cena */
-body.com-video #fundo-gamer { display: none; }
 
 /* fora da capa, video e veu somem junto com o resto */
 body:not(.capa) #fundo-video,
