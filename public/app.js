@@ -577,10 +577,22 @@ const App = (function () {
       tr.appendChild(tdTitulo);
 
       tr.appendChild(celula(t('condicao.' + o.condicao) || o.condicao, o.condicao === 'usado' ? 'negativo' : ''));
-      tr.appendChild(celula((o.vendedor || '—') + (o.vendidos ? ' · ' + o.vendidos + ' vendas' : '')));
+
+      // preco que era (riscado na loja) e o desconto que ele representa
+      const precoDe = Number(o.preco_de) || 0;
+      const temDesconto = precoDe > o.preco;
+      tr.appendChild(celula(temDesconto ? dinheiro(precoDe) : '—', 'dir riscado'));
       tr.appendChild(celula(dinheiro(o.preco), 'dir'));
-      tr.appendChild(celula(o.frete > 0 ? dinheiro(o.frete) : t('tabela.gratis'), 'dir'));
-      tr.appendChild(celula(dinheiro(o.preco_total), 'dir ' + (i === 0 ? 'positivo' : '')));
+      tr.appendChild(celula(
+        temDesconto ? '-' + Math.round(((precoDe - o.preco) / precoDe) * 100) + '%' : '—',
+        'dir ' + (temDesconto ? 'desconto' : 'neutro')
+      ));
+
+      // valor a pagar = preco + frete
+      const tdPagar = el('td', 'dir pagar ' + (i === 0 ? 'positivo' : ''));
+      tdPagar.appendChild(el('b', '', dinheiro(o.preco_total)));
+      if (o.frete > 0) tdPagar.appendChild(el('small', 'neutro', '+ ' + dinheiro(o.frete) + ' ' + t('tabela.frete').toLowerCase()));
+      tr.appendChild(tdPagar);
 
       const tdAcao = el('td', 'dir');
       if (o.url) tdAcao.appendChild(link(t('tabela.comprar'), o.url, 'mini-botao'));

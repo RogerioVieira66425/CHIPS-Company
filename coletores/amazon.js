@@ -24,11 +24,15 @@ const SCRIPT = `(() => {
     const precoEl = c.querySelector('.a-price .a-offscreen');
     if (!precoEl) continue;
 
+    // preco "de": a Amazon marca o valor cheio como a-text-price
+    const deEl = c.querySelector('.a-price.a-text-price .a-offscreen, .a-text-price .a-offscreen');
+
     const texto = c.textContent;
     itens.push({
       asin,
       titulo,
       precoTexto: precoEl.textContent.trim(),
+      precoDeTexto: deEl ? deEl.textContent.trim() : '',
       patrocinado: /patrocinado|sponsored/i.test(texto),
       usado: /usado|recondicionado|renewed/i.test(texto),
     });
@@ -56,10 +60,12 @@ async function buscar(termo) {
     .slice(0, LIMITE)
     .map((i) => {
       const preco = paraNumero(i.precoTexto);
+      const precoDe = paraNumero(i.precoDeTexto);
       return {
         loja: NOME,
         titulo: String(i.titulo || '').slice(0, 200),
         preco,
+        preco_de: precoDe > preco ? precoDe : 0,
         frete: 0, // o frete depende do CEP e do Prime
         preco_total: preco,
         frete_gratis: false,

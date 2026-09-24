@@ -232,13 +232,13 @@ async function coletarPrecos(userId, produto) {
     ).run(produto.id, userId, coletor.nome, agora, ofertas.length, erro);
 
     const inserir = db.prepare(
-      'INSERT INTO ofertas (coleta_id, produto_id, user_id, loja, titulo, preco, frete, preco_total, condicao, vendedor, reputacao, vendidos, parcelas, url, id_externo, manual, coletado_em) ' +
-      'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)'
+      'INSERT INTO ofertas (coleta_id, produto_id, user_id, loja, titulo, preco, preco_de, frete, preco_total, condicao, vendedor, reputacao, vendidos, parcelas, url, id_externo, manual, coletado_em) ' +
+      'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)'
     );
     ofertas.forEach((o) => {
       inserir.run(
-        Number(coleta.lastInsertRowid), produto.id, userId, o.loja, o.titulo, o.preco, o.frete, o.preco_total,
-        o.condicao, o.vendedor, o.reputacao, o.vendidos, o.parcelas, o.url, o.id_externo, agora
+        Number(coleta.lastInsertRowid), produto.id, userId, o.loja, o.titulo, o.preco, Number(o.preco_de) || 0,
+        o.frete, o.preco_total, o.condicao, o.vendedor, o.reputacao, o.vendidos, o.parcelas, o.url, o.id_externo, agora
       );
     });
 
@@ -533,8 +533,8 @@ async function api(req, res, rota) {
       ).run(produto.id, produto.user_id, fonte, agora, ofertas.length, String(corpo.erro || ''));
 
       const inserir = db.prepare(
-        'INSERT INTO ofertas (coleta_id, produto_id, user_id, loja, titulo, preco, frete, preco_total, condicao, vendedor, reputacao, vendidos, parcelas, url, id_externo, manual, coletado_em) ' +
-        'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)'
+        'INSERT INTO ofertas (coleta_id, produto_id, user_id, loja, titulo, preco, preco_de, frete, preco_total, condicao, vendedor, reputacao, vendidos, parcelas, url, id_externo, manual, coletado_em) ' +
+        'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)'
       );
       let gravadas = 0;
       ofertas.forEach((o) => {
@@ -543,7 +543,7 @@ async function api(req, res, rota) {
         if (!Number.isFinite(preco) || preco <= 0) return;
         inserir.run(
           Number(coleta.lastInsertRowid), produto.id, produto.user_id,
-          String(o.loja || fonte), String(o.titulo || ''), preco, frete, preco + frete,
+          String(o.loja || fonte), String(o.titulo || ''), preco, num(o.preco_de) || 0, frete, preco + frete,
           o.condicao === 'usado' ? 'usado' : 'novo', String(o.vendedor || ''), String(o.reputacao || ''),
           Number(o.vendidos) || 0, Number(o.parcelas) || 0, String(o.url || ''), String(o.id_externo || ''), agora
         );

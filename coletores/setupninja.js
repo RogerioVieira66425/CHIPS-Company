@@ -26,11 +26,13 @@ const SCRIPT = `(() => {
 
     // "price total" e o valor no pix (o que a loja destaca)
     const alvo = c.querySelector('.price.total') || c.querySelector('[class*="price"]');
+    const antigo = c.querySelector('.discount');
     const precoTexto = alvo ? alvo.textContent.trim() : (texto.match(/R\\$\\s*[\\d.,]+/) || [''])[0];
 
     itens.push({
       titulo,
       precoTexto,
+      precoDeTexto: antigo ? antigo.textContent.trim() : '',
       href: a.getAttribute('href'),
       esgotado: /indispon|esgotad|avise-me/i.test(texto),
     });
@@ -59,11 +61,13 @@ async function buscar(termo) {
     .slice(0, LIMITE)
     .map((i) => {
       const preco = paraNumero(i.precoTexto);
+      const precoDe = paraNumero(i.precoDeTexto);
       const href = String(i.href || '');
       return {
         loja: NOME,
         titulo: String(i.titulo || '').slice(0, 200),
         preco,
+        preco_de: precoDe > preco ? precoDe : 0,
         frete: 0,
         preco_total: preco,
         frete_gratis: false,

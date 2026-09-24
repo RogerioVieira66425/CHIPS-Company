@@ -844,3 +844,9 @@ body.capa .chip:hover { background: rgba(255,255,255,.2); color: #fff; }
 @media (max-width: 560px) {
   .filtros { grid-template-columns: 1fr; }
 }
+
+/* ---------- colunas de preco ---------- */
+.tabela td.riscado { color: var(--texto-fraco); text-decoration: line-through; }
+.tabela td.desconto { color: var(--acao); font-weight: 700; }
+.tabela td.pagar b { font-weight: 700; }
+.tabela td.pagar small { display: block; font-size: 11px; font-weight: 400; }

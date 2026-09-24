@@ -90,6 +90,12 @@ CREATE INDEX IF NOT EXISTS idx_coletas_produto ON coletas(produto_id, executado_
 CREATE INDEX IF NOT EXISTS idx_produtos_user ON produtos(user_id);
 `);
 
+// Preco "de" (riscado na loja), acrescentado depois
+const colunasOfertas = db.prepare('PRAGMA table_info(ofertas)').all().map((c) => c.name);
+if (colunasOfertas.indexOf('preco_de') === -1) {
+  db.exec('ALTER TABLE ofertas ADD COLUMN preco_de REAL NOT NULL DEFAULT 0');
+}
+
 // Coluna de administrador (adicionada depois; ALTER seguro para bancos antigos)
 const colunas = db.prepare('PRAGMA table_info(usuarios)').all().map((c) => c.name);
 if (colunas.indexOf('admin') === -1) {

@@ -16,6 +16,7 @@ function normalizar(item) {
   const a = item.attributes || {};
   // price_with_discount é o preço à vista (boleto/pix); price é o "de".
   const preco = Number(a.price_with_discount) > 0 ? Number(a.price_with_discount) : Number(a.price) || 0;
+  const precoDe = Number(a.price) > preco ? Number(a.price) : 0;
   // product_link e apenas o "slug" do produto: a URL valida e /produto/{id}/{slug}
   const slug = String(a.product_link || '').replace(/^\//, '');
   const url = 'https://www.kabum.com.br/produto/' + item.id + (slug ? '/' + slug : '');
@@ -24,6 +25,7 @@ function normalizar(item) {
     loja: NOME,
     titulo: String(a.title || ''),
     preco,
+    preco_de: precoDe,
     // A KaBuM! só calcula o frete no carrinho, com CEP. Registramos 0 e deixamos
     // o ajuste manual a cargo de quem compara.
     frete: 0,

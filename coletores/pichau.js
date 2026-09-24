@@ -31,6 +31,7 @@ const SCRIPT = `(() => {
                    textoDe(a.querySelector('img') && a.querySelector('img').getAttribute ? null : null);
 
     const vista = textoDe(acharPorClasse(a, 'price_vista'));
+    const riscado = textoDe(acharPorClasse(a, 'strikeThrough'));
     const total = textoDe(acharPorClasse(a, 'price_total'));
     const precoTexto = vista || total;
     if (!precoTexto) continue;
@@ -38,6 +39,7 @@ const SCRIPT = `(() => {
     itens.push({
       titulo,
       precoTexto,
+      precoDeTexto: riscado,
       href: href.indexOf('http') === 0 ? href : 'https://www.pichau.com.br' + href,
       esgotado: /indispon|esgotad/i.test(a.textContent),
     });
@@ -60,10 +62,12 @@ async function buscar(termo) {
     .slice(0, LIMITE)
     .map((i) => {
       const preco = paraNumero(i.precoTexto);
+      const precoDe = paraNumero(i.precoDeTexto);
       return {
         loja: NOME,
         titulo: String(i.titulo || '').slice(0, 200),
         preco,
+        preco_de: precoDe > preco ? precoDe : 0,
         frete: 0, // a Pichau so calcula o frete com o CEP, no carrinho
         preco_total: preco,
         frete_gratis: false,

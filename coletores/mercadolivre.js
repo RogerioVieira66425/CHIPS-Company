@@ -61,6 +61,7 @@ function normalizar(item) {
     loja: NOME,
     titulo: String(item.title || ''),
     preco,
+    preco_de: Number(item.original_price) > preco ? Number(item.original_price) : 0,
     frete,
     preco_total: preco + frete,
     frete_gratis: freteGratis,

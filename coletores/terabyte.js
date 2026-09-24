@@ -22,6 +22,7 @@ const SCRIPT = `(() => {
 
     // "De: R$ 305,87 por: R$ 259,99 a vista" -> queremos o "por"
     const porMatch = texto.match(/por:?\\s*R\\$\\s*([\\d.,]+)/i);
+    const deMatch = texto.match(/de:?\\s*R\\$\\s*([\\d.,]+)/i);
     const todos = texto.match(/R\\$\\s*[\\d.,]+/g) || [];
     const precoTexto = porMatch ? porMatch[1] : (todos.length > 1 ? todos[1] : (todos[0] || ''));
 
@@ -29,6 +30,7 @@ const SCRIPT = `(() => {
     itens.push({
       titulo: String(titulo).trim(),
       precoTexto,
+      precoDeTexto: deMatch ? deMatch[1] : '',
       href: href.indexOf('http') === 0 ? href : 'https://www.terabyteshop.com.br' + href,
       esgotado: /indispon|avise-me|esgotad/i.test(texto),
     });
@@ -51,10 +53,12 @@ async function buscar(termo) {
     .slice(0, LIMITE)
     .map((i) => {
       const preco = paraNumero(i.precoTexto);
+      const precoDe = paraNumero(i.precoDeTexto);
       return {
         loja: NOME,
         titulo: String(i.titulo || '').slice(0, 200),
         preco,
+        preco_de: precoDe > preco ? precoDe : 0,
         frete: 0,
         preco_total: preco,
         frete_gratis: false,
