@@ -1,0 +1,266 @@
+'use strict';
+/* Idiomas do site.
+   -------------------------------------------------------------------------
+   Um dicionario por idioma e uma funcao t() para buscar o texto. A escolha
+   fica salva no navegador; sem escolha, o site adota o idioma do sistema.
+   Os textos do HTML sao marcados com data-i18n (conteudo) e data-i18n-ph
+   (placeholder de campo). */
+
+const I18N = (function () {
+  const TEXTOS = {
+    pt: {
+      'capa.titulo': 'Onde está mais barato?',
+      'capa.sub': 'Digite o equipamento que você quer e o sistema procura nas lojas, compara o preço final e mostra onde compensa comprar.',
+      'capa.placeholder': 'teclado mecânico redragon, rtx 4060, headset hyperx...',
+      'busca.botao': 'Buscar',
+      'busca.topoPlaceholder': 'buscar outro produto...',
+      'busca.recentes': 'Buscas recentes:',
+
+      'estado.procurando': 'Procurando "{termo}" nas lojas',
+      'estado.consultando': 'Consultando as lojas',
+      'estado.preparando': 'Preparando a consulta',
+      'estado.lojas': 'KaBuM!, Pichau, Terabyte, Patoloco, Setup Ninja e Amazon',
+      'estado.tempo': 'cada loja responde no seu tempo — costuma levar de 10 a 30 segundos',
+      'estado.fila': 'a busca entrou na fila do coletor',
+      'estado.semResposta': 'Nenhuma loja respondeu a tempo. O coletor precisa estar rodando para atender buscas neste site.',
+      'estado.semOfertas': 'Nenhuma oferta encontrada para "{termo}".',
+      'estado.semFiltro': 'Nenhuma oferta com esses filtros. Tente afrouxar um deles.',
+
+      'veredito.melhor': 'Mais vantajoso: {loja}',
+      'veredito.freteIncluso': 'inclui frete de {valor}',
+      'veredito.freteGratis': 'frete grátis ou não informado',
+      'veredito.condicao': 'produto {condicao}',
+      'veredito.parcelas': 'até {n}x',
+      'veredito.comprar': 'Ir à loja e comprar ↗',
+      'veredito.comparacao': 'Comparação entre lojas',
+      'veredito.economia': 'Comprando aqui em vez da loja mais cara você economiza {valor} ({pct}).',
+      'veredito.modelosDiferentes': 'As lojas trouxeram modelos diferentes para esta busca, então não dá para falar em economia: a lista abaixo mostra a opção mais barata de cada loja. Para comparar o mesmo produto, busque pelo modelo exato (ex.: "redragon kumara k552").',
+      'veredito.maisBarato': 'Existe oferta mais barata ({valor} na {loja}), mas o sistema não a recomenda por causa da condição do produto ou da reputação do vendedor.',
+      'veredito.consulta': 'Consulta feita em {data}',
+      'veredito.origem': ' · coleta pelo {origem}',
+
+      'filtro.marca': 'Marca',
+      'filtro.categoria': 'Categoria',
+      'filtro.loja': 'Loja',
+      'filtro.preco': 'Preço',
+      'filtro.todas': 'Todas',
+      'filtro.qualquer': 'Qualquer',
+      'filtro.limpar': 'Limpar filtros',
+      'filtro.resumoTudo': '{total} oferta(s) encontradas',
+      'filtro.resumoParcial': '{n} de {total} oferta(s)',
+      'filtro.outras': 'Outras',
+      'filtro.outros': 'Outros',
+
+      'tabela.titulo': 'Todas as ofertas encontradas',
+      'tabela.loja': 'Loja',
+      'tabela.anuncio': 'Anúncio',
+      'tabela.condicao': 'Condição',
+      'tabela.vendedor': 'Vendedor',
+      'tabela.preco': 'Preço',
+      'tabela.frete': 'Frete',
+      'tabela.total': 'Total',
+      'tabela.comprar': 'comprar ↗',
+      'tabela.gratis': 'grátis',
+      'tabela.verAnuncio': 'ver anúncio',
+      'tabela.vazio': 'Nenhuma oferta encontrada para esse termo.',
+
+      'condicao.novo': 'novo',
+      'condicao.usado': 'usado',
+
+      'pagina.anterior': '← Anterior',
+      'pagina.proxima': 'Próxima →',
+      'pagina.info': 'mostrando {de}–{ate} de {total} ofertas',
+
+      'rodape.frase': 'Engenharia de Software e Soluções Digitais',
+      'idioma.rotulo': 'Idioma',
+    },
+
+    en: {
+      'capa.titulo': 'Where is it cheapest?',
+      'capa.sub': 'Type the gear you want and the system searches the stores, compares the final price and shows where it pays off to buy.',
+      'capa.placeholder': 'redragon mechanical keyboard, rtx 4060, hyperx headset...',
+      'busca.botao': 'Search',
+      'busca.topoPlaceholder': 'search another product...',
+      'busca.recentes': 'Recent searches:',
+
+      'estado.procurando': 'Looking for "{termo}" in the stores',
+      'estado.consultando': 'Checking the stores',
+      'estado.preparando': 'Preparing the search',
+      'estado.lojas': 'KaBuM!, Pichau, Terabyte, Patoloco, Setup Ninja and Amazon',
+      'estado.tempo': 'each store answers at its own pace — usually 10 to 30 seconds',
+      'estado.fila': 'the search is queued for the collector',
+      'estado.semResposta': 'No store answered in time. The collector must be running to serve searches on this site.',
+      'estado.semOfertas': 'No offers found for "{termo}".',
+      'estado.semFiltro': 'No offers match these filters. Try loosening one of them.',
+
+      'veredito.melhor': 'Best deal: {loja}',
+      'veredito.freteIncluso': 'includes {valor} shipping',
+      'veredito.freteGratis': 'free or unlisted shipping',
+      'veredito.condicao': '{condicao} product',
+      'veredito.parcelas': 'up to {n}x',
+      'veredito.comprar': 'Go to the store ↗',
+      'veredito.comparacao': 'Store comparison',
+      'veredito.economia': 'Buying here instead of the most expensive store saves you {valor} ({pct}).',
+      'veredito.modelosDiferentes': 'The stores returned different models for this search, so there is no real saving to report: the list below shows the cheapest option in each store. To compare the same product, search for the exact model (e.g. "redragon kumara k552").',
+      'veredito.maisBarato': 'There is a cheaper offer ({valor} at {loja}), but the system does not recommend it because of the product condition or the seller reputation.',
+      'veredito.consulta': 'Searched on {data}',
+      'veredito.origem': ' · collected by the {origem}',
+
+      'filtro.marca': 'Brand',
+      'filtro.categoria': 'Category',
+      'filtro.loja': 'Store',
+      'filtro.preco': 'Price',
+      'filtro.todas': 'All',
+      'filtro.qualquer': 'Any',
+      'filtro.limpar': 'Clear filters',
+      'filtro.resumoTudo': '{total} offer(s) found',
+      'filtro.resumoParcial': '{n} of {total} offer(s)',
+      'filtro.outras': 'Others',
+      'filtro.outros': 'Others',
+
+      'tabela.titulo': 'All offers found',
+      'tabela.loja': 'Store',
+      'tabela.anuncio': 'Listing',
+      'tabela.condicao': 'Condition',
+      'tabela.vendedor': 'Seller',
+      'tabela.preco': 'Price',
+      'tabela.frete': 'Shipping',
+      'tabela.total': 'Total',
+      'tabela.comprar': 'buy ↗',
+      'tabela.gratis': 'free',
+      'tabela.verAnuncio': 'view listing',
+      'tabela.vazio': 'No offers found for this term.',
+
+      'condicao.novo': 'new',
+      'condicao.usado': 'used',
+
+      'pagina.anterior': '← Previous',
+      'pagina.proxima': 'Next →',
+      'pagina.info': 'showing {de}–{ate} of {total} offers',
+
+      'rodape.frase': 'Software Engineering and Digital Solutions',
+      'idioma.rotulo': 'Language',
+    },
+
+    es: {
+      'capa.titulo': '¿Dónde está más barato?',
+      'capa.sub': 'Escribe el equipo que quieres y el sistema busca en las tiendas, compara el precio final y muestra dónde conviene comprar.',
+      'capa.placeholder': 'teclado mecánico redragon, rtx 4060, headset hyperx...',
+      'busca.botao': 'Buscar',
+      'busca.topoPlaceholder': 'buscar otro producto...',
+      'busca.recentes': 'Búsquedas recientes:',
+
+      'estado.procurando': 'Buscando "{termo}" en las tiendas',
+      'estado.consultando': 'Consultando las tiendas',
+      'estado.preparando': 'Preparando la consulta',
+      'estado.lojas': 'KaBuM!, Pichau, Terabyte, Patoloco, Setup Ninja y Amazon',
+      'estado.tempo': 'cada tienda responde a su ritmo — suele tardar de 10 a 30 segundos',
+      'estado.fila': 'la búsqueda entró en la cola del colector',
+      'estado.semResposta': 'Ninguna tienda respondió a tiempo. El colector debe estar en ejecución para atender búsquedas en este sitio.',
+      'estado.semOfertas': 'No se encontraron ofertas para "{termo}".',
+      'estado.semFiltro': 'Ninguna oferta con estos filtros. Prueba a aflojar uno de ellos.',
+
+      'veredito.melhor': 'Más conveniente: {loja}',
+      'veredito.freteIncluso': 'incluye envío de {valor}',
+      'veredito.freteGratis': 'envío gratis o no informado',
+      'veredito.condicao': 'producto {condicao}',
+      'veredito.parcelas': 'hasta {n}x',
+      'veredito.comprar': 'Ir a la tienda ↗',
+      'veredito.comparacao': 'Comparación entre tiendas',
+      'veredito.economia': 'Comprando aquí en vez de la tienda más cara ahorras {valor} ({pct}).',
+      'veredito.modelosDiferentes': 'Las tiendas trajeron modelos diferentes para esta búsqueda, así que no se puede hablar de ahorro: la lista de abajo muestra la opción más barata de cada tienda. Para comparar el mismo producto, busca el modelo exacto (ej.: "redragon kumara k552").',
+      'veredito.maisBarato': 'Hay una oferta más barata ({valor} en {loja}), pero el sistema no la recomienda por la condición del producto o la reputación del vendedor.',
+      'veredito.consulta': 'Consulta hecha el {data}',
+      'veredito.origem': ' · recogido por el {origem}',
+
+      'filtro.marca': 'Marca',
+      'filtro.categoria': 'Categoría',
+      'filtro.loja': 'Tienda',
+      'filtro.preco': 'Precio',
+      'filtro.todas': 'Todas',
+      'filtro.qualquer': 'Cualquiera',
+      'filtro.limpar': 'Limpiar filtros',
+      'filtro.resumoTudo': '{total} oferta(s) encontradas',
+      'filtro.resumoParcial': '{n} de {total} oferta(s)',
+      'filtro.outras': 'Otras',
+      'filtro.outros': 'Otros',
+
+      'tabela.titulo': 'Todas las ofertas encontradas',
+      'tabela.loja': 'Tienda',
+      'tabela.anuncio': 'Anuncio',
+      'tabela.condicao': 'Condición',
+      'tabela.vendedor': 'Vendedor',
+      'tabela.preco': 'Precio',
+      'tabela.frete': 'Envío',
+      'tabela.total': 'Total',
+      'tabela.comprar': 'comprar ↗',
+      'tabela.gratis': 'gratis',
+      'tabela.verAnuncio': 'ver anuncio',
+      'tabela.vazio': 'No se encontraron ofertas para ese término.',
+
+      'condicao.novo': 'nuevo',
+      'condicao.usado': 'usado',
+
+      'pagina.anterior': '← Anterior',
+      'pagina.proxima': 'Siguiente →',
+      'pagina.info': 'mostrando {de}–{ate} de {total} ofertas',
+
+      'rodape.frase': 'Ingeniería de Software y Soluciones Digitales',
+      'idioma.rotulo': 'Idioma',
+    },
+  };
+
+  const DISPONIVEIS = [
+    ['pt', 'Português'],
+    ['en', 'English'],
+    ['es', 'Español'],
+  ];
+
+  function idiomaSalvo() {
+    try {
+      const guardado = localStorage.getItem('idioma');
+      if (guardado && TEXTOS[guardado]) return guardado;
+    } catch (e) { /* navegador sem storage: segue com o padrao */ }
+
+    const doNavegador = String(navigator.language || 'pt').slice(0, 2).toLowerCase();
+    return TEXTOS[doNavegador] ? doNavegador : 'pt';
+  }
+
+  let atual = idiomaSalvo();
+
+  /* Busca o texto e troca os {marcadores} pelos valores. */
+  function t(chave, valores) {
+    const dicionario = TEXTOS[atual] || TEXTOS.pt;
+    let texto = dicionario[chave] !== undefined ? dicionario[chave] : (TEXTOS.pt[chave] || chave);
+    if (valores) {
+      Object.keys(valores).forEach((k) => {
+        texto = texto.split('{' + k + '}').join(valores[k]);
+      });
+    }
+    return texto;
+  }
+
+  /* Aplica o idioma aos textos marcados no HTML. */
+  function traduzirPagina() {
+    document.documentElement.lang = atual === 'pt' ? 'pt-BR' : atual;
+    document.querySelectorAll('[data-i18n]').forEach((e) => {
+      e.textContent = t(e.getAttribute('data-i18n'));
+    });
+    document.querySelectorAll('[data-i18n-ph]').forEach((e) => {
+      e.setAttribute('placeholder', t(e.getAttribute('data-i18n-ph')));
+    });
+  }
+
+  function definir(novo) {
+    if (!TEXTOS[novo]) return;
+    atual = novo;
+    try { localStorage.setItem('idioma', novo); } catch (e) { /* sem storage */ }
+    traduzirPagina();
+    document.dispatchEvent(new CustomEvent('idioma-mudou', { detail: novo }));
+  }
+
+  const idioma = () => atual;
+  const formatoData = () => (atual === 'pt' ? 'pt-BR' : atual === 'es' ? 'es-ES' : 'en-US');
+
+  return { t, definir, idioma, traduzirPagina, disponiveis: DISPONIVEIS, formatoData };
+})();

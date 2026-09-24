@@ -15,12 +15,15 @@
     <span class="marca-tipo">company</span>
   </div>
   <form id="busca-topo" class="busca-topo oculto">
-    <input id="campo-topo" placeholder="buscar outro produto..." autocomplete="off">
-    <button class="botao primario" type="submit">Buscar</button>
+    <input id="campo-topo" data-i18n-ph="busca.topoPlaceholder" placeholder="buscar outro produto..." autocomplete="off">
+    <button class="botao primario" type="submit" data-i18n="busca.botao">Buscar</button>
   </form>
 
   <nav id="menu" class="menu"></nav>
   <div class="topo-dir">
+    <div class="idioma">
+      <select id="seletor-idioma" aria-label="Idioma"></select>
+    </div>
     <span id="ola" class="ola"></span>
     <button id="btn-sair" class="botao fantasma oculto">Sair</button>
   </div>
@@ -35,12 +38,12 @@
 
 <main id="vista-busca" class="conteudo centralizada">
   <section class="heroi">
-    <h1>Onde está mais barato?</h1>
-    <p class="sub">Digite o equipamento que você quer e o sistema procura nas lojas, compara o preço final e mostra onde compensa comprar.</p>
+    <h1 data-i18n="capa.titulo">Onde está mais barato?</h1>
+    <p class="sub" data-i18n="capa.sub">Digite o equipamento que você quer e o sistema procura nas lojas, compara o preço final e mostra onde compensa comprar.</p>
 
     <form id="form-busca" class="caixa-busca">
-      <input id="campo-busca" name="termo" placeholder="teclado mecânico redragon, rtx 4060, headset hyperx..." autocomplete="off" required>
-      <button class="botao primario" type="submit">Buscar</button>
+      <input id="campo-busca" name="termo" data-i18n-ph="capa.placeholder" placeholder="teclado mecânico redragon, rtx 4060, headset hyperx..." autocomplete="off" required>
+      <button class="botao primario" type="submit" data-i18n="busca.botao">Buscar</button>
     </form>
 
     <p id="frase" class="frase"></p>
@@ -55,17 +58,19 @@
     <div id="res-veredito"></div>
 
     <div class="painel">
-      <h2>Todas as ofertas encontradas</h2>
+      <h2 data-i18n="tabela.titulo">Todas as ofertas encontradas</h2>
       <table class="tabela">
         <thead>
           <tr>
-            <th>Loja</th><th>Anúncio</th><th>Condição</th><th>Vendedor</th>
-            <th class="dir">Preço</th><th class="dir">Frete</th><th class="dir">Total</th><th></th>
+            <th data-i18n="tabela.loja">Loja</th><th data-i18n="tabela.anuncio">Anúncio</th>
+            <th data-i18n="tabela.condicao">Condição</th><th data-i18n="tabela.vendedor">Vendedor</th>
+            <th class="dir" data-i18n="tabela.preco">Preço</th><th class="dir" data-i18n="tabela.frete">Frete</th>
+            <th class="dir" data-i18n="tabela.total">Total</th><th></th>
           </tr>
         </thead>
         <tbody id="tbody-ofertas"></tbody>
       </table>
-      <p id="vazio-ofertas" class="vazio oculto">Nenhuma oferta encontrada para esse termo.</p>
+      <p id="vazio-ofertas" class="vazio oculto" data-i18n="tabela.vazio">Nenhuma oferta encontrada para esse termo.</p>
       <div id="paginacao" class="paginacao oculto"></div>
     </div>
   </section>
@@ -247,11 +252,12 @@
     <span class="rodape-copy">&copy; 2026</span>
     <b>CHIPS</b>
     <span class="rodape-ponto">·</span>
-    Engenharia de Software e Solu&ccedil;&otilde;es Digitais
+    <span data-i18n="rodape.frase">Engenharia de Software e Solu&ccedil;&otilde;es Digitais</span>
   </p>
 </footer>
 
 <div id="toast" class="toast oculto"></div>
+<script src="/idiomas.js"></script>
 <script src="/app.js"></script>
 <script src="/fundo.js"></script>
 </body>

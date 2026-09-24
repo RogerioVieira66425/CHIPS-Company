@@ -9,8 +9,11 @@ const App = (function () {
   const dataHora = (iso) => {
     if (!iso) return '—';
     const d = new Date(iso);
-    return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const local = I18N.formatoData();
+    return d.toLocaleDateString(local) + ' ' + d.toLocaleTimeString(local, { hour: '2-digit', minute: '2-digit' });
   };
+
+  const t = (chave, valores) => I18N.t(chave, valores);
 
   const el = (tag, classe, texto) => {
     const e = document.createElement(tag);
@@ -79,12 +82,12 @@ const App = (function () {
 
   const marcaDe = (titulo) => {
     const t = String(titulo || '').toLowerCase();
-    return MARCAS.find((m) => t.indexOf(m.toLowerCase()) !== -1) || 'Outras';
+    return MARCAS.find((m) => t.indexOf(m.toLowerCase()) !== -1) || I18N.t('filtro.outras');
   };
 
   const categoriaDe = (titulo) => {
     const achou = CATEGORIAS.find(([, padrao]) => padrao.test(String(titulo || '')));
-    return achou ? achou[0] : 'Outros';
+    return achou ? achou[0] : I18N.t('filtro.outros');
   };
 
   /* ---------- utilitarios ---------- */
@@ -190,7 +193,7 @@ const App = (function () {
     linha.appendChild(el('span', 'anel'));
     const bloco = el('div', 'estado-texto');
     bloco.appendChild(el('b', '', texto));
-    bloco.appendChild(el('small', '', detalhe || 'KaBuM!, Pichau, Terabyte, Patoloco, Setup Ninja e Amazon'));
+    bloco.appendChild(el('small', '', detalhe || t('estado.lojas')));
     linha.appendChild(bloco);
     caixa.appendChild(linha);
   }
@@ -227,7 +230,7 @@ const App = (function () {
     $('#busca-topo').classList.remove('oculto');
     $('#campo-topo').value = termo;
     pagina = 1;
-    estado('Procurando "' + termo + '" nas lojas', true);
+    estado(t('estado.procurando', { termo }), true);
 
     let busca;
     try {
@@ -241,11 +244,9 @@ const App = (function () {
     const limite = Date.now() + 90000;
     while (busca.status !== 'pronta' && busca.status !== 'falhou' && Date.now() < limite) {
       estado(
-        busca.status === 'executando' ? 'Consultando as lojas' : 'Preparando a consulta',
+        t(busca.status === 'executando' ? 'estado.consultando' : 'estado.preparando'),
         true,
-        busca.status === 'executando'
-          ? 'cada loja responde no seu tempo — costuma levar de 10 a 30 segundos'
-          : 'a busca entrou na fila do coletor'
+        t(busca.status === 'executando' ? 'estado.tempo' : 'estado.fila')
       );
       await espera(2000);
       try {
@@ -254,11 +255,7 @@ const App = (function () {
     }
 
     if (busca.status !== 'pronta') {
-      estado(
-        busca.erro ||
-        'Nenhuma loja respondeu a tempo. O coletor precisa estar rodando para atender buscas neste site.',
-        false
-      );
+      estado(busca.erro || t('estado.semResposta'), false);
       return;
     }
 
@@ -286,7 +283,7 @@ const App = (function () {
     destino.innerHTML = '';
 
     if (!comparacao.melhor) {
-      destino.appendChild(el('p', 'painel vazio', 'Nenhuma oferta encontrada para "' + busca.termo + '".'));
+      destino.appendChild(el('p', 'painel vazio', t('estado.semOfertas', { termo: busca.termo })));
     } else {
       destino.appendChild(cartaoMelhor(comparacao, busca));
     }
@@ -346,16 +343,16 @@ const App = (function () {
       return caixaFiltro;
     };
 
-    caixa.appendChild(seletor('marca', 'Marca',
-      [['', 'Todas']].concat(unicos('marca').map((m) => [m, m]))));
-    caixa.appendChild(seletor('categoria', 'Categoria',
-      [['', 'Todas']].concat(unicos('categoria').map((c) => [c, c]))));
-    caixa.appendChild(seletor('loja', 'Loja',
-      [['', 'Todas']].concat(unicos('loja').map((l) => [l, l]))));
-    caixa.appendChild(seletor('preco', 'Preço',
-      [['', 'Qualquer']].concat(faixasComOfertas.map(([chave, texto]) => [chave, texto]))));
+    caixa.appendChild(seletor('marca', t('filtro.marca'),
+      [['', t('filtro.todas')]].concat(unicos('marca').map((m) => [m, m]))));
+    caixa.appendChild(seletor('categoria', t('filtro.categoria'),
+      [['', t('filtro.todas')]].concat(unicos('categoria').map((c) => [c, c]))));
+    caixa.appendChild(seletor('loja', t('filtro.loja'),
+      [['', t('filtro.todas')]].concat(unicos('loja').map((l) => [l, l]))));
+    caixa.appendChild(seletor('preco', t('filtro.preco'),
+      [['', t('filtro.qualquer')]].concat(faixasComOfertas.map(([chave, texto]) => [chave, texto]))));
 
-    const limpar = el('button', 'limpar', 'Limpar filtros');
+    const limpar = el('button', 'limpar', t('filtro.limpar'));
     limpar.addEventListener('click', () => {
       filtros = { marca: '', categoria: '', loja: '', preco: '' };
       pagina = 1;
@@ -421,7 +418,7 @@ const App = (function () {
     destino.innerHTML = '';
 
     if (!lista.length) {
-      destino.appendChild(el('p', 'painel vazio', 'Nenhuma oferta com esses filtros. Tente afrouxar um deles.'));
+      destino.appendChild(el('p', 'painel vazio', t('estado.semFiltro')));
     } else {
       destino.appendChild(cartaoMelhor(compararLocal(lista), buscaAtual));
     }
@@ -430,8 +427,8 @@ const App = (function () {
     if (resumo) {
       const total = ofertasDaBusca.length;
       resumo.textContent = lista.length === total
-        ? total + ' oferta(s) encontradas'
-        : lista.length + ' de ' + total + ' oferta(s)';
+        ? t('filtro.resumoTudo', { total })
+        : t('filtro.resumoParcial', { n: lista.length, total });
     }
 
     renderPagina(lista);
@@ -459,7 +456,7 @@ const App = (function () {
       $('#resultado').scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
 
-    const anterior = el('button', 'botao', '← Anterior');
+    const anterior = el('button', 'botao', t('pagina.anterior'));
     anterior.disabled = pagina === 1;
     anterior.addEventListener('click', () => irPara(pagina - 1));
     caixa.appendChild(anterior);
@@ -472,13 +469,16 @@ const App = (function () {
     }
     caixa.appendChild(numeros);
 
-    const proxima = el('button', 'botao', 'Próxima →');
+    const proxima = el('button', 'botao', t('pagina.proxima'));
     proxima.disabled = pagina === paginas;
     proxima.addEventListener('click', () => irPara(pagina + 1));
     caixa.appendChild(proxima);
 
-    caixa.appendChild(el('span', 'pagina-info',
-      'mostrando ' + (inicio + 1) + '–' + Math.min(inicio + POR_PAGINA, total) + ' de ' + total + ' ofertas'));
+    caixa.appendChild(el('span', 'pagina-info', t('pagina.info', {
+      de: inicio + 1,
+      ate: Math.min(inicio + POR_PAGINA, total),
+      total,
+    })));
   }
 
   function cartaoMelhor(comparacao, busca) {
@@ -487,49 +487,49 @@ const App = (function () {
 
     const topo = el('div', 'veredito-topo');
     const esq = el('div');
-    esq.appendChild(el('h2', '', 'Mais vantajoso: ' + melhor.loja));
+    esq.appendChild(el('h2', '', t('veredito.melhor', { loja: melhor.loja })));
     esq.appendChild(el('p', 'veredito-preco', dinheiro(melhor.preco_total)));
 
     const detalhes = [];
-    if (melhor.frete > 0) detalhes.push('inclui frete de ' + dinheiro(melhor.frete));
-    else detalhes.push('frete grátis ou não informado');
-    if (melhor.condicao !== 'novo') detalhes.push('produto ' + melhor.condicao);
-    if (melhor.parcelas > 0) detalhes.push('até ' + melhor.parcelas + 'x');
+    if (melhor.frete > 0) detalhes.push(t('veredito.freteIncluso', { valor: dinheiro(melhor.frete) }));
+    else detalhes.push(t('veredito.freteGratis'));
+    if (melhor.condicao !== 'novo') detalhes.push(t('veredito.condicao', { condicao: t('condicao.' + melhor.condicao) }));
+    if (melhor.parcelas > 0) detalhes.push(t('veredito.parcelas', { n: melhor.parcelas }));
     esq.appendChild(el('small', 'neutro', detalhes.join(' · ')));
 
     if (melhor.titulo) esq.appendChild(el('p', 'anuncio-titulo', melhor.titulo));
-    if (melhor.url) esq.appendChild(link('Ir à loja e comprar ↗', melhor.url, 'botao primario comprar'));
+    if (melhor.url) esq.appendChild(link(t('veredito.comprar'), melhor.url, 'botao primario comprar'));
     topo.appendChild(esq);
 
     const dir = el('div', 'ranking-lado');
     if (comparacao.ranking.length > 1) {
-      dir.appendChild(el('h3', '', 'Comparação entre lojas'));
+      dir.appendChild(el('h3', '', t('veredito.comparacao')));
       dir.appendChild(barrasDeLojas(comparacao.ranking));
     }
     topo.appendChild(dir);
     cartao.appendChild(topo);
 
     if (comparacao.economia > 0) {
-      cartao.appendChild(el('p', 'economia',
-        'Comprando aqui em vez da loja mais cara você economiza ' + dinheiro(comparacao.economia) +
-        ' (' + pctFmt(comparacao.economia_pct) + ').'));
+      cartao.appendChild(el('p', 'economia', t('veredito.economia', {
+        valor: dinheiro(comparacao.economia),
+        pct: pctFmt(comparacao.economia_pct),
+      })));
     } else if (comparacao.mesmo_produto === false) {
-      cartao.appendChild(el('p', 'dica',
-        'As lojas trouxeram modelos diferentes para esta busca, então não dá para falar em economia: ' +
-        'a lista abaixo mostra a opção mais barata de cada loja. Para comparar o mesmo produto, ' +
-        'busque pelo modelo exato (ex.: "redragon kumara k552").'));
+      cartao.appendChild(el('p', 'dica', t('veredito.modelosDiferentes')));
     }
 
     const maisBarato = comparacao.mais_barato;
     if (maisBarato && maisBarato.preco_total < melhor.preco_total) {
-      cartao.appendChild(el('p', 'dica',
-        'Existe oferta mais barata (' + dinheiro(maisBarato.preco_total) + ' na ' + maisBarato.loja +
-        '), mas o sistema não a recomenda por causa da condição do produto ou da reputação do vendedor.'));
+      cartao.appendChild(el('p', 'dica', t('veredito.maisBarato', {
+        valor: dinheiro(maisBarato.preco_total),
+        loja: maisBarato.loja,
+      })));
     }
 
     if (busca && busca.atualizado_em) {
       cartao.appendChild(el('small', 'neutro rodape-busca',
-        'Consulta feita em ' + dataHora(busca.atualizado_em) + (busca.origem ? ' · coleta pelo ' + busca.origem : '')));
+        t('veredito.consulta', { data: dataHora(busca.atualizado_em) }) +
+        (busca.origem ? t('veredito.origem', { origem: busca.origem }) : '')));
     }
 
     return cartao;
@@ -566,7 +566,7 @@ const App = (function () {
       tr.appendChild(celula(o.loja, 'ticker'));
 
       const tdTitulo = el('td', 'titulo-oferta');
-      const curto = (o.titulo || '').length > 62 ? o.titulo.slice(0, 62).trim() + '…' : (o.titulo || 'ver anúncio');
+      const curto = (o.titulo || '').length > 62 ? o.titulo.slice(0, 62).trim() + '…' : (o.titulo || t('tabela.verAnuncio'));
       if (o.url) {
         const a = link(curto, o.url);
         a.title = o.titulo || '';
@@ -576,14 +576,14 @@ const App = (function () {
       }
       tr.appendChild(tdTitulo);
 
-      tr.appendChild(celula(o.condicao, o.condicao === 'usado' ? 'negativo' : ''));
+      tr.appendChild(celula(t('condicao.' + o.condicao) || o.condicao, o.condicao === 'usado' ? 'negativo' : ''));
       tr.appendChild(celula((o.vendedor || '—') + (o.vendidos ? ' · ' + o.vendidos + ' vendas' : '')));
       tr.appendChild(celula(dinheiro(o.preco), 'dir'));
-      tr.appendChild(celula(o.frete > 0 ? dinheiro(o.frete) : 'grátis', 'dir'));
+      tr.appendChild(celula(o.frete > 0 ? dinheiro(o.frete) : t('tabela.gratis'), 'dir'));
       tr.appendChild(celula(dinheiro(o.preco_total), 'dir ' + (i === 0 ? 'positivo' : '')));
 
       const tdAcao = el('td', 'dir');
-      if (o.url) tdAcao.appendChild(link('comprar ↗', o.url, 'mini-botao'));
+      if (o.url) tdAcao.appendChild(link(t('tabela.comprar'), o.url, 'mini-botao'));
       tr.appendChild(tdAcao);
 
       tbody.appendChild(tr);
@@ -596,7 +596,7 @@ const App = (function () {
       const caixa = $('#sugestoes');
       caixa.innerHTML = '';
       if (!populares.length) return;
-      caixa.appendChild(el('span', 'sugestoes-titulo', 'Buscas recentes:'));
+      caixa.appendChild(el('span', 'sugestoes-titulo', t('busca.recentes')));
       populares.forEach((p) => {
         const b = el('button', 'chip', p.termo);
         b.addEventListener('click', () => buscar(p.termo));
@@ -978,8 +978,33 @@ const App = (function () {
     location.href = '/';
   });
 
+  /* ================= IDIOMA ================= */
+  function montarSeletorIdioma() {
+    const select = $('#seletor-idioma');
+    if (!select) return;
+    select.innerHTML = '';
+    I18N.disponiveis.forEach(([codigo, nome]) => {
+      const op = document.createElement('option');
+      op.value = codigo;
+      op.textContent = nome;
+      select.appendChild(op);
+    });
+    select.value = I18N.idioma();
+    select.addEventListener('change', () => I18N.definir(select.value));
+  }
+
+  // ao trocar de idioma, redesenha o que foi montado por JavaScript
+  document.addEventListener('idioma-mudou', () => {
+    escreverFrase();
+    carregarSugestoes();
+    if (ofertasDaBusca.length) { montarFiltros(); aplicarFiltros(); }
+    if (detalhe) renderDetalhe();
+  });
+
   /* ================= INICIO ================= */
   (async function iniciar() {
+    I18N.traduzirPagina();
+    montarSeletorIdioma();
     try {
       usuarioAtual = await pedir('/api/eu');
       ehAdmin = Boolean(usuarioAtual && usuarioAtual.admin);
