@@ -4,27 +4,31 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Comparador de Preços Gamer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/estilo.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
 </head>
 <body class="capa">
 
-<header class="topo">
-  <div class="marca-empresa">
-    <span class="marca-sigla">CHIPS</span>
-    <span class="marca-tipo">company</span>
-  </div>
-  <form id="busca-topo" class="busca-topo oculto">
-    <input id="campo-topo" data-i18n-ph="busca.topoPlaceholder" placeholder="buscar outro produto..." autocomplete="off">
-    <button class="botao primario" type="submit" data-i18n="busca.botao">Buscar</button>
-  </form>
+<header class="top" id="topo">
+  <div class="wrap">
+    <a class="logo" href="/"><b>CHIPS</b><small>COMPANY</small></a>
 
-  <nav id="menu" class="menu"></nav>
-  <div class="topo-dir">
-    <div class="idioma">
-      <button id="idioma-botao" class="idioma-botao" type="button" aria-haspopup="listbox" aria-expanded="false"></button>
-      <ul id="idioma-lista" class="idioma-lista oculto" role="listbox"></ul>
+    <form id="busca-topo" class="search oculto" role="search">
+      <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m11 11 3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <input id="campo-topo" type="search" data-i18n-ph="busca.topoPlaceholder" placeholder="buscar outro produto..." autocomplete="off" aria-label="Buscar produto">
+      <button class="btn btn-primary" type="submit" data-i18n="busca.botao">Buscar</button>
+    </form>
+
+    <nav id="menu" class="menu"></nav>
+
+    <div class="langbox">
+      <button id="idioma-botao" class="lang" type="button" aria-haspopup="listbox" aria-expanded="false"></button>
+      <ul id="idioma-lista" class="lang-menu oculto" role="listbox"></ul>
     </div>
+
     <span id="ola" class="ola"></span>
     <button id="btn-sair" class="botao fantasma oculto">Sair</button>
   </div>
@@ -54,29 +58,63 @@
 
   <section id="estado-busca" class="estado-busca oculto"></section>
 
+  <!-- ---------- RESULTADO DA BUSCA ---------- -->
   <section id="resultado" class="oculto">
-    <div id="filtros" class="filtros oculto"></div>
-    <div id="res-veredito"></div>
+    <section class="intro">
+      <div>
+        <p class="eyebrow" data-i18n="res.eyebrow">Resultado da busca</p>
+        <h1 id="res-titulo"></h1>
+      </div>
+      <p class="meta"><span class="live" aria-hidden="true"></span><span id="res-meta"></span></p>
+    </section>
 
-    <div class="painel">
-      <h2 data-i18n="tabela.titulo">Todas as ofertas encontradas</h2>
-      <table class="tabela">
-        <thead>
-          <tr>
-            <th data-i18n="tabela.loja">Loja</th>
-            <th data-i18n="tabela.produto">Produto</th>
-            <th class="dir" data-i18n="tabela.precoAtual">Preço atual</th>
-            <th class="dir" data-i18n="tabela.precoEra">Preço que era</th>
-            <th class="dir" data-i18n="tabela.desconto">Desconto</th>
-            <th data-i18n="tabela.condicao">Condição</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="tbody-ofertas"></tbody>
-      </table>
-      <p id="vazio-ofertas" class="vazio oculto" data-i18n="tabela.vazio">Nenhuma oferta encontrada para esse termo.</p>
-      <div id="paginacao" class="paginacao oculto"></div>
+    <div id="res-erros"></div>
+
+    <section class="bento" aria-label="Resumo">
+      <article class="hero" id="res-hero"></article>
+
+      <div class="side">
+        <article class="tile">
+          <div class="tile-h">
+            <h2 data-i18n="res.menorPorLoja">Menor preço em cada loja</h2>
+            <span data-i18n="res.diferenca">diferença para o mais barato</span>
+          </div>
+          <div class="rank" id="res-rank"></div>
+          <div id="res-nota"></div>
+        </article>
+        <div class="mini-stats" id="res-stats"></div>
+      </div>
+    </section>
+
+    <div class="toolbar">
+      <div class="toolbar-in">
+        <div class="pills" id="filtro-lojas" role="group" aria-label="Filtrar por loja"></div>
+        <span class="sep"></span>
+        <select class="select" id="filtro-preco" aria-label="Preço"></select>
+        <select class="select" id="filtro-ordem" aria-label="Ordenar"></select>
+        <button class="pill" id="btn-mais-filtros" type="button" aria-expanded="false">
+          <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M4.5 8h7M7 12h2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          <span data-i18n="res.filtros">Filtros</span>
+        </button>
+        <div class="view" role="group" aria-label="Visualização">
+          <button id="ver-grade" type="button" aria-pressed="true" aria-label="Grade"><svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1.5" fill="currentColor"/><rect x="9" y="2" width="5" height="5" rx="1.5" fill="currentColor"/><rect x="2" y="9" width="5" height="5" rx="1.5" fill="currentColor"/><rect x="9" y="9" width="5" height="5" rx="1.5" fill="currentColor"/></svg></button>
+          <button id="ver-lista" type="button" aria-pressed="false" aria-label="Lista"><svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+        </div>
+      </div>
+      <div class="more" id="mais-filtros">
+        <label><span data-i18n="filtro.marca">Marca</span><select class="select" id="filtro-marca"></select></label>
+        <label><span data-i18n="filtro.categoria">Categoria</span><select class="select" id="filtro-categoria"></select></label>
+        <button class="pill" id="btn-limpar" type="button" data-i18n="filtro.limpar">Limpar filtros</button>
+      </div>
     </div>
+
+    <div class="results-h">
+      <h2 data-i18n="res.todas">Todas as ofertas</h2>
+      <span id="res-contagem"></span>
+    </div>
+
+    <div id="ofertas"></div>
+    <nav class="pager" id="paginacao" aria-label="Paginação"></nav>
   </section>
 
   <section id="monitorados" class="painel oculto">
@@ -151,16 +189,7 @@
 
   <section class="painel">
     <h2>Todas as ofertas da última coleta</h2>
-    <table class="tabela">
-      <thead>
-        <tr>
-          <th>Loja</th><th>Anúncio</th><th>Condição</th><th>Vendedor</th>
-          <th class="dir">Preço</th><th class="dir">Frete</th><th class="dir">Total</th><th></th>
-        </tr>
-      </thead>
-      <tbody id="tbody-det-ofertas"></tbody>
-    </table>
-    <p id="vazio-det-ofertas" class="vazio">Nenhuma oferta coletada ainda.</p>
+    <div id="det-ofertas"></div>
   </section>
 </main>
 
@@ -252,12 +281,11 @@
 </section>
 
 <footer class="rodape-site">
-  <p class="rodape-frase">
-    <span class="rodape-copy">&copy; 2026</span>
+  <div class="wrap foot">
     <b>CHIPS</b>
-    <span class="rodape-ponto">·</span>
-    <span data-i18n="rodape.frase">Engenharia de Software e Solu&ccedil;&otilde;es Digitais</span>
-  </p>
+    <span class="bar" aria-hidden="true"></span>
+    <span><span data-i18n="rodape.frase">Engenharia de Software e Solu&ccedil;&otilde;es Digitais</span> &middot; &copy; 2026</span>
+  </div>
 </footer>
 
 <div id="toast" class="toast oculto"></div>

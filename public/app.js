@@ -264,9 +264,55 @@ const App = (function () {
     carregarSugestoes();
   }
 
+  /* ================= TELA DE RESULTADOS =================
+     O resultado e montado em tres camadas: o resumo (melhor oferta e ranking
+     das lojas), a barra de filtros e a lista de ofertas em grade ou lista. */
+
+  let ordem = 'preco';     // criterio de ordenacao escolhido na barra
+  let vista = 'grade';     // grade de cartoes ou lista em linhas
+
+  const ORDENS = [
+    ['preco', 'ordem.menorPreco'],
+    ['-preco', 'ordem.maiorPreco'],
+    ['desconto', 'ordem.maiorDesconto'],
+  ];
+
+  /* Uma cor por loja apenas para o selo redondo do cartao. */
+  const COR_LOJA = {
+    'KaBuM!': '#1a4fd6',
+    Pichau: '#c2410c',
+    Terabyte: '#0e7490',
+    Patoloco: '#5b3fd1',
+    'Setup Ninja': '#0f766e',
+    Amazon: '#0d0f12',
+    'Mercado Livre': '#a68b00',
+  };
+  const corDaLoja = (loja) => COR_LOJA[loja] || '#0d0f12';
+
+  const ICONE_CHECK = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">' +
+    '<path d="m2.5 6.2 2.3 2.3 4.7-5" fill="none" stroke="currentColor" stroke-width="2" ' +
+    'stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const ICONE_LINK = '<svg width="14" height="14" viewBox="0 0 12 12" aria-hidden="true">' +
+    '<path d="M4 2h6v6M10 2 3 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+  const ICONE_INFO = '<svg width="16" height="16" viewBox="0 0 20 20" aria-hidden="true">' +
+    '<circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="1.7"/>' +
+    '<path d="M10 9v5M10 6.2v.1" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>';
+
+  /* o preco grande do cartao principal mostra o "R$" separado do numero */
+  const valor = (v) => Math.abs(Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const curto = (texto, limite) => {
+    const s = String(texto || '');
+    return s.length > limite ? s.slice(0, limite).trim() + '…' : s;
+  };
+  /* na faixa de precos os centavos so atrapalham: o cartao e um resumo */
+  const dinheiroRedondo = (v) => 'R$ ' + Math.round(Number(v) || 0).toLocaleString('pt-BR');
+  const descontoDe = (o) => {
+    const de = Number(o.preco_de) || 0;
+    return de > o.preco ? Math.round(((de - o.preco) / de) * 100) : 0;
+  };
+
   function renderResultado(busca) {
     const r = busca.resultado || {};
-    const comparacao = r.comparacao || { ranking: [], melhor: null, economia: 0, economia_pct: 0 };
     // mostra apenas as ofertas que combinam com o que foi pesquisado
     const termos = String(busca.termo || '').toLowerCase().normalize('NFD').replace(/[^a-z0-9 ]/g, '').split(' ').filter((t) => t.length >= 3 && t !== 'gamer');
     const combina = (titulo) => {
@@ -274,26 +320,10 @@ const App = (function () {
       const alvo = String(titulo || '').toLowerCase().normalize('NFD').replace(/[^a-z0-9 ]/g, '');
       return termos.filter((t) => alvo.indexOf(t) !== -1).length / termos.length >= 0.7;
     };
-    let ofertas = (r.fontes || []).reduce((acc, f) => acc.concat(f.ofertas || []), []).filter((o) => combina(o.titulo));
+    const ofertas = (r.fontes || []).reduce((acc, f) => acc.concat(f.ofertas || []), []).filter((o) => combina(o.titulo));
     ofertas.sort((a, b) => a.preco_total - b.preco_total);
 
     $('#resultado').classList.remove('oculto');
-
-    const destino = $('#res-veredito');
-    destino.innerHTML = '';
-
-    if (!comparacao.melhor) {
-      destino.appendChild(el('p', 'painel vazio', t('estado.semOfertas', { termo: busca.termo })));
-    } else {
-      destino.appendChild(cartaoMelhor(comparacao, busca));
-    }
-
-    // detalhes tecnicos de cada fonte so interessam a quem administra
-    if (ehAdmin) {
-      (r.fontes || []).filter((f) => f.erro).forEach((f) => {
-        destino.appendChild(el('p', 'aviso', f.fonte + ': ' + f.erro));
-      });
-    }
 
     ofertasDaBusca = ofertas.map((o) => Object.assign({}, o, {
       marca: marcaDe(o.titulo),
@@ -301,78 +331,107 @@ const App = (function () {
     }));
     buscaAtual = busca;
     filtros = { marca: '', categoria: '', loja: '', preco: '' };
+    ordem = 'preco';
     pagina = 1;
 
+    // detalhes tecnicos de cada fonte so interessam a quem administra
+    const erros = $('#res-erros');
+    erros.innerHTML = '';
+    if (ehAdmin) {
+      (r.fontes || []).filter((f) => f.erro).forEach((f) => {
+        erros.appendChild(el('p', 'aviso', f.fonte + ': ' + f.erro));
+      });
+    }
+
+    montarIntro(busca);
     montarFiltros();
     aplicarFiltros();
   }
 
-  /* ---------- filtros: marca, categoria, loja e faixa de preco ---------- */
-  function montarFiltros() {
-    const caixa = $('#filtros');
-    caixa.innerHTML = '';
-    caixa.classList.toggle('oculto', ofertasDaBusca.length < 2);
-    if (ofertasDaBusca.length < 2) return;
+  /* ---------- titulo: quantas ofertas, para qual termo e de quando ---------- */
+  function montarIntro(busca) {
+    const titulo = $('#res-titulo');
+    titulo.textContent = t('res.titulo', { n: ofertasDaBusca.length }) + ' ';
+    titulo.appendChild(el('em', '', '“' + (busca.termo || '') + '”'));
 
+    const lojas = new Set(ofertasDaBusca.map((o) => o.loja)).size;
+    $('#res-meta').textContent = t('res.meta', { lojas, data: dataHora(busca.atualizado_em) }) +
+      (busca.origem ? t('veredito.origem', { origem: busca.origem }) : '');
+  }
+
+  /* ---------- barra de filtros: lojas, preco, ordem, marca e categoria ---------- */
+  function encherSelect(select, opcoes, escolhido) {
+    select.innerHTML = '';
+    opcoes.forEach(([valorOpcao, texto]) => {
+      const op = document.createElement('option');
+      op.value = valorOpcao;
+      op.textContent = texto;
+      select.appendChild(op);
+    });
+    select.value = escolhido;
+  }
+
+  function montarFiltros() {
     const unicos = (campo) => [...new Set(ofertasDaBusca.map((o) => o[campo]))].sort();
     const faixasComOfertas = FAIXAS.filter(([, , min, max]) =>
       ofertasDaBusca.some((o) => o.preco_total >= min && o.preco_total < max));
 
-    const seletor = (chave, rotulo, opcoes) => {
-      const caixaFiltro = el('div', 'filtro');
-      const id = 'filtro-' + chave;
-      const etiqueta = el('label', '', rotulo);
-      etiqueta.setAttribute('for', id);
-      caixaFiltro.appendChild(etiqueta);
+    encherSelect($('#filtro-preco'),
+      [['', t('filtro.qualquer')]].concat(faixasComOfertas.map(([chave, texto]) => [chave, texto])), filtros.preco);
+    encherSelect($('#filtro-ordem'),
+      ORDENS.map(([chave, rotulo]) => [chave, t(rotulo)]), ordem);
+    encherSelect($('#filtro-marca'),
+      [['', t('filtro.todas')]].concat(unicos('marca').map((m) => [m, m])), filtros.marca);
+    encherSelect($('#filtro-categoria'),
+      [['', t('filtro.todas')]].concat(unicos('categoria').map((c) => [c, c])), filtros.categoria);
 
-      const select = document.createElement('select');
-      select.id = id;
-      opcoes.forEach(([valor, texto]) => {
-        const op = document.createElement('option');
-        op.value = valor;
-        op.textContent = texto;
-        select.appendChild(op);
-      });
-      select.value = filtros[chave];
-      select.addEventListener('change', () => {
-        filtros[chave] = select.value;
+    renderPills();
+  }
+
+  /* As pastilhas de loja mostram quantas ofertas cada uma tem dentro dos
+     outros filtros, para o visitante ver o que ganha ao trocar de loja. */
+  function renderPills() {
+    const caixa = $('#filtro-lojas');
+    caixa.innerHTML = '';
+
+    const semLoja = ofertasDaBusca.filter((o) => passaFiltros(o, { ignorarLoja: true }));
+    const lojas = [''].concat([...new Set(ofertasDaBusca.map((o) => o.loja))].sort());
+
+    lojas.forEach((loja) => {
+      const b = el('button', 'pill');
+      b.type = 'button';
+      b.setAttribute('aria-pressed', String(filtros.loja === loja));
+      b.appendChild(document.createTextNode(loja || t('filtro.todas')));
+      b.appendChild(el('span', 'count', String(semLoja.filter((o) => !loja || o.loja === loja).length)));
+      b.addEventListener('click', () => {
+        filtros.loja = loja;
         pagina = 1;
         aplicarFiltros();
       });
-      caixaFiltro.appendChild(select);
-      return caixaFiltro;
-    };
-
-    caixa.appendChild(seletor('marca', t('filtro.marca'),
-      [['', t('filtro.todas')]].concat(unicos('marca').map((m) => [m, m]))));
-    caixa.appendChild(seletor('categoria', t('filtro.categoria'),
-      [['', t('filtro.todas')]].concat(unicos('categoria').map((c) => [c, c]))));
-    caixa.appendChild(seletor('loja', t('filtro.loja'),
-      [['', t('filtro.todas')]].concat(unicos('loja').map((l) => [l, l]))));
-    caixa.appendChild(seletor('preco', t('filtro.preco'),
-      [['', t('filtro.qualquer')]].concat(faixasComOfertas.map(([chave, texto]) => [chave, texto]))));
-
-    const limpar = el('button', 'limpar', t('filtro.limpar'));
-    limpar.addEventListener('click', () => {
-      filtros = { marca: '', categoria: '', loja: '', preco: '' };
-      pagina = 1;
-      montarFiltros();
-      aplicarFiltros();
+      caixa.appendChild(b);
     });
-    caixa.appendChild(limpar);
+  }
 
-    caixa.appendChild(el('span', 'resumo', ''));
+  function passaFiltros(o, opcoes) {
+    const como = opcoes || {};
+    const faixa = FAIXAS.find(([chave]) => chave === filtros.preco);
+    if (filtros.marca && o.marca !== filtros.marca) return false;
+    if (filtros.categoria && o.categoria !== filtros.categoria) return false;
+    if (!como.ignorarLoja && filtros.loja && o.loja !== filtros.loja) return false;
+    if (faixa && !(o.preco_total >= faixa[2] && o.preco_total < faixa[3])) return false;
+    return true;
   }
 
   function ofertasFiltradas() {
-    const faixa = FAIXAS.find(([chave]) => chave === filtros.preco);
-    return ofertasDaBusca.filter((o) => {
-      if (filtros.marca && o.marca !== filtros.marca) return false;
-      if (filtros.categoria && o.categoria !== filtros.categoria) return false;
-      if (filtros.loja && o.loja !== filtros.loja) return false;
-      if (faixa && !(o.preco_total >= faixa[2] && o.preco_total < faixa[3])) return false;
-      return true;
-    });
+    return ofertasDaBusca.filter((o) => passaFiltros(o));
+  }
+
+  function ordenar(lista) {
+    const copia = lista.slice();
+    if (ordem === '-preco') copia.sort((a, b) => b.preco_total - a.preco_total);
+    else if (ordem === 'desconto') copia.sort((a, b) => descontoDe(b) - descontoDe(a));
+    else copia.sort((a, b) => a.preco_total - b.preco_total);
+    return copia;
   }
 
   /* Mesma regra do servidor (analise.js): preco final mais penalidade de risco. */
@@ -413,28 +472,162 @@ const App = (function () {
   }
 
   function aplicarFiltros() {
-    const lista = ofertasFiltradas();
-    const destino = $('#res-veredito');
-    destino.innerHTML = '';
+    const lista = ordenar(ofertasFiltradas());
+    const comparacao = lista.length ? compararLocal(lista) : null;
 
-    if (!lista.length) {
-      destino.appendChild(el('p', 'painel vazio', t('estado.semFiltro')));
-    } else {
-      destino.appendChild(cartaoMelhor(compararLocal(lista), buscaAtual));
-    }
-
-    const resumo = document.querySelector('#filtros .resumo');
-    if (resumo) {
-      const total = ofertasDaBusca.length;
-      resumo.textContent = lista.length === total
-        ? t('filtro.resumoTudo', { total })
-        : t('filtro.resumoParcial', { n: lista.length, total });
-    }
-
+    renderPills();
+    renderHero(comparacao);
+    renderRank(comparacao);
+    renderNota(comparacao);
+    renderStats(lista);
+    $('#res-contagem').textContent = t('res.contagem', { n: lista.length });
     renderPagina(lista);
   }
 
-  /* Mostra uma pagina da lista de ofertas e os controles de navegacao. */
+  /* ---------- cartao escuro: a oferta que o sistema recomenda ---------- */
+  function renderHero(comparacao) {
+    const caixa = $('#res-hero');
+    caixa.innerHTML = '';
+    caixa.classList.toggle('vazia', !comparacao);
+
+    if (!comparacao || !comparacao.melhor) {
+      caixa.appendChild(el('p', '', t('estado.semFiltro')));
+      return;
+    }
+
+    const melhor = comparacao.melhor;
+    const chips = el('div', 'chips');
+    const selo = el('span', 'tag tag-glow');
+    selo.innerHTML = ICONE_CHECK;
+    selo.appendChild(document.createTextNode(
+      comparacao.mais_barato === melhor ? t('res.menorPreco') : t('res.maisVantajoso')));
+    chips.appendChild(selo);
+    chips.appendChild(el('span', 'tag tag-ghost', melhor.loja));
+    caixa.appendChild(chips);
+
+    const preco = el('div', 'hero-price num');
+    preco.appendChild(el('sup', '', 'R$'));
+    preco.appendChild(document.createTextNode(valor(melhor.preco_total)));
+    caixa.appendChild(preco);
+
+    const detalhes = [];
+    if (melhor.frete > 0) detalhes.push(t('veredito.freteIncluso', { valor: dinheiro(melhor.frete) }));
+    else detalhes.push(t('veredito.freteGratis'));
+    if (melhor.condicao !== 'novo') detalhes.push(t('veredito.condicao', { condicao: t('condicao.' + melhor.condicao) }));
+    if (melhor.parcelas > 0) detalhes.push(t('veredito.parcelas', { n: melhor.parcelas }));
+    caixa.appendChild(el('div', 'hero-ship', detalhes.join(' · ')));
+
+    if (melhor.titulo) caixa.appendChild(el('p', 'hero-title', melhor.titulo));
+
+    if (melhor.url) {
+      const ir = link(t('res.irLoja', { loja: melhor.loja }), melhor.url, 'btn btn-primary');
+      ir.insertAdjacentHTML('beforeend', ICONE_LINK);
+      caixa.appendChild(ir);
+    }
+  }
+
+  /* ---------- ranking: o menor preco de cada loja, em barras ---------- */
+  function renderRank(comparacao) {
+    const caixa = $('#res-rank');
+    caixa.innerHTML = '';
+    if (!comparacao || !comparacao.ranking.length) {
+      caixa.appendChild(el('p', 'neutro', t('res.semLojas')));
+      return;
+    }
+
+    const ranking = comparacao.ranking;
+    const maximo = Math.max(...ranking.map((o) => o.preco_total));
+    const menor = Math.min(...ranking.map((o) => o.preco_total));
+    const barras = [];
+
+    ranking.forEach((o, i) => {
+      const linha = el('div', 'rank-row' + (i === 0 ? ' win' : ''));
+      linha.appendChild(el('span', 'rank-pos', String(i + 1)));
+      linha.appendChild(el('span', 'rank-store', o.loja));
+
+      const trilho = el('span', 'track');
+      const barra = el('span', 'fill');
+      trilho.appendChild(barra);
+      linha.appendChild(trilho);
+      barras.push([barra, maximo > 0 ? (o.preco_total / maximo) * 100 : 0]);
+
+      const preco = el('span', 'rank-price num');
+      if (o.url) preco.appendChild(link(dinheiro(o.preco_total), o.url, 'link-externo'));
+      else preco.textContent = dinheiro(o.preco_total);
+      linha.appendChild(preco);
+
+      linha.appendChild(el('span', 'rank-diff num',
+        o.preco_total <= menor ? t('res.maisBarato') : '+ ' + dinheiro(o.preco_total - menor)));
+
+      caixa.appendChild(linha);
+    });
+
+    // as barras crescem depois de entrarem na tela: a diferenca fica visivel
+    setTimeout(() => barras.forEach(([barra, largura]) => { barra.style.width = largura + '%'; }), 80);
+  }
+
+  /* ---------- avisos honestos sobre a comparacao ---------- */
+  function renderNota(comparacao) {
+    const caixa = $('#res-nota');
+    caixa.innerHTML = '';
+    if (!comparacao || !comparacao.melhor) return;
+
+    const avisos = [];
+    if (comparacao.economia > 0) {
+      avisos.push(t('veredito.economia', {
+        valor: dinheiro(comparacao.economia),
+        pct: pctFmt(comparacao.economia_pct),
+      }));
+    } else if (comparacao.mesmo_produto === false) {
+      avisos.push(t('veredito.modelosDiferentes'));
+    }
+
+    const maisBarato = comparacao.mais_barato;
+    if (maisBarato && maisBarato.preco_total < comparacao.melhor.preco_total) {
+      avisos.push(t('veredito.maisBarato', {
+        valor: dinheiro(maisBarato.preco_total),
+        loja: maisBarato.loja,
+      }));
+    }
+
+    avisos.forEach((texto) => {
+      const nota = el('div', 'note');
+      nota.innerHTML = ICONE_INFO;
+      nota.appendChild(el('span', '', texto));
+      caixa.appendChild(nota);
+    });
+  }
+
+  /* ---------- dois numeros que resumem a busca ---------- */
+  function renderStats(lista) {
+    const caixa = $('#res-stats');
+    caixa.innerHTML = '';
+
+    const cartao = (rotulo, texto, sub, positivo) => {
+      const c = el('div', 'stat');
+      c.appendChild(el('div', 'stat-l', rotulo));
+      c.appendChild(el('div', 'stat-v num' + (positivo ? ' pos' : ''), texto));
+      c.appendChild(el('div', 'stat-s', sub));
+      return c;
+    };
+
+    const campeao = lista.filter((o) => descontoDe(o)).sort((a, b) => descontoDe(b) - descontoDe(a))[0];
+    caixa.appendChild(campeao
+      ? cartao(t('res.maiorDesconto'), '-' + descontoDe(campeao) + '%',
+        campeao.loja + ' · ' + curto(campeao.titulo, 40), true)
+      : cartao(t('res.maiorDesconto'), '—', t('res.semDesconto'), false));
+
+    if (lista.length) {
+      const precos = lista.map((o) => o.preco_total);
+      caixa.appendChild(cartao(t('res.faixaPreco'),
+        dinheiroRedondo(Math.min(...precos)) + ' – ' + dinheiroRedondo(Math.max(...precos)),
+        t('res.faixaSub', { n: lista.length })));
+    } else {
+      caixa.appendChild(cartao(t('res.faixaPreco'), '—', t('res.semDesconto')));
+    }
+  }
+
+  /* ---------- paginacao: 15 ofertas por pagina ---------- */
   let listaVisivel = [];
   function renderPagina(lista) {
     if (lista) listaVisivel = lista;
@@ -443,8 +636,12 @@ const App = (function () {
     if (pagina > paginas) pagina = paginas;
 
     const inicio = (pagina - 1) * POR_PAGINA;
-    renderOfertas($('#tbody-ofertas'), listaVisivel.slice(inicio, inicio + POR_PAGINA), $('#vazio-ofertas'), inicio);
+    const campeao = listaVisivel.slice().sort((a, b) => a.preco_total - b.preco_total)[0];
+    renderCartoes($('#ofertas'), listaVisivel.slice(inicio, inicio + POR_PAGINA), campeao);
+    renderPaginacao(total, paginas, inicio);
+  }
 
+  function renderPaginacao(total, paginas, inicio) {
     const caixa = $('#paginacao');
     caixa.innerHTML = '';
     caixa.classList.toggle('oculto', total <= POR_PAGINA);
@@ -456,31 +653,204 @@ const App = (function () {
       $('#resultado').scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
 
-    const anterior = el('button', 'botao', t('pagina.anterior'));
+    const botao = (rotulo, destino, atual) => {
+      const b = el('button', 'pg', rotulo);
+      b.type = 'button';
+      if (atual) b.setAttribute('aria-current', 'page');
+      b.addEventListener('click', () => irPara(destino));
+      return b;
+    };
+
+    const anterior = botao(t('pagina.anterior'), pagina - 1, false);
     anterior.disabled = pagina === 1;
-    anterior.addEventListener('click', () => irPara(pagina - 1));
     caixa.appendChild(anterior);
 
-    const numeros = el('div', 'numeros');
+    // com muitas paginas, mostra so as vizinhas da atual, a primeira e a ultima
+    const numeros = [];
     for (let n = 1; n <= paginas; n += 1) {
-      const b = el('button', 'num' + (n === pagina ? ' ativa' : ''), String(n));
-      b.addEventListener('click', () => irPara(n));
-      numeros.appendChild(b);
+      if (paginas <= 7 || n === 1 || n === paginas || Math.abs(n - pagina) <= 1) numeros.push(n);
     }
-    caixa.appendChild(numeros);
+    let anteriorNumero = 0;
+    numeros.forEach((n) => {
+      if (anteriorNumero && n - anteriorNumero > 1) caixa.appendChild(el('span', 'pager-info', '…'));
+      caixa.appendChild(botao(String(n), n, n === pagina));
+      anteriorNumero = n;
+    });
 
-    const proxima = el('button', 'botao', t('pagina.proxima'));
+    const proxima = botao(t('pagina.proxima'), pagina + 1, false);
     proxima.disabled = pagina === paginas;
-    proxima.addEventListener('click', () => irPara(pagina + 1));
     caixa.appendChild(proxima);
 
-    caixa.appendChild(el('span', 'pagina-info', t('pagina.info', {
+    caixa.appendChild(el('span', 'pager-info', t('pagina.info', {
       de: inicio + 1,
       ate: Math.min(inicio + POR_PAGINA, total),
       total,
     })));
   }
 
+  /* ---------- ofertas em grade ou em lista ---------- */
+  function renderCartoes(destino, lista, campeao, forcarLista) {
+    destino.innerHTML = '';
+    const emLista = forcarLista || vista === 'lista';
+
+    if (!lista.length) {
+      destino.className = '';
+      const vazio = el('div', 'vazio-ofertas');
+      vazio.appendChild(el('b', '', t('res.vazioTitulo')));
+      vazio.appendChild(document.createTextNode(t('res.vazioTexto')));
+      destino.appendChild(vazio);
+      return;
+    }
+
+    destino.className = emLista ? 'list' : 'grid';
+    lista.forEach((o, i) => {
+      destino.appendChild(emLista ? linhaOferta(o, i, campeao) : cartaoOferta(o, i, campeao));
+    });
+  }
+
+  function seloLoja(loja) {
+    const selo = el('span', 'store');
+    const ponto = el('span', 'dot', String(loja || '?').charAt(0));
+    ponto.style.background = corDaLoja(loja);
+    selo.appendChild(ponto);
+    selo.appendChild(document.createTextNode(loja || ''));
+    return selo;
+  }
+
+  function marcaDesconto(o, venceu) {
+    if (venceu) return el('span', 'win-tag', '★ ' + t('res.menorPreco'));
+    const desconto = descontoDe(o);
+    return desconto ? el('span', 'disc num', '-' + desconto + '%') : el('span', '');
+  }
+
+  function blocoPreco(o) {
+    const caixa = el('div');
+    caixa.appendChild(el('span', 'old num', descontoDe(o) ? dinheiro(Number(o.preco_de)) : ''));
+    caixa.appendChild(el('span', 'price num', dinheiro(o.preco_total)));
+    if (o.frete > 0) {
+      caixa.appendChild(el('div', 'frete-linha',
+        dinheiro(o.preco) + ' + ' + dinheiro(o.frete) + ' ' + t('tabela.frete').toLowerCase()));
+    }
+    return caixa;
+  }
+
+  function botaoLoja(o, classe) {
+    if (!o.url) return el('span', '');
+    const ir = link(t('res.irLoja', { loja: o.loja }), o.url, classe);
+    ir.insertAdjacentHTML('beforeend', ICONE_LINK);
+    return ir;
+  }
+
+  function cartaoOferta(o, i, campeao) {
+    const venceu = o === campeao;
+    const cartao = el('article', 'card' + (venceu ? ' win' : ''));
+    cartao.style.animationDelay = (i * 30) + 'ms';
+
+    const topo = el('div', 'card-top');
+    topo.appendChild(seloLoja(o.loja));
+    topo.appendChild(marcaDesconto(o, venceu));
+    cartao.appendChild(topo);
+
+    const titulo = el('h3');
+    if (o.url) {
+      const a = link(o.titulo || t('tabela.verAnuncio'), o.url);
+      a.title = o.titulo || '';
+      titulo.appendChild(a);
+    } else {
+      titulo.textContent = o.titulo || '';
+    }
+    cartao.appendChild(titulo);
+
+    const precos = el('div', 'price-box');
+    precos.appendChild(blocoPreco(o));
+    precos.appendChild(el('span', 'cond', t('condicao.' + o.condicao) || o.condicao));
+    cartao.appendChild(precos);
+
+    cartao.appendChild(botaoLoja(o, 'btn go'));
+    return cartao;
+  }
+
+  function linhaOferta(o, i, campeao) {
+    const venceu = o === campeao;
+    const linha = el('div', 'row' + (venceu ? ' win' : ''));
+    linha.style.animationDelay = (i * 20) + 'ms';
+
+    const loja = seloLoja(o.loja);
+    loja.classList.add('s');
+    linha.appendChild(loja);
+
+    if (o.url) {
+      const a = link(o.titulo || t('tabela.verAnuncio'), o.url, 't');
+      a.title = o.titulo || '';
+      linha.appendChild(a);
+    } else {
+      linha.appendChild(el('span', 't', o.titulo || ''));
+    }
+
+    const precos = blocoPreco(o);
+    precos.className = 'p';
+    linha.appendChild(precos);
+
+    const marca = marcaDesconto(o, venceu);
+    marca.classList.add('d');
+    linha.appendChild(marca);
+
+    const acao = el('span', 'a');
+    acao.appendChild(botaoLoja(o, 'btn go'));
+    linha.appendChild(acao);
+    return linha;
+  }
+
+  /* ---------- controles fixos da barra de ferramentas ---------- */
+  function montarControles() {
+    $('#filtro-preco').addEventListener('change', (e) => {
+      filtros.preco = e.target.value; pagina = 1; aplicarFiltros();
+    });
+    $('#filtro-ordem').addEventListener('change', (e) => {
+      ordem = e.target.value; pagina = 1; aplicarFiltros();
+    });
+    $('#filtro-marca').addEventListener('change', (e) => {
+      filtros.marca = e.target.value; pagina = 1; aplicarFiltros();
+    });
+    $('#filtro-categoria').addEventListener('change', (e) => {
+      filtros.categoria = e.target.value; pagina = 1; aplicarFiltros();
+    });
+
+    const mais = $('#btn-mais-filtros');
+    const caixaMais = $('#mais-filtros');
+    mais.addEventListener('click', () => {
+      const aberto = caixaMais.classList.toggle('aberto');
+      mais.setAttribute('aria-expanded', String(aberto));
+      mais.setAttribute('aria-pressed', String(aberto));
+    });
+
+    $('#btn-limpar').addEventListener('click', () => {
+      filtros = { marca: '', categoria: '', loja: '', preco: '' };
+      ordem = 'preco';
+      pagina = 1;
+      montarFiltros();
+      aplicarFiltros();
+    });
+
+    const grade = $('#ver-grade');
+    const emLista = $('#ver-lista');
+    const trocarVista = (nova) => {
+      vista = nova;
+      grade.setAttribute('aria-pressed', String(nova === 'grade'));
+      emLista.setAttribute('aria-pressed', String(nova === 'lista'));
+      renderPagina();
+    };
+    grade.addEventListener('click', () => trocarVista('grade'));
+    emLista.addEventListener('click', () => trocarVista('lista'));
+
+    // o topo preto ganha sombra quando a pagina rola
+    window.addEventListener('scroll', () => {
+      $('#topo').classList.toggle('rolou', window.scrollY > 4);
+    }, { passive: true });
+  }
+  montarControles();
+
+  /* ---------- cartao de veredito (tela de produto acompanhado) ---------- */
   function cartaoMelhor(comparacao, busca) {
     const melhor = comparacao.melhor;
     const cartao = el('section', 'painel veredito bom');
@@ -546,63 +916,13 @@ const App = (function () {
       barra.style.width = (o.preco_total / maximo) * 100 + '%';
       trilho.appendChild(barra);
       li.appendChild(trilho);
-      const valor = el('span', 'barra-valor');
-      if (o.url) valor.appendChild(link(dinheiro(o.preco_total) + ' ↗', o.url));
-      else valor.textContent = dinheiro(o.preco_total);
-      li.appendChild(valor);
+      const valorLoja = el('span', 'barra-valor');
+      if (o.url) valorLoja.appendChild(link(dinheiro(o.preco_total) + ' ↗', o.url));
+      else valorLoja.textContent = dinheiro(o.preco_total);
+      li.appendChild(valorLoja);
       ul.appendChild(li);
     });
     return ul;
-  }
-
-  function renderOfertas(tbody, ofertas, avisoVazio, deslocamento) {
-    const base = deslocamento || 0;
-    tbody.innerHTML = '';
-    if (avisoVazio) avisoVazio.classList.toggle('oculto', ofertas.length > 0);
-
-    ofertas.forEach((o, indice) => {
-      const i = base + indice; // posicao na lista inteira, nao so na pagina
-      const tr = el('tr', i === 0 ? 'melhor-linha' : '');
-      tr.appendChild(celula(o.loja, 'ticker'));
-
-      const tdTitulo = el('td', 'titulo-oferta');
-      const curto = (o.titulo || '').length > 62 ? o.titulo.slice(0, 62).trim() + '…' : (o.titulo || t('tabela.verAnuncio'));
-      if (o.url) {
-        const a = link(curto, o.url);
-        a.title = o.titulo || '';
-        tdTitulo.appendChild(a);
-      } else {
-        tdTitulo.textContent = curto;
-      }
-      tr.appendChild(tdTitulo);
-
-      /* Ordem pensada para quem compara: primeiro o preco que decide a compra,
-         depois a prova do desconto e, por ultimo, a condicao — que quase sempre
-         e "novo" e so interessa quando foge do esperado. */
-      const precoDe = Number(o.preco_de) || 0;
-      const temDesconto = precoDe > o.preco;
-
-      // preco atual: quando a loja cobra frete, a composicao aparece logo abaixo
-      const tdAtual = el('td', 'dir pagar ' + (i === 0 ? 'positivo' : ''));
-      tdAtual.appendChild(el('b', '', dinheiro(o.preco_total)));
-      if (o.frete > 0) {
-        tdAtual.appendChild(el('small', 'neutro', dinheiro(o.preco) + ' + ' + dinheiro(o.frete) + ' ' + t('tabela.frete').toLowerCase()));
-      }
-      tr.appendChild(tdAtual);
-
-      tr.appendChild(celula(temDesconto ? dinheiro(precoDe) : '—', 'dir riscado'));
-      tr.appendChild(celula(
-        temDesconto ? '-' + Math.round(((precoDe - o.preco) / precoDe) * 100) + '%' : '—',
-        'dir ' + (temDesconto ? 'desconto' : 'neutro')
-      ));
-      tr.appendChild(celula(t('condicao.' + o.condicao) || o.condicao, o.condicao === 'usado' ? 'negativo' : 'neutro'));
-
-      const tdAcao = el('td', 'dir');
-      if (o.url) tdAcao.appendChild(link(t('tabela.comprar'), o.url, 'mini-botao'));
-      tr.appendChild(tdAcao);
-
-      tbody.appendChild(tr);
-    });
   }
 
   async function carregarSugestoes() {
@@ -734,7 +1054,8 @@ const App = (function () {
     }
 
     renderGrafico(d.historico);
-    renderOfertas($('#tbody-det-ofertas'), d.ofertas, $('#vazio-det-ofertas'));
+    const maisBarata = d.ofertas.slice().sort((a, b) => a.preco_total - b.preco_total)[0];
+    renderCartoes($('#det-ofertas'), d.ofertas, maisBarata, true);
   }
 
   function renderGrafico(historico) {
