@@ -269,7 +269,7 @@ const App = (function () {
      das lojas), a barra de filtros e a lista de ofertas em grade ou lista. */
 
   let ordem = 'preco';     // criterio de ordenacao escolhido na barra
-  let vista = 'grade';     // grade de cartoes ou lista em linhas
+  let vista = 'lista';     // a busca abre em lista; a grade fica a um clique
 
   const ORDENS = [
     ['preco', 'ordem.menorPreco'],
