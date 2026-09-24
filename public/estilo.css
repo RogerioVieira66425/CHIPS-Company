@@ -633,11 +633,13 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 .num { font-variant-numeric: tabular-nums; }
-.wrap { max-width: 1240px; margin: 0 auto; padding: 0 24px; }
+/* topo, conteudo e rodape usam a janela inteira: os resultados sao uma
+   tabela de comparacao e ganham com o espaco */
+.wrap { max-width: none; margin: 0 auto; padding: 0 28px; }
 
-/* o conteudo acompanha a mesma coluna de leitura do topo e do rodape */
-.conteudo { max-width: 1240px; padding-left: 24px; padding-right: 24px; }
-.conteudo.centralizada { max-width: 1240px; }
+.conteudo { max-width: none; padding-left: 28px; padding-right: 28px; }
+/* so a capa mantem largura de leitura, para a busca nao ficar perdida */
+.conteudo.centralizada { max-width: 1180px; }
 /* o conteudo e uma grade: sem min-width os blocos largos empurrariam a
    pagina para os lados em vez de se ajustarem a coluna */
 .conteudo > * { min-width: 0; }
