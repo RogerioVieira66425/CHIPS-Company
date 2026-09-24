@@ -664,7 +664,7 @@ body {
 /* campo de busca do topo: aparece depois do primeiro resultado */
 .search {
   flex: 1; max-width: 620px; display: flex; align-items: center; gap: 6px;
-  height: 48px; padding: 0 6px 0 18px; border-radius: 999px;
+  height: 42px; padding: 0 5px 0 16px; border-radius: 999px;
   background: #fff; border: 1px solid #fff;
   transition: box-shadow .2s;
 }
@@ -672,7 +672,7 @@ body {
 .search svg { flex: none; color: var(--muted); }
 .search input {
   flex: 1; min-width: 0; border: 0; background: transparent; height: 100%;
-  font-size: 15px; outline: none; padding-left: 6px; color: var(--ink);
+  font-size: 14px; outline: none; padding-left: 6px; color: var(--ink);
 }
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
@@ -683,7 +683,7 @@ body {
 .btn:active { transform: scale(.97); }
 .btn-primary { background: var(--brand); color: #fff; }
 .btn-primary:hover { background: var(--brand-h); box-shadow: 0 8px 20px -8px rgba(215,25,47,.6); }
-.search .btn { height: 36px; padding: 0 18px; border-radius: 999px; font-size: 14px; }
+.search .btn { height: 32px; padding: 0 16px; border-radius: 999px; font-size: 13.5px; }
 
 /* ---------- idioma ---------- */
 .langbox { margin-left: auto; position: relative; }
