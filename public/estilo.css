@@ -748,6 +748,10 @@ body {
 }
 /* o logotipo se ajusta dentro da placa, seja largo (Terabyte) ou quase
    quadrado (Setup Ninja), sem nunca mudar o tamanho dela */
+/* estes dois arquivos nao tem respiro nenhum em volta do desenho, entao
+   pediam um tamanho menor para parecerem do mesmo porte dos outros */
+.hero-logo.marca-kabum img,
+.hero-logo.marca-amazon img { max-height: 76%; }
 .hero-logo img { max-width: 100%; max-height: 100%; display: block; object-fit: contain; }
 /* marca clara sobre fundo escuro: a placa vira escura para nao emoldurar */
 .hero-logo.escura {

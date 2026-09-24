@@ -301,7 +301,8 @@ const App = (function () {
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
   function marcaDaLoja(loja) {
-    const caixa = el('div', 'hero-logo' + (MARCA_ESCURA.indexOf(loja) !== -1 ? ' escura' : ''));
+    const caixa = el('div', 'hero-logo marca-' + chaveDaLoja(loja) +
+      (MARCA_ESCURA.indexOf(loja) !== -1 ? ' escura' : ''));
     const img = document.createElement('img');
     img.alt = loja || '';
 
