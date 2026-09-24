@@ -582,17 +582,18 @@ const App = (function () {
       const precoDe = Number(o.preco_de) || 0;
       const temDesconto = precoDe > o.preco;
       tr.appendChild(celula(temDesconto ? dinheiro(precoDe) : '—', 'dir riscado'));
-      tr.appendChild(celula(dinheiro(o.preco), 'dir'));
+      // preco atual: quando a loja cobra frete, ele entra somado logo abaixo
+      const tdAtual = el('td', 'dir pagar ' + (i === 0 ? 'positivo' : ''));
+      tdAtual.appendChild(el('b', '', dinheiro(o.preco_total)));
+      if (o.frete > 0) {
+        tdAtual.appendChild(el('small', 'neutro', dinheiro(o.preco) + ' + ' + dinheiro(o.frete) + ' ' + t('tabela.frete').toLowerCase()));
+      }
+      tr.appendChild(tdAtual);
+
       tr.appendChild(celula(
         temDesconto ? '-' + Math.round(((precoDe - o.preco) / precoDe) * 100) + '%' : '—',
         'dir ' + (temDesconto ? 'desconto' : 'neutro')
       ));
-
-      // valor a pagar = preco + frete
-      const tdPagar = el('td', 'dir pagar ' + (i === 0 ? 'positivo' : ''));
-      tdPagar.appendChild(el('b', '', dinheiro(o.preco_total)));
-      if (o.frete > 0) tdPagar.appendChild(el('small', 'neutro', '+ ' + dinheiro(o.frete) + ' ' + t('tabela.frete').toLowerCase()));
-      tr.appendChild(tdPagar);
 
       const tdAcao = el('td', 'dir');
       if (o.url) tdAcao.appendChild(link(t('tabela.comprar'), o.url, 'mini-botao'));
