@@ -176,12 +176,23 @@ const App = (function () {
   }
 
   /* ================= BUSCA PUBLICA ================= */
-  function estado(texto, carregando) {
+  function estado(texto, carregando, detalhe) {
     const caixa = $('#estado-busca');
     caixa.classList.remove('oculto');
     caixa.innerHTML = '';
-    if (carregando) caixa.appendChild(el('span', 'girando', '◐'));
-    caixa.appendChild(el('span', '', texto));
+
+    if (!carregando) {
+      caixa.appendChild(el('p', 'estado-aviso', texto));
+      return;
+    }
+
+    const linha = el('div', 'estado-linha');
+    linha.appendChild(el('span', 'anel'));
+    const bloco = el('div', 'estado-texto');
+    bloco.appendChild(el('b', '', texto));
+    bloco.appendChild(el('small', '', detalhe || 'KaBuM!, Pichau, Terabyte, Patoloco, Setup Ninja e Amazon'));
+    linha.appendChild(bloco);
+    caixa.appendChild(linha);
   }
 
   function limparEstado() {
@@ -216,7 +227,7 @@ const App = (function () {
     $('#busca-topo').classList.remove('oculto');
     $('#campo-topo').value = termo;
     pagina = 1;
-    estado('Procurando "' + termo + '" nas lojas...', true);
+    estado('Procurando "' + termo + '" nas lojas', true);
 
     let busca;
     try {
@@ -229,7 +240,13 @@ const App = (function () {
     // o resultado pode vir do proprio servidor ou do agente coletor
     const limite = Date.now() + 90000;
     while (busca.status !== 'pronta' && busca.status !== 'falhou' && Date.now() < limite) {
-      estado('Consultando as lojas... (' + (busca.status === 'executando' ? 'em andamento' : 'na fila') + ')', true);
+      estado(
+        busca.status === 'executando' ? 'Consultando as lojas' : 'Preparando a consulta',
+        true,
+        busca.status === 'executando'
+          ? 'cada loja responde no seu tempo — costuma levar de 10 a 30 segundos'
+          : 'a busca entrou na fila do coletor'
+      );
       await espera(2000);
       try {
         busca = await pedir('/api/buscas/' + busca.id);
