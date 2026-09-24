@@ -564,3 +564,69 @@ body:not(.capa) #fundo-veu { opacity: 0; }
 body.capa .heroi h1 { text-shadow: 0 2px 18px rgba(0,0,0,.75), 0 1px 3px rgba(0,0,0,.6); }
 body.capa .heroi .sub { text-shadow: 0 1px 10px rgba(0,0,0,.7); }
 body.capa .sugestoes-titulo { text-shadow: 0 1px 8px rgba(0,0,0,.7); }
+
+/* ---------- busca compacta no topo (aparece depois do primeiro resultado) ---------- */
+.busca-topo { display: flex; gap: 8px; flex: 1; max-width: 560px; margin: 0 20px; }
+.busca-topo input {
+  flex: 1;
+  background: #0f141c;
+  border: 1px solid var(--borda);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--texto);
+}
+.busca-topo input:focus { outline: 2px solid var(--acao); outline-offset: -1px; }
+.busca-topo .botao { padding: 8px 18px; font-size: 13px; }
+
+/* com resultado na tela, a capa sai de cena */
+body.com-resultado .heroi { display: none; }
+body.com-resultado .conteudo { padding-top: 22px; }
+
+/* ---------- barra de filtros ---------- */
+.filtros {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  background: var(--fundo-2);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  padding: 14px 18px;
+}
+.filtro { display: flex; align-items: center; gap: 7px; }
+.filtro label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  color: var(--texto-fraco);
+  font-weight: 600;
+}
+.filtro select {
+  width: auto;
+  min-width: 128px;
+  padding: 6px 10px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+.filtros .resumo {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--texto-fraco);
+}
+.filtros .limpar {
+  background: transparent;
+  border: 1px solid var(--borda);
+  color: var(--texto-fraco);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.filtros .limpar:hover { border-color: var(--acao); color: var(--texto); }
+
+@media (max-width: 760px) {
+  .busca-topo { order: 3; width: 100%; max-width: none; margin: 8px 0 0; }
+  .filtros .resumo { margin-left: 0; width: 100%; }
+}

@@ -33,8 +33,59 @@ const App = (function () {
   let ehAdmin = false;
   let vistaAtual = 'busca';
   let ofertasDaBusca = [];   // resultado completo da ultima busca
+  let buscaAtual = null;     // dados da busca (termo, origem, data)
+  let filtros = { marca: '', categoria: '', loja: '', preco: '' };
   let pagina = 1;
   const POR_PAGINA = 10;
+
+  /* Marcas conhecidas do mercado gamer: usadas para classificar o anuncio pelo titulo. */
+  const MARCAS = [
+    'Logitech', 'Redragon', 'HyperX', 'Razer', 'Corsair', 'Kingston', 'Asus', 'Gigabyte',
+    'MSI', 'Intel', 'AMD', 'NVIDIA', 'Sandisk', 'Seagate', 'Western Digital', 'XPG', 'Adata',
+    'Fortrek', 'Havit', 'Motospeed', 'Multilaser', 'Dazz', 'Mancer', 'Pichau', 'Rise Mode',
+    'Cooler Master', 'Thermaltake', 'DeepCool', 'Akko', 'Keychron', 'Steelseries', 'Sades',
+    'JBL', 'Sony', 'Samsung', 'LG', 'AOC', 'Acer', 'Dell', 'Philips', 'TP-Link', 'Intelbras',
+    'Galax', 'PowerColor', 'Sapphire', 'Zotac', 'PNY', 'Crucial', 'Husky', 'Vinik', 'C3Tech',
+    'Clanm', 'Attack Shark', 'Epomaker', 'Gamdias', 'Marvo', 'Elgato', 'Trust', 'Aula',
+  ];
+
+  const CATEGORIAS = [
+    ['Teclado', /teclado/i],
+    ['Mouse', /\bmouse\b/i],
+    ['Mousepad', /mousepad|mouse pad/i],
+    ['Headset', /headset|fone de ouvido|fone gamer/i],
+    ['Monitor', /monitor/i],
+    ['Placa de vídeo', /placa de v[íi]deo|geforce|radeon|rtx|gtx/i],
+    ['Processador', /processador|ryzen|core i[3579]/i],
+    ['Memória', /mem[óo]ria|ddr[45]/i],
+    ['Armazenamento', /ssd|hd |hd\b|nvme|disco/i],
+    ['Cadeira', /cadeira/i],
+    ['Gabinete', /gabinete/i],
+    ['Fonte', /fonte/i],
+    ['Cooler', /cooler|water ?cooler|ventoinha/i],
+    ['Microfone', /microfone/i],
+    ['Webcam', /webcam/i],
+    ['Controle', /controle|gamepad|joystick/i],
+    ['Cabo e adaptador', /cabo|adaptador|hub/i],
+  ];
+
+  const FAIXAS = [
+    ['ate100', 'Até R$ 100', 0, 100],
+    ['100a300', 'R$ 100 a R$ 300', 100, 300],
+    ['300a600', 'R$ 300 a R$ 600', 300, 600],
+    ['600a1200', 'R$ 600 a R$ 1.200', 600, 1200],
+    ['acima1200', 'Acima de R$ 1.200', 1200, Infinity],
+  ];
+
+  const marcaDe = (titulo) => {
+    const t = String(titulo || '').toLowerCase();
+    return MARCAS.find((m) => t.indexOf(m.toLowerCase()) !== -1) || 'Outras';
+  };
+
+  const categoriaDe = (titulo) => {
+    const achou = CATEGORIAS.find(([, padrao]) => padrao.test(String(titulo || '')));
+    return achou ? achou[0] : 'Outros';
+  };
 
   /* ---------- utilitarios ---------- */
   let temporizadorToast;
@@ -143,6 +194,12 @@ const App = (function () {
     if (termo.length >= 2) buscar(termo);
   });
 
+  $('#busca-topo').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const termo = $('#campo-topo').value.trim();
+    if (termo.length >= 2) { mostrar('busca'); buscar(termo); }
+  });
+
   async function buscar(termo) {
     $('#campo-busca').value = termo;
     $('#resultado').classList.add('oculto');
@@ -153,6 +210,11 @@ const App = (function () {
     // o video de fundo para de tocar fora da capa: economiza processamento
     const video = $('#fundo-video');
     if (video) { try { video.pause(); } catch (e) { /* sem problema */ } }
+
+    // a busca sobe para o topo e a capa sai de cena
+    document.body.classList.add('com-resultado');
+    $('#busca-topo').classList.remove('oculto');
+    $('#campo-topo').value = termo;
     pagina = 1;
     estado('Procurando "' + termo + '" nas lojas...', true);
 
@@ -219,19 +281,155 @@ const App = (function () {
       });
     }
 
-    ofertasDaBusca = ofertas;
+    ofertasDaBusca = ofertas.map((o) => Object.assign({}, o, {
+      marca: marcaDe(o.titulo),
+      categoria: categoriaDe(o.titulo),
+    }));
+    buscaAtual = busca;
+    filtros = { marca: '', categoria: '', loja: '', preco: '' };
     pagina = 1;
-    renderPagina();
+
+    montarFiltros();
+    aplicarFiltros();
+  }
+
+  /* ---------- filtros: marca, categoria, loja e faixa de preco ---------- */
+  function montarFiltros() {
+    const caixa = $('#filtros');
+    caixa.innerHTML = '';
+    caixa.classList.toggle('oculto', ofertasDaBusca.length < 2);
+    if (ofertasDaBusca.length < 2) return;
+
+    const unicos = (campo) => [...new Set(ofertasDaBusca.map((o) => o[campo]))].sort();
+    const faixasComOfertas = FAIXAS.filter(([, , min, max]) =>
+      ofertasDaBusca.some((o) => o.preco_total >= min && o.preco_total < max));
+
+    const seletor = (chave, rotulo, opcoes) => {
+      const caixaFiltro = el('div', 'filtro');
+      const id = 'filtro-' + chave;
+      const etiqueta = el('label', '', rotulo);
+      etiqueta.setAttribute('for', id);
+      caixaFiltro.appendChild(etiqueta);
+
+      const select = document.createElement('select');
+      select.id = id;
+      opcoes.forEach(([valor, texto]) => {
+        const op = document.createElement('option');
+        op.value = valor;
+        op.textContent = texto;
+        select.appendChild(op);
+      });
+      select.value = filtros[chave];
+      select.addEventListener('change', () => {
+        filtros[chave] = select.value;
+        pagina = 1;
+        aplicarFiltros();
+      });
+      caixaFiltro.appendChild(select);
+      return caixaFiltro;
+    };
+
+    caixa.appendChild(seletor('marca', 'Marca',
+      [['', 'Todas']].concat(unicos('marca').map((m) => [m, m]))));
+    caixa.appendChild(seletor('categoria', 'Categoria',
+      [['', 'Todas']].concat(unicos('categoria').map((c) => [c, c]))));
+    caixa.appendChild(seletor('loja', 'Loja',
+      [['', 'Todas']].concat(unicos('loja').map((l) => [l, l]))));
+    caixa.appendChild(seletor('preco', 'Preço',
+      [['', 'Qualquer']].concat(faixasComOfertas.map(([chave, texto]) => [chave, texto]))));
+
+    const limpar = el('button', 'limpar', 'Limpar filtros');
+    limpar.addEventListener('click', () => {
+      filtros = { marca: '', categoria: '', loja: '', preco: '' };
+      pagina = 1;
+      montarFiltros();
+      aplicarFiltros();
+    });
+    caixa.appendChild(limpar);
+
+    caixa.appendChild(el('span', 'resumo', ''));
+  }
+
+  function ofertasFiltradas() {
+    const faixa = FAIXAS.find(([chave]) => chave === filtros.preco);
+    return ofertasDaBusca.filter((o) => {
+      if (filtros.marca && o.marca !== filtros.marca) return false;
+      if (filtros.categoria && o.categoria !== filtros.categoria) return false;
+      if (filtros.loja && o.loja !== filtros.loja) return false;
+      if (faixa && !(o.preco_total >= faixa[2] && o.preco_total < faixa[3])) return false;
+      return true;
+    });
+  }
+
+  /* Mesma regra do servidor (analise.js): preco final mais penalidade de risco. */
+  function custoAjustado(o) {
+    const pesos = { '5_green': 0, '4_light_green': 0.01, '3_yellow': 0.03, '2_orange': 0.06, '1_red': 0.12 };
+    let fator = 1;
+    if (o.condicao === 'usado') fator += 0.15;
+    const risco = o.reputacao ? pesos[o.reputacao] : 0.02;
+    fator += risco === undefined ? 0.02 : risco;
+    return o.preco_total * fator;
+  }
+
+  function compararLocal(lista) {
+    let base = lista.filter((o) => o.condicao === 'novo');
+    if (!base.length) base = lista;
+    if (!base.length) return { ranking: [], melhor: null, economia: 0, economia_pct: 0 };
+
+    const porLoja = new Map();
+    base.forEach((o) => {
+      const atual = porLoja.get(o.loja);
+      if (!atual || o.preco_total < atual.preco_total) porLoja.set(o.loja, o);
+    });
+    const ranking = [...porLoja.values()].sort((a, b) => custoAjustado(a) - custoAjustado(b));
+    const melhor = ranking[0];
+    const pior = ranking[ranking.length - 1];
+    const economia = pior.preco_total - melhor.preco_total;
+    const mesmo = ranking.length < 2 || buscaAtual && buscaAtual.resultado &&
+      buscaAtual.resultado.comparacao && buscaAtual.resultado.comparacao.mesmo_produto;
+
+    return {
+      ranking,
+      melhor,
+      economia: mesmo ? economia : 0,
+      economia_pct: mesmo && pior.preco_total > 0 ? (economia / pior.preco_total) * 100 : 0,
+      mesmo_produto: Boolean(mesmo),
+      mais_barato: ranking.slice().sort((a, b) => a.preco_total - b.preco_total)[0],
+    };
+  }
+
+  function aplicarFiltros() {
+    const lista = ofertasFiltradas();
+    const destino = $('#res-veredito');
+    destino.innerHTML = '';
+
+    if (!lista.length) {
+      destino.appendChild(el('p', 'painel vazio', 'Nenhuma oferta com esses filtros. Tente afrouxar um deles.'));
+    } else {
+      destino.appendChild(cartaoMelhor(compararLocal(lista), buscaAtual));
+    }
+
+    const resumo = document.querySelector('#filtros .resumo');
+    if (resumo) {
+      const total = ofertasDaBusca.length;
+      resumo.textContent = lista.length === total
+        ? total + ' oferta(s) encontradas'
+        : lista.length + ' de ' + total + ' oferta(s)';
+    }
+
+    renderPagina(lista);
   }
 
   /* Mostra uma pagina da lista de ofertas e os controles de navegacao. */
-  function renderPagina() {
-    const total = ofertasDaBusca.length;
+  let listaVisivel = [];
+  function renderPagina(lista) {
+    if (lista) listaVisivel = lista;
+    const total = listaVisivel.length;
     const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
     if (pagina > paginas) pagina = paginas;
 
     const inicio = (pagina - 1) * POR_PAGINA;
-    renderOfertas($('#tbody-ofertas'), ofertasDaBusca.slice(inicio, inicio + POR_PAGINA), $('#vazio-ofertas'), inicio);
+    renderOfertas($('#tbody-ofertas'), listaVisivel.slice(inicio, inicio + POR_PAGINA), $('#vazio-ofertas'), inicio);
 
     const caixa = $('#paginacao');
     caixa.innerHTML = '';
