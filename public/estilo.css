@@ -776,3 +776,21 @@ body.capa .chip:hover { background: rgba(255,255,255,.2); color: #fff; }
   border-color: var(--acao-clara);
   color: #fff;
 }
+
+/* botoes de navegacao entre paginas na cor da marca */
+.paginacao .botao {
+  background: var(--acao);
+  border: 1px solid var(--acao);
+  color: #fff;
+  font-weight: 600;
+}
+.paginacao .botao:hover:not(:disabled) {
+  background: var(--acao-clara);
+  border-color: var(--acao-clara);
+}
+.paginacao .botao:disabled {
+  background: #eef1f6;
+  border-color: var(--borda);
+  color: var(--texto-fraco);
+  opacity: 1;
+}
