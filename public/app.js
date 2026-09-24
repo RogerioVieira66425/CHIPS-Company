@@ -571,11 +571,11 @@ const App = (function () {
     setTimeout(() => barras.forEach(([barra, largura]) => { barra.style.width = largura + '%'; }), 80);
   }
 
-  /* ---------- o que a comparacao mostra ----------
-     Em vez de um aviso, o quadro traz leituras tiradas das proprias
-     ofertas: o quanto o preco varia entre as lojas, onde a recomendada
-     esta na distribuicao, quantas ofertas estao com preco reduzido e se
-     existe algo mais barato que o sistema preferiu nao recomendar. */
+  /* ---------- a leitura da comparacao, em uma frase ----------
+     Uma linha so, escolhida pelo que aquela busca tem de mais util: a
+     economia quando as lojas trouxeram o mesmo produto, o tamanho da
+     diferenca entre elas quando os modelos divergem, ou a posicao do
+     preco recomendado dentro das ofertas encontradas. */
   function mediana(valores) {
     const ordem = valores.slice().sort((a, b) => a - b);
     if (!ordem.length) return 0;
@@ -583,81 +583,57 @@ const App = (function () {
     return ordem.length % 2 ? ordem[meio] : (ordem[meio - 1] + ordem[meio]) / 2;
   }
 
-  function renderInsights(comparacao, lista) {
-    const caixa = $('#res-nota');
-    caixa.innerHTML = '';
-    if (!comparacao || !comparacao.melhor || !lista.length) return;
-
+  function fraseDaComparacao(comparacao, lista) {
     const melhor = comparacao.melhor;
     const ranking = comparacao.ranking;
-    const frases = [];
 
-    // 1. o tamanho da diferenca entre a loja mais barata e a mais cara
     if (ranking.length > 1) {
       const porPreco = ranking.slice().sort((a, b) => a.preco_total - b.preco_total);
       const barata = porPreco[0];
       const cara = porPreco[porPreco.length - 1];
       const diferenca = cara.preco_total - barata.preco_total;
       if (diferenca > 0) {
-        frases.push(t(comparacao.mesmo_produto ? 'insight.economia' : 'insight.variacao', {
+        return t(comparacao.mesmo_produto ? 'insight.economia' : 'insight.variacao', {
           lojaMin: barata.loja,
           lojaMax: cara.loja,
           min: dinheiro(barata.preco_total),
           max: dinheiro(cara.preco_total),
           dif: dinheiro(diferenca),
           pct: Math.round((diferenca / cara.preco_total) * 100) + '%',
-        }));
+        });
       }
     }
 
-    // 2. onde a oferta recomendada cai na distribuicao de precos
     const meio = mediana(lista.map((o) => o.preco_total));
-    if (meio > 0) {
+    if (meio > 0 && lista.length > 2) {
       const abaixo = ((meio - melhor.preco_total) / meio) * 100;
-      frases.push(abaixo >= 5
+      return abaixo >= 5
         ? t('insight.mediana', { pct: Math.round(abaixo) + '%', n: lista.length, mediana: dinheiro(meio) })
-        : t('insight.medianaPerto', { valor: dinheiro(melhor.preco_total), n: lista.length, mediana: dinheiro(meio) }));
+        : t('insight.medianaPerto', { valor: dinheiro(melhor.preco_total), n: lista.length, mediana: dinheiro(meio) });
     }
 
-    // 3. quantas ofertas estao com preco reduzido
     const comDesconto = lista.filter((o) => descontoDe(o));
     if (comDesconto.length) {
       const maior = comDesconto.slice().sort((a, b) => descontoDe(b) - descontoDe(a))[0];
-      frases.push(t('insight.descontos', {
+      return t('insight.descontos', {
         n: comDesconto.length,
         total: lista.length,
         pct: descontoDe(maior) + '%',
         loja: maior.loja,
-      }));
-    } else {
-      frases.push(t('insight.semDescontos'));
+      });
     }
+    return t('insight.semDescontos');
+  }
 
-    // 4. existe oferta mais barata, mas com risco maior
-    const maisBarato = comparacao.mais_barato;
-    if (maisBarato && maisBarato.preco_total < melhor.preco_total) {
-      frases.push(t('veredito.maisBarato', {
-        valor: dinheiro(maisBarato.preco_total),
-        loja: maisBarato.loja,
-      }));
-    }
+  function renderInsights(comparacao, lista) {
+    const caixa = $('#res-nota');
+    caixa.innerHTML = '';
+    if (!comparacao || !comparacao.melhor || !lista.length) return;
 
     const bloco = el('section', 'insights');
-    bloco.appendChild(el('h3', '', t('insight.titulo')));
-    const lista_ul = el('ul');
-    frases.slice(0, 4).forEach((texto) => {
-      const item = el('li');
-      item.innerHTML = ICONE_PONTO;
-      item.appendChild(el('span', '', texto));
-      lista_ul.appendChild(item);
-    });
-    bloco.appendChild(lista_ul);
+    bloco.innerHTML = ICONE_PONTO;
+    bloco.appendChild(el('span', '', fraseDaComparacao(comparacao, lista)));
     caixa.appendChild(bloco);
-
-    // a ressalva continua, agora como nota de rodape do quadro
-    if (comparacao.mesmo_produto === false) {
-      caixa.appendChild(el('p', 'nota-modelo', t('insight.modelosDiferentes')));
-    }
   }
 
   /* ---------- dois numeros que resumem a busca ---------- */
