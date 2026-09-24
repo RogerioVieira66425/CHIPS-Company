@@ -18,12 +18,6 @@ CREATE TABLE IF NOT EXISTS usuarios (
   criado_em  TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS sessoes (
-  token     TEXT PRIMARY KEY,
-  user_id   INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
-  expira_em INTEGER NOT NULL
-);
-
 -- Produtos monitorados (a "lista de desejos" de cada usuario)
 CREATE TABLE IF NOT EXISTS produtos (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -89,6 +83,9 @@ CREATE INDEX IF NOT EXISTS idx_ofertas_produto ON ofertas(produto_id, coletado_e
 CREATE INDEX IF NOT EXISTS idx_coletas_produto ON coletas(produto_id, executado_em);
 CREATE INDEX IF NOT EXISTS idx_produtos_user ON produtos(user_id);
 `);
+
+// O sistema nao tem mais login: a tabela de sessoes sai dos bancos antigos
+db.exec('DROP TABLE IF EXISTS sessoes');
 
 // Preco "de" (riscado na loja), acrescentado depois
 const colunasOfertas = db.prepare('PRAGMA table_info(ofertas)').all().map((c) => c.name);

@@ -28,9 +28,6 @@
       <button id="idioma-botao" class="lang" type="button" aria-haspopup="listbox" aria-expanded="false"></button>
       <ul id="idioma-lista" class="lang-menu oculto" role="listbox"></ul>
     </div>
-
-    <span id="ola" class="ola"></span>
-    <button id="btn-sair" class="botao fantasma oculto">Sair</button>
   </div>
 </header>
 
@@ -130,34 +127,6 @@
     </table>
   </section>
 
-  <div class="grade so-admin oculto">
-    <section class="painel">
-      <h2>Adicionar produto ao acompanhamento</h2>
-      <form id="form-produto" class="form compacto">
-        <label>Nome do produto<input name="nome" placeholder="Teclado Redragon Kumara K552" required></label>
-        <label>Termo de busca<input name="termo" placeholder="redragon kumara k552"></label>
-        <div class="linha">
-          <label>Categoria
-            <select name="categoria">
-              <option>Teclado</option><option>Mouse</option><option>Headset</option>
-              <option>Monitor</option><option>Placa de vídeo</option><option>Processador</option>
-              <option>Memória RAM</option><option>Cadeira gamer</option><option>Console</option>
-              <option>Jogo</option><option>Outros</option>
-            </select>
-          </label>
-          <label>Preço-alvo<input name="preco_alvo" inputmode="decimal" placeholder="0,00"></label>
-        </div>
-        <button class="botao primario" type="submit">Monitorar preço</button>
-      </form>
-    </section>
-
-    <section class="painel">
-      <h2>Coleta</h2>
-      <p class="dica">Atualiza os preços de todos os produtos acompanhados.</p>
-      <button id="btn-coletar-todos" class="botao">Atualizar preços de todos</button>
-      <div id="aviso-coleta" class="aviso-fontes oculto"></div>
-    </section>
-  </div>
 </main>
 
 <!-- ---------- DETALHE DE UM PRODUTO ACOMPANHADO ---------- -->
@@ -169,7 +138,6 @@
     </div>
     <div class="barra-acoes">
       <button id="det-voltar" class="botao fantasma">← Voltar</button>
-      <button id="det-coletar" class="botao primario so-admin oculto">Atualizar preços agora</button>
     </div>
   </div>
 
@@ -236,48 +204,6 @@
     </section>
   </div>
 </main>
-
-<!-- ---------- ADMINISTRAÇÃO (só com login, via /admin) ---------- -->
-<main id="vista-admin" class="conteudo oculto">
-  <div class="cabecalho-tela">
-    <div><h1>Administração</h1><p class="sub">Contas cadastradas no sistema.</p></div>
-    <button id="admin-atualizar" class="botao">Atualizar</button>
-  </div>
-
-  <section class="kpis">
-    <article class="kpi"><h3>Usuários</h3><strong id="admin-total-usuarios">0</strong></article>
-    <article class="kpi"><h3>Produtos</h3><strong id="admin-total-produtos">0</strong></article>
-    <article class="kpi"><h3>Coletas</h3><strong id="admin-total-coletas">0</strong></article>
-    <article class="kpi"><h3>Ofertas</h3><strong id="admin-total-ofertas">0</strong></article>
-  </section>
-
-  <section class="painel">
-    <h2>Contas</h2>
-    <table class="tabela">
-      <thead>
-        <tr><th>#</th><th>Nome</th><th>Login</th><th>Criada em</th>
-          <th class="dir">Produtos</th><th class="dir">Coletas</th><th class="dir">Ofertas</th>
-          <th class="dir">Sessões</th><th></th></tr>
-      </thead>
-      <tbody id="tbody-admin"></tbody>
-    </table>
-  </section>
-</main>
-
-<!-- ---------- LOGIN (aparece só em /admin) ---------- -->
-<section id="tela-login" class="tela-login oculto">
-  <div class="cartao-login">
-    <div class="marca"><span>🎮</span> Administração</div>
-    <p class="sub">O site é público. Esta área é só para gerenciar os produtos acompanhados.</p>
-    <form id="form-entrar" class="form">
-      <label>Usuário<input type="text" name="email" autocomplete="username" required></label>
-      <label>Senha<input type="password" name="senha" autocomplete="current-password" required></label>
-      <button class="botao primario" type="submit">Entrar</button>
-    </form>
-    <p id="aviso-login" class="aviso oculto"></p>
-    <button id="btn-voltar-site" class="botao fantasma largo">← Voltar para o site</button>
-  </div>
-</section>
 
 <footer class="rodape-site">
   <div class="wrap foot">

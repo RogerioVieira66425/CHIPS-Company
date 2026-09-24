@@ -10,89 +10,68 @@ const DIAS_SESSAO = 7;
 const PRODUCAO = process.env.NODE_ENV === 'production';
 const ENDERECO = PRODUCAO ? '0.0.0.0' : '127.0.0.1';
 
-/* ---------- limite de tentativas de login ---------- */
-const JANELA_TENTATIVAS = 15 * 60 * 1000;
-const MAX_TENTATIVAS = 8;
-const tentativas = new Map();
+/* ---------- acesso as rotas de escrita ----------
+   O site e publico e nao tem login nem senha. O que muda dados - produtos
+   acompanhados, coleta e ingestao - e autenticado pelo token do agente,
+   que roda na maquina de quem mantem o sistema. */
+const COLETOR_TOKEN = String(process.env.COLETOR_TOKEN || '').trim();
 
-function chaveTentativa(req, email) {
-  const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '?';
-  return ip + '|' + email;
+function tokenValido(req) {
+  if (!COLETOR_TOKEN) return false;
+  const enviado = Buffer.from(String(req.headers['x-coletor-token'] || ''));
+  const esperado = Buffer.from(COLETOR_TOKEN);
+  return enviado.length === esperado.length && crypto.timingSafeEqual(enviado, esperado);
 }
-function bloqueado(chave) {
-  const reg = tentativas.get(chave);
-  if (!reg) return false;
-  if (Date.now() - reg.desde > JANELA_TENTATIVAS) { tentativas.delete(chave); return false; }
-  return reg.contagem >= MAX_TENTATIVAS;
+
+/* ---------- catalogo ----------
+   Os produtos acompanhados pertencem a uma unica vitrine, criada no primeiro
+   boot. A coluna user_id continua nas tabelas por causa do historico ja
+   gravado. */
+const VITRINE = { id: 0 };
+
+function garantirVitrine() {
+  const existente = db.prepare('SELECT id FROM usuarios WHERE admin = 1 ORDER BY id LIMIT 1').get() ||
+    db.prepare('SELECT id FROM usuarios ORDER BY id LIMIT 1').get();
+  if (existente) { VITRINE.id = existente.id; return; }
+  const info = db.prepare(
+    'INSERT INTO usuarios (email, nome, senha_hash, salt, criado_em, admin) VALUES (?,?,?,?,?,1)'
+  ).run('vitrine', 'Vitrine', '', '', new Date().toISOString());
+  VITRINE.id = Number(info.lastInsertRowid);
 }
-function registrarFalha(chave) {
-  const reg = tentativas.get(chave);
-  if (!reg || Date.now() - reg.desde > JANELA_TENTATIVAS) tentativas.set(chave, { contagem: 1, desde: Date.now() });
+
+/* ---------- limite de buscas por visitante ----------
+   Cada busca vira uma consulta as seis lojas, feita pelo agente a partir de
+   uma rede residencial. Sem limite, um robo usaria o site para martelar as
+   lojas em nome de quem hospeda o agente. */
+const JANELA_BUSCAS_MS = 10 * 60 * 1000;
+const MAX_BUSCAS = Number(process.env.MAX_BUSCAS) || 30;   // por IP, ajustavel por variavel de ambiente
+const buscasPorIp = new Map();
+
+function ipDoPedido(req) {
+  return String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '?';
+}
+
+function podeBuscar(req) {
+  const agora = Date.now();
+  const ip = ipDoPedido(req);
+  const reg = buscasPorIp.get(ip);
+
+  if (!reg || agora - reg.desde > JANELA_BUSCAS_MS) buscasPorIp.set(ip, { contagem: 1, desde: agora });
+  else if (reg.contagem >= MAX_BUSCAS) return false;
   else reg.contagem += 1;
-}
 
-function cookieSessao(token) {
-  return 'sid=' + token + '; HttpOnly; SameSite=Lax; Path=/; Max-Age=' + DIAS_SESSAO * 86400 + (PRODUCAO ? '; Secure' : '');
-}
-
-/* ---------- senhas ---------- */
-function hashSenha(senha, salt = crypto.randomBytes(16).toString('hex')) {
-  const hash = crypto.scryptSync(senha, salt, 64).toString('hex');
-  return { hash, salt };
-}
-function senhaConfere(senha, hash, salt) {
-  const a = Buffer.from(hash, 'hex');
-  const b = crypto.scryptSync(senha, salt, 64);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
-}
-
-/* ---------- conta de administrador ----------
-   Criada no primeiro boot. Troque a senha definindo ADMIN_SENHA nas variaveis
-   de ambiente (no Render: Environment -> Add Environment Variable). */
-const ADMIN_LOGIN = String(process.env.ADMIN_LOGIN || 'admin').toLowerCase().trim();
-const ADMIN_SENHA = String(process.env.ADMIN_SENHA || 'admin');
-
-function garantirAdmin() {
-  const existente = db.prepare('SELECT id, admin FROM usuarios WHERE email = ?').get(ADMIN_LOGIN);
-  if (existente) {
-    if (!existente.admin) db.prepare('UPDATE usuarios SET admin = 1 WHERE id = ?').run(existente.id);
-    if (process.env.ADMIN_SENHA) {
-      const { hash, salt } = hashSenha(ADMIN_SENHA);
-      db.prepare('UPDATE usuarios SET senha_hash = ?, salt = ? WHERE id = ?').run(hash, salt, existente.id);
-    }
-    return;
+  // limpeza preguicosa: sem isso o mapa so cresce
+  if (buscasPorIp.size > 2000) {
+    buscasPorIp.forEach((v, k) => { if (agora - v.desde > JANELA_BUSCAS_MS) buscasPorIp.delete(k); });
   }
-  const { hash, salt } = hashSenha(ADMIN_SENHA);
-  db.prepare('INSERT INTO usuarios (email, nome, senha_hash, salt, criado_em, admin) VALUES (?,?,?,?,?,1)')
-    .run(ADMIN_LOGIN, 'Administrador', hash, salt, new Date().toISOString());
-  console.log('  Conta de administrador criada: login "' + ADMIN_LOGIN + '"' +
-    (process.env.ADMIN_SENHA ? '' : ' / senha "admin" (defina ADMIN_SENHA para trocar)'));
+  return true;
 }
 
-/* ---------- sessoes ---------- */
-function criarSessao(userId) {
-  const token = crypto.randomBytes(32).toString('hex');
-  const expira = Date.now() + DIAS_SESSAO * 864e5;
-  db.prepare('INSERT INTO sessoes (token, user_id, expira_em) VALUES (?,?,?)').run(token, userId, expira);
-  return token;
-}
-function usuarioDaRequisicao(req) {
-  const cookie = req.headers.cookie || '';
-  const m = cookie.match(/(?:^|;\s*)sid=([a-f0-9]+)/);
-  if (!m) return null;
-  const s = db.prepare('SELECT * FROM sessoes WHERE token = ?').get(m[1]);
-  if (!s) return null;
-  if (s.expira_em < Date.now()) {
-    db.prepare('DELETE FROM sessoes WHERE token = ?').run(m[1]);
-    return null;
-  }
-  const u = db.prepare('SELECT id, email, nome, admin FROM usuarios WHERE id = ?').get(s.user_id);
-  return u ? { id: u.id, email: u.email, nome: u.nome, admin: !!u.admin, token: m[1] } : null;
-}
+/* Endereco de anuncio so serve se for http(s): um "javascript:" vindo de uma
+   pagina de loja viraria execucao de script dentro do nosso site. */
+const urlSegura = (u) => (/^https?:\/\//i.test(String(u || '')) ? String(u) : '');
 
 /* ---------- coletores e analise ---------- */
-// Token do agente coletor local (veja agente.js). Sem ele, a ingestao fica desligada.
-const COLETOR_TOKEN = String(process.env.COLETOR_TOKEN || '').trim();
 let cacheDiagnostico = { quando: 0, dados: null };
 // Quando o agente local esta ativo, ele atende as buscas: tem mais lojas que o servidor.
 let ultimoSinalDoAgente = 0;
@@ -141,11 +120,8 @@ const num = (v) => {
 };
 
 /* ---------- produtos, coleta e historico ---------- */
-/* A vitrine publica mostra os produtos do administrador: e o catalogo do site. */
-function donoDaVitrine() {
-  const admin = db.prepare('SELECT id FROM usuarios WHERE admin = 1 ORDER BY id LIMIT 1').get();
-  return admin ? admin.id : 0;
-}
+/* Todo o catalogo publico pertence a vitrine. */
+const donoDaVitrine = () => VITRINE.id;
 
 function listarProdutos(userId) {
   const produtos = db.prepare('SELECT * FROM produtos WHERE user_id = ? ORDER BY nome').all(userId);
@@ -244,7 +220,7 @@ async function coletarPrecos(userId, produto) {
     ofertas.forEach((o) => {
       inserir.run(
         Number(coleta.lastInsertRowid), produto.id, userId, o.loja, o.titulo, o.preco, Number(o.preco_de) || 0,
-        o.frete, o.preco_total, o.condicao, o.vendedor, o.reputacao, o.vendidos, o.parcelas, o.url, o.id_externo, agora
+        o.frete, o.preco_total, o.condicao, o.vendedor, o.reputacao, o.vendidos, o.parcelas, urlSegura(o.url), o.id_externo, agora
       );
     });
 
@@ -285,6 +261,23 @@ function buscaRecente(termo) {
   ).get(termo);
   if (!linha) return null;
   return Date.now() - new Date(linha.atualizado_em).getTime() < VALIDADE_BUSCA_MS ? linha : null;
+}
+
+/* A busca sai da fila quando o agente a pega. Se ele cair no meio do caminho,
+   ninguem devolveria a linha: por isso, a cada visita do agente, o que esta
+   em execucao ha tempo demais volta para a fila, e o pedido antigo - cujo
+   visitante ja foi embora - e encerrado. */
+const EXECUCAO_MAX_MS = 3 * 60 * 1000;
+const PENDENTE_MAX_MS = 15 * 60 * 1000;
+
+function devolverBuscasTravadas() {
+  const travadas = new Date(Date.now() - EXECUCAO_MAX_MS).toISOString();
+  db.prepare("UPDATE buscas SET status = 'pendente' WHERE status = 'executando' AND atualizado_em < ?")
+    .run(travadas);
+
+  const antigas = new Date(Date.now() - PENDENTE_MAX_MS).toISOString();
+  db.prepare("UPDATE buscas SET status = 'falhou', erro = ?, atualizado_em = ? WHERE status = 'pendente' AND criado_em < ?")
+    .run('A busca expirou antes de o coletor atender.', new Date().toISOString(), antigas);
 }
 
 /* Tenta executar aqui mesmo. Devolve true quando conseguiu falar com alguma loja. */
@@ -445,15 +438,12 @@ async function api(req, res, rota) {
      e envia o resultado para ca. Autentica com o header X-Coletor-Token. */
   if (rota.indexOf('/api/ingestao') === 0) {
     if (!COLETOR_TOKEN) return json(res, 503, { erro: 'Ingestao desativada: defina COLETOR_TOKEN no servidor.' });
-    const enviado = String(req.headers['x-coletor-token'] || '');
-    if (enviado.length !== COLETOR_TOKEN.length ||
-        !crypto.timingSafeEqual(Buffer.from(enviado), Buffer.from(COLETOR_TOKEN))) {
-      return json(res, 401, { erro: 'Token do coletor invalido.' });
-    }
+    if (!tokenValido(req)) return json(res, 401, { erro: 'Token do coletor invalido.' });
 
     /* fila de buscas pedidas pelos visitantes */
     if (rota === '/api/ingestao/buscas' && metodo === 'GET') {
       ultimoSinalDoAgente = Date.now();
+      devolverBuscasTravadas();
       const linhas = db.prepare(
         "SELECT id, termo FROM buscas WHERE status = 'pendente' ORDER BY id LIMIT 10"
       ).all();
@@ -471,8 +461,10 @@ async function api(req, res, rota) {
       if (!linha) return json(res, 404, { erro: 'Busca nao encontrada.' });
 
       const c = await lerCorpo(req);
-      const fontes = Array.isArray(c.fontes) ? c.fontes : [];
-      const todas = fontes.reduce((acc, f) => acc.concat(Array.isArray(f.ofertas) ? f.ofertas : []), []);
+      const fontes = (Array.isArray(c.fontes) ? c.fontes : []).map((f) => Object.assign({}, f, {
+        ofertas: (Array.isArray(f.ofertas) ? f.ofertas : []).map((o) => Object.assign({}, o, { url: urlSegura(o.url) })),
+      }));
+      const todas = fontes.reduce((acc, f) => acc.concat(f.ofertas), []);
       const filtrado = analise.filtrarRelevantes(todas, linha.termo);
       const encontrou = filtrado.ofertas.length > 0;
       const resultado = {
@@ -501,19 +493,15 @@ async function api(req, res, rota) {
       return json(res, 200, linhas);
     }
 
-    /* cria (ou reaproveita) um produto no dono indicado, para espelhar o que
-       existe no servidor local. Sem dono informado, usa o administrador. */
+    /* cria (ou reaproveita) um produto na vitrine, para espelhar o que existe
+       no servidor local. */
     if (rota === '/api/ingestao/produtos' && metodo === 'POST') {
       const c = await lerCorpo(req);
       const nome = String(c.nome || '').trim();
       const termo = String(c.termo || '').trim() || nome;
       if (!nome) return json(res, 400, { erro: 'Informe o nome do produto.' });
 
-      let dono = null;
-      if (c.email) dono = db.prepare('SELECT id FROM usuarios WHERE email = ?').get(String(c.email).toLowerCase().trim());
-      if (!dono) dono = db.prepare('SELECT id FROM usuarios WHERE admin = 1 ORDER BY id LIMIT 1').get();
-      if (!dono) return json(res, 400, { erro: 'Nenhum usuario para receber o produto.' });
-
+      const dono = { id: VITRINE.id };
       const existente = db.prepare('SELECT * FROM produtos WHERE user_id = ? AND termo = ?').get(dono.id, termo);
       if (existente) return json(res, 200, { criado: false, produto: existente });
 
@@ -551,7 +539,7 @@ async function api(req, res, rota) {
           Number(coleta.lastInsertRowid), produto.id, produto.user_id,
           String(o.loja || fonte), String(o.titulo || ''), preco, num(o.preco_de) || 0, frete, preco + frete,
           o.condicao === 'usado' ? 'usado' : 'novo', String(o.vendedor || ''), String(o.reputacao || ''),
-          Number(o.vendidos) || 0, Number(o.parcelas) || 0, String(o.url || ''), String(o.id_externo || ''), agora
+          Number(o.vendidos) || 0, Number(o.parcelas) || 0, urlSegura(o.url), String(o.id_externo || ''), agora
         );
         gravadas += 1;
       });
@@ -563,56 +551,19 @@ async function api(req, res, rota) {
     return json(res, 404, { erro: 'Rota de ingestao nao encontrada.' });
   }
 
-  if (rota === '/api/registrar' && metodo === 'POST') {
-    const { nome, email, senha } = await lerCorpo(req);
-    if (!nome || !email || !senha) return json(res, 400, { erro: 'Preencha nome, e-mail e senha.' });
-    if (String(senha).length < 8) return json(res, 400, { erro: 'A senha precisa ter ao menos 8 caracteres.' });
-    const mail = String(email).toLowerCase().trim();
-    if (db.prepare('SELECT id FROM usuarios WHERE email = ?').get(mail)) {
-      return json(res, 409, { erro: 'Este e-mail ja esta cadastrado.' });
-    }
-    const { hash, salt } = hashSenha(String(senha));
-    const info = db.prepare('INSERT INTO usuarios (email, nome, senha_hash, salt, criado_em) VALUES (?,?,?,?,?)')
-      .run(mail, String(nome).trim(), hash, salt, new Date().toISOString());
-    const token = criarSessao(Number(info.lastInsertRowid));
-    res.setHeader('Set-Cookie', cookieSessao(token));
-    return json(res, 201, { nome, email: mail, admin: false });
-  }
-
-  if (rota === '/api/login' && metodo === 'POST') {
-    const { email, senha } = await lerCorpo(req);
-    const mail = String(email || '').toLowerCase().trim();
-    const chave = chaveTentativa(req, mail);
-    if (bloqueado(chave)) {
-      return json(res, 429, { erro: 'Muitas tentativas. Tente de novo daqui a 15 minutos.' });
-    }
-    const u = db.prepare('SELECT * FROM usuarios WHERE email = ?').get(mail);
-    if (!u || !senhaConfere(String(senha || ''), u.senha_hash, u.salt)) {
-      registrarFalha(chave);
-      return json(res, 401, { erro: 'E-mail ou senha incorretos.' });
-    }
-    tentativas.delete(chave);
-    const token = criarSessao(u.id);
-    res.setHeader('Set-Cookie', cookieSessao(token));
-    return json(res, 200, { nome: u.nome, email: u.email, admin: !!u.admin });
-  }
-
-  const usuario = usuarioDaRequisicao(req);
-
-  if (rota === '/api/logout' && metodo === 'POST') {
-    if (usuario) db.prepare('DELETE FROM sessoes WHERE token = ?').run(usuario.token);
-    res.setHeader('Set-Cookie', 'sid=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0' + (PRODUCAO ? '; Secure' : ''));
-    return json(res, 200, { ok: true });
-  }
-
   /* ---------- busca publica: qualquer visitante pode pesquisar ---------- */
   if (rota === '/api/buscas' && metodo === 'POST') {
     const { termo } = await lerCorpo(req);
     const t = normalizarTermo(termo);
     if (t.length < 2) return json(res, 400, { erro: 'Digite o que voce quer procurar.' });
 
+    // resultado guardado nao custa consulta nenhuma: responde antes do limite
     const recente = buscaRecente(t);
     if (recente) return json(res, 200, formatarBusca(recente));
+
+    if (!podeBuscar(req)) {
+      return json(res, 429, { erro: 'Muitas buscas seguidas deste endereco. Tente de novo em alguns minutos.' });
+    }
 
     const agora = new Date().toISOString();
     const info = db.prepare(
@@ -651,28 +602,24 @@ async function api(req, res, rota) {
     return json(res, 200, linhas);
   }
 
-  /* ---------- leitura publica (o site e aberto; login so para administrar) ---------- */
+  /* ---------- leitura publica: o catalogo da vitrine ---------- */
   if (rota === '/api/fontes' && metodo === 'GET') {
     return json(res, 200, coletores.map((c) => ({ chave: c.chave, nome: c.nome, configurado: c.configurado() })));
   }
 
   if (rota === '/api/produtos' && metodo === 'GET') {
-    return json(res, 200, listarProdutos(usuario ? usuario.id : donoDaVitrine()));
+    return json(res, 200, listarProdutos(VITRINE.id));
   }
 
   const mPublico = rota.match(/^\/api\/produtos\/(\d+)$/);
   if (mPublico && metodo === 'GET') {
-    const id = Number(mPublico[1]);
-    const detalhe = detalheProduto(usuario ? usuario.id : donoDaVitrine(), id);
+    const detalhe = detalheProduto(VITRINE.id, Number(mPublico[1]));
     if (!detalhe) return json(res, 404, { erro: 'Produto nao encontrado.' });
     return json(res, 200, detalhe);
   }
 
-  if (!usuario) return json(res, 401, { erro: 'Nao autenticado.' });
-
-  if (rota === '/api/eu' && metodo === 'GET') {
-    return json(res, 200, { nome: usuario.nome, email: usuario.email, admin: usuario.admin });
-  }
+  /* ---------- daqui para baixo, so com o token do agente ---------- */
+  if (!tokenValido(req)) return json(res, 401, { erro: 'Esta rota exige o token do coletor.' });
 
   /* ================= PRODUTOS MONITORADOS ================= */
   if (rota === '/api/produtos' && metodo === 'POST') {
@@ -685,14 +632,14 @@ async function api(req, res, rota) {
     const agora = new Date().toISOString();
     const info = db.prepare(
       'INSERT INTO produtos (user_id, nome, termo, categoria, preco_alvo, criado_em, atualizado_em) VALUES (?,?,?,?,?,?,?)'
-    ).run(usuario.id, n, t, String(categoria || 'Outros'), alvo, agora, agora);
-    return json(res, 201, produtoPorId(usuario.id, Number(info.lastInsertRowid)));
+    ).run(VITRINE.id, n, t, String(categoria || 'Outros'), alvo, agora, agora);
+    return json(res, 201, produtoPorId(VITRINE.id, Number(info.lastInsertRowid)));
   }
 
   let m = rota.match(/^\/api\/produtos\/(\d+)$/);
   if (m) {
     const id = Number(m[1]);
-    const produto = db.prepare('SELECT * FROM produtos WHERE id = ? AND user_id = ?').get(id, usuario.id);
+    const produto = db.prepare('SELECT * FROM produtos WHERE id = ? AND user_id = ?').get(id, VITRINE.id);
     if (!produto) return json(res, 404, { erro: 'Produto nao encontrado.' });
 
     if (metodo === 'PATCH') {
@@ -708,12 +655,12 @@ async function api(req, res, rota) {
           new Date().toISOString(),
           id
         );
-      return json(res, 200, produtoPorId(usuario.id, id));
+      return json(res, 200, produtoPorId(VITRINE.id, id));
     }
 
     if (metodo === 'DELETE') {
-      db.prepare('DELETE FROM ofertas WHERE produto_id = ? AND user_id = ?').run(id, usuario.id);
-      db.prepare('DELETE FROM coletas WHERE produto_id = ? AND user_id = ?').run(id, usuario.id);
+      db.prepare('DELETE FROM ofertas WHERE produto_id = ? AND user_id = ?').run(id, VITRINE.id);
+      db.prepare('DELETE FROM coletas WHERE produto_id = ? AND user_id = ?').run(id, VITRINE.id);
       db.prepare('DELETE FROM produtos WHERE id = ?').run(id);
       return json(res, 200, { ok: true });
     }
@@ -723,17 +670,17 @@ async function api(req, res, rota) {
   m = rota.match(/^\/api\/produtos\/(\d+)\/coletar$/);
   if (m && metodo === 'POST') {
     const id = Number(m[1]);
-    const produto = db.prepare('SELECT * FROM produtos WHERE id = ? AND user_id = ?').get(id, usuario.id);
+    const produto = db.prepare('SELECT * FROM produtos WHERE id = ? AND user_id = ?').get(id, VITRINE.id);
     if (!produto) return json(res, 404, { erro: 'Produto nao encontrado.' });
-    const resultado = await coletarPrecos(usuario.id, produto);
-    return json(res, 200, Object.assign(resultado, { detalhe: detalheProduto(usuario.id, id) }));
+    const resultado = await coletarPrecos(VITRINE.id, produto);
+    return json(res, 200, Object.assign(resultado, { detalhe: detalheProduto(VITRINE.id, id) }));
   }
 
   /* ----- oferta lancada a mao (plano B e lojas sem API) ----- */
   m = rota.match(/^\/api\/produtos\/(\d+)\/ofertas$/);
   if (m && metodo === 'POST') {
     const id = Number(m[1]);
-    const produto = db.prepare('SELECT * FROM produtos WHERE id = ? AND user_id = ?').get(id, usuario.id);
+    const produto = db.prepare('SELECT * FROM produtos WHERE id = ? AND user_id = ?').get(id, VITRINE.id);
     if (!produto) return json(res, 404, { erro: 'Produto nao encontrado.' });
 
     const c = await lerCorpo(req);
@@ -747,22 +694,22 @@ async function api(req, res, rota) {
     const agora = new Date().toISOString();
     const coleta = db.prepare(
       "INSERT INTO coletas (produto_id, user_id, fonte, executado_em, encontrados, erro) VALUES (?,?,?,?,1,'')"
-    ).run(id, usuario.id, loja, agora);
+    ).run(id, VITRINE.id, loja, agora);
 
     db.prepare(
       'INSERT INTO ofertas (coleta_id, produto_id, user_id, loja, titulo, preco, frete, preco_total, condicao, vendedor, reputacao, vendidos, parcelas, url, id_externo, manual, coletado_em) ' +
       "VALUES (?,?,?,?,?,?,?,?,?,'','',0,0,?,'',1,?)"
     ).run(
-      Number(coleta.lastInsertRowid), id, usuario.id, loja, String(c.titulo || produto.nome),
+      Number(coleta.lastInsertRowid), id, VITRINE.id, loja, String(c.titulo || produto.nome),
       preco, frete, preco + frete, ['novo', 'usado'].indexOf(c.condicao) === -1 ? 'novo' : c.condicao,
       String(c.url || ''), agora
     );
-    return json(res, 201, detalheProduto(usuario.id, id));
+    return json(res, 201, detalheProduto(VITRINE.id, id));
   }
 
   m = rota.match(/^\/api\/ofertas\/(\d+)$/);
   if (m && metodo === 'DELETE') {
-    const info = db.prepare('DELETE FROM ofertas WHERE id = ? AND user_id = ?').run(Number(m[1]), usuario.id);
+    const info = db.prepare('DELETE FROM ofertas WHERE id = ? AND user_id = ?').run(Number(m[1]), VITRINE.id);
     if (!info.changes) return json(res, 404, { erro: 'Oferta nao encontrada.' });
     return json(res, 200, { ok: true });
   }
@@ -789,50 +736,6 @@ async function api(req, res, rota) {
   }
 
 
-  /* ----- area do administrador ----- */
-  if (rota.indexOf('/api/admin/') === 0) {
-    if (!usuario.admin) return json(res, 403, { erro: 'Acesso restrito ao administrador.' });
-
-    if (rota === '/api/admin/usuarios' && metodo === 'GET') {
-      const linhas = db.prepare(
-        'SELECT u.id, u.nome, u.email, u.admin, u.criado_em, ' +
-        '  (SELECT COUNT(*) FROM produtos p WHERE p.user_id = u.id) AS produtos, ' +
-        '  (SELECT COUNT(*) FROM coletas c WHERE c.user_id = u.id) AS coletas, ' +
-        '  (SELECT COUNT(*) FROM ofertas o WHERE o.user_id = u.id) AS ofertas, ' +
-        '  (SELECT COUNT(*) FROM sessoes s WHERE s.user_id = u.id AND s.expira_em > ?) AS sessoes ' +
-        'FROM usuarios u ORDER BY u.id'
-      ).all(Date.now());
-      return json(res, 200, linhas.map((l) => Object.assign(l, { admin: !!l.admin })));
-    }
-
-    let ad = rota.match(/^\/api\/admin\/usuarios\/(\d+)$/);
-    if (ad && metodo === 'DELETE') {
-      const id = Number(ad[1]);
-      if (id === usuario.id) return json(res, 400, { erro: 'Voce nao pode excluir a propria conta.' });
-      const alvo = db.prepare('SELECT id FROM usuarios WHERE id = ?').get(id);
-      if (!alvo) return json(res, 404, { erro: 'Usuario nao encontrado.' });
-      db.prepare('DELETE FROM ofertas WHERE user_id = ?').run(id);
-      db.prepare('DELETE FROM coletas WHERE user_id = ?').run(id);
-      db.prepare('DELETE FROM produtos WHERE user_id = ?').run(id);
-      db.prepare('DELETE FROM sessoes WHERE user_id = ?').run(id);
-      db.prepare('DELETE FROM usuarios WHERE id = ?').run(id);
-      return json(res, 200, { ok: true });
-    }
-
-    ad = rota.match(/^\/api\/admin\/usuarios\/(\d+)\/senha$/);
-    if (ad && metodo === 'POST') {
-      const { senha } = await lerCorpo(req);
-      if (String(senha || '').length < 8) return json(res, 400, { erro: 'A nova senha precisa ter ao menos 8 caracteres.' });
-      const id = Number(ad[1]);
-      const alvo = db.prepare('SELECT id FROM usuarios WHERE id = ?').get(id);
-      if (!alvo) return json(res, 404, { erro: 'Usuario nao encontrado.' });
-      const { hash, salt } = hashSenha(String(senha));
-      db.prepare('UPDATE usuarios SET senha_hash = ?, salt = ? WHERE id = ?').run(hash, salt, id);
-      db.prepare('DELETE FROM sessoes WHERE user_id = ?').run(id);
-      return json(res, 200, { ok: true });
-    }
-  }
-
   return json(res, 404, { erro: 'Rota nao encontrada.' });
 }
 
@@ -850,7 +753,8 @@ const servidor = http.createServer((req, res) => {
 
   const arquivo = rota === '/' ? 'index.html' : rota.replace(/^\/+/, '');
   const destino = path.join(PUBLICO, arquivo);
-  if (destino.indexOf(PUBLICO) !== 0) {
+  // o separador evita que uma pasta irma chamada "public-algo" passe no teste
+  if (destino !== PUBLICO && destino.indexOf(PUBLICO + path.sep) !== 0) {
     res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('Acesso negado');
     return;
@@ -875,7 +779,7 @@ const servidor = http.createServer((req, res) => {
   });
 });
 
-garantirAdmin();
+garantirVitrine();
 
 servidor.listen(PORTA, ENDERECO, () => {
   console.log('\n  Comparador de Precos rodando em  http://localhost:' + PORTA + '\n  (Ctrl+C para parar)\n');

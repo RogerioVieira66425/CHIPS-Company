@@ -65,6 +65,81 @@ async function pedir(servidor, caminho, opcoes) {
   return dados;
 }
 
+/* ---------- produtos acompanhados ----------
+   O site nao tem login: quem cuida do catalogo e quem tem o token, daqui.
+     node agente.js --acompanhar "Teclado Redragon Kumara K552" "redragon kumara k552"
+     node agente.js --esquecer "redragon kumara k552"
+     node agente.js --lista
+     node agente.js --exportar     (salva as metricas em arquivo) */
+async function acompanhar(nome, termo) {
+  if (!nome) {
+    console.error('\nInforme o nome: node agente.js --acompanhar "Nome do produto" "termo de busca"\n');
+    return;
+  }
+  for (const servidor of SERVIDORES) {
+    try {
+      const r = await pedir(servidor, '/api/ingestao/produtos', {
+        method: 'POST',
+        body: { nome, termo: termo || nome },
+      });
+      console.log('  ' + apelido(servidor) + ': ' + (r.criado ? 'acompanhando "' : 'ja acompanhava "') + r.produto.nome + '"');
+    } catch (e) {
+      console.log('  ' + apelido(servidor) + ': ' + e.message);
+    }
+  }
+  console.log('\n  Rode "node agente.js" para a primeira coleta e comecar o historico.\n');
+}
+
+async function esquecer(termo) {
+  if (!termo) {
+    console.error('\nInforme o termo: node agente.js --esquecer "termo de busca"\n');
+    return;
+  }
+  for (const servidor of SERVIDORES) {
+    try {
+      const produtos = await pedir(servidor, '/api/ingestao/pendentes');
+      const alvo = produtos.find((x) => x.termo === termo || x.nome === termo);
+      if (!alvo) { console.log('  ' + apelido(servidor) + ': nao acompanhava "' + termo + '"'); continue; }
+      await pedir(servidor, '/api/produtos/' + alvo.id, { method: 'DELETE' });
+      console.log('  ' + apelido(servidor) + ': "' + alvo.nome + '" removido, com o historico');
+    } catch (e) {
+      console.log('  ' + apelido(servidor) + ': ' + e.message);
+    }
+  }
+}
+
+async function listar() {
+  for (const servidor of SERVIDORES) {
+    try {
+      const produtos = await pedir(servidor, '/api/ingestao/pendentes');
+      console.log('\n  ' + apelido(servidor) + ': ' + produtos.length + ' produto(s)');
+      produtos.forEach((x) => console.log('    #' + x.id + '  ' + x.nome + '   (busca: "' + x.termo + '")'));
+    } catch (e) {
+      console.log('  ' + apelido(servidor) + ': ' + e.message);
+    }
+  }
+  console.log('');
+}
+
+/* Guarda as metricas de operacao em arquivo: no plano gratuito do Render o
+   banco e apagado a cada deploy, e esses numeros sao o capitulo de
+   resultados do TCC. */
+async function exportar() {
+  const fs = require('node:fs');
+  for (const servidor of SERVIDORES) {
+    try {
+      const r = await fetch(servidor + '/api/metricas');
+      const dados = await r.json();
+      const arquivo = 'metricas-' + apelido(servidor).replace(/[^a-z0-9]+/gi, '-') + '-' +
+        new Date().toISOString().slice(0, 10) + '.json';
+      fs.writeFileSync(arquivo, JSON.stringify(dados, null, 2), 'utf8');
+      console.log('  ' + apelido(servidor) + ': ' + dados.buscas_total + ' busca(s) salvas em ' + arquivo);
+    } catch (e) {
+      console.log('  ' + apelido(servidor) + ': ' + e.message);
+    }
+  }
+}
+
 async function principal() {
   if (!TOKEN) {
     console.error('\n' + 'Defina COLETOR_TOKEN antes de rodar. Gere um com:  node agente.js --token' + '\n');
@@ -221,16 +296,25 @@ async function servico() {
   }
 }
 
-if (process.argv.indexOf('--servico') !== -1) {
-  if (!TOKEN) {
-    console.error('Defina COLETOR_TOKEN antes de rodar.');
-    process.exit(1);
-  }
-  servico();
-} else {
+/* ---------- qual tarefa rodar ---------- */
+const argumentos = process.argv.slice(2);
+const comando = argumentos.find((a) => a.indexOf('--') === 0) || '';
+const parametros = argumentos.filter((a) => a.indexOf('--') !== 0);
 
-principal().catch((e) => {
+if (comando && comando !== '--exportar' && !TOKEN) {
+  console.error('\n  Defina COLETOR_TOKEN antes de rodar.\n');
+  process.exit(1);
+}
+
+const tarefa =
+  comando === '--servico' ? servico
+    : comando === '--acompanhar' ? () => acompanhar(parametros[0], parametros[1])
+      : comando === '--esquecer' ? () => esquecer(parametros[0])
+        : comando === '--lista' ? listar
+          : comando === '--exportar' ? exportar
+            : principal;
+
+tarefa().catch((e) => {
   console.error('\n  Erro: ' + e.message + '\n');
   process.exit(1);
 });
-}

@@ -14,8 +14,9 @@ services:
         sync: false
       - key: ML_CLIENT_SECRET
         sync: false
-      # Senha do administrador (login: admin). Sem ela, a senha padrao e "admin".
-      - key: ADMIN_SENHA
+      # Token do agente coletor: e o que autoriza a escrita (o site nao tem login).
+      # Preencha o valor no painel do Render (Environment), nao aqui no repositorio.
+      - key: COLETOR_TOKEN
         sync: false
 # Para o historico de precos sobreviver a deploys e reinicios, troque para:
 #   plan: starter

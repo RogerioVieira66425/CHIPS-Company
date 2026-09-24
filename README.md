@@ -10,8 +10,8 @@ Projeto de TCC. Sem bibliotecas externas: só Node.js (o SQLite já vem embutido
 1. Dê dois cliques em **INICIAR.bat** (ou rode `node server.js`).
 2. Abra http://localhost:3000 — **o site é público**: qualquer visitante vê os produtos,
    a comparação entre lojas e o link de compra, sem precisar de conta.
-3. Para administrar (cadastrar produtos, coletar, excluir), clique em **Entrar** e use
-   `admin` com a senha definida em `ADMIN_SENHA` (padrão `admin` no ambiente local).
+3. O site **não tem login nem senha**. O catálogo de produtos acompanhados é cuidado
+   pela linha de comando, com o token do coletor (veja *Produtos acompanhados*).
 
 ## Como funciona
 
@@ -156,8 +156,21 @@ o registro manual.
   Tem também uma **busca rápida**, que consulta as lojas sem salvar nada (bom para testar o termo).
 - **Detalhe do produto** — veredito (onde comprar + se o momento é bom), ranking por loja,
   gráfico do histórico, todas as ofertas da última coleta e o formulário de oferta manual.
-- **⚙️ Admin** — só para o administrador: contas, quantos produtos/coletas/ofertas cada uma tem,
-  redefinição de senha e exclusão de conta.
+- **Métricas** (`/metricas`) — desempenho de cada loja, tempo por busca e ofertas
+  descartadas pelo filtro de relevância: os números do capítulo de resultados.
+
+## Produtos acompanhados
+
+O histórico de preço (e o veredito "é bom momento para comprar") existe para os produtos
+acompanhados. Como o site é aberto, quem mexe nesse catálogo é quem tem o `COLETOR_TOKEN`,
+pelo agente:
+
+```
+node agente.js --lista
+node agente.js --acompanhar "Teclado Redragon Kumara K552" "redragon kumara k552"
+node agente.js --esquecer "redragon kumara k552"
+node agente.js --exportar     # salva as métricas em JSON, antes de um deploy apagar o banco
+```
 
 ## Publicar na web (Render)
 
@@ -209,18 +222,30 @@ sistema deixa claro na tela quando o valor é apenas o preço do produto.
 
 ## Segurança
 
-- Senhas com `scrypt` + salt aleatório; nunca em texto puro.
-- Cookie de sessão `HttpOnly`, `SameSite=Lax` e `Secure` em produção.
-- Máximo de 8 tentativas de login erradas por usuário/IP a cada 15 minutos.
-- Cada usuário só acessa os próprios produtos, coletas e ofertas.
-- **Troque a senha do admin** definindo `ADMIN_SENHA` antes de divulgar o endereço.
+O site é público e não guarda conta nem senha de ninguém: não há login, sessão nem dado
+pessoal no banco. O que protege o sistema é o escopo das rotas.
+
+- **Leitura é aberta**: buscar, comparar e ver histórico não exige nada.
+- **Escrita exige o token do coletor** (`COLETOR_TOKEN`, header `X-Coletor-Token`), comparado
+  em tempo constante: cadastrar produto, coletar preços e ingerir resultados só acontecem
+  a partir do agente.
+- **Busca com limite por endereço**: 30 a cada 10 minutos (`MAX_BUSCAS`). Cada busca vira
+  consulta às seis lojas a partir da rede do agente; sem limite, um robô usaria o site para
+  martelar as lojas em nome de quem hospeda o agente. Resultado repetido sai do cache e não
+  consome o limite.
+- **Fila que se recupera**: busca entregue ao agente que não volta em 3 minutos retorna à
+  fila; pedido parado há mais de 15 minutos é encerrado.
+- **Endereço de anúncio só vale `http(s)`**, tanto ao gravar quanto ao exibir: um
+  `javascript:` vindo de uma página de loja não vira link clicável.
+- **Consultas às lojas têm prazo** (15s nas APIs, 45s no navegador), para uma conexão
+  pendurada não travar a rodada inteira do agente.
 
 ## Estrutura
 
 | Arquivo | Função |
 |---|---|
-| `server.js` | Servidor HTTP, autenticação, rotas da API e orquestração da coleta |
-| `db.js` | Banco SQLite e tabelas (`usuarios`, `sessoes`, `produtos`, `coletas`, `ofertas`) |
+| `server.js` | Servidor HTTP, rotas da API, fila de buscas e orquestração da coleta |
+| `db.js` | Banco SQLite e tabelas (`produtos`, `coletas`, `ofertas`, `buscas`) |
 | `analise.js` | Regra de decisão: comparação entre lojas e avaliação do momento de compra |
 | `agente.js` | Agente coletor local: consulta as lojas e envia ao servidor |
 | `coletores/navegador.js` | Controla o Chrome local via DevTools Protocol (sem dependências) |
@@ -232,7 +257,7 @@ sistema deixa claro na tela quando o valor é apenas o preço do produto.
 | `coletores/terabyte.js` | Coletor da Terabyte (navegador local) |
 | `coletores/magalu.js` | Coletor do Magazine Luiza (desligado: a loja bloqueia) |
 | `coletores/mercadolivre.js` | Coletor da API oficial do Mercado Livre (aguardando liberação) |
-| `public/index.html` | Telas de login, produtos, comparação e administração |
+| `public/index.html` | Telas de busca, comparação, produto acompanhado e métricas |
 | `public/app.js` | Lógica da interface, gráfico de histórico e chamadas à API |
 | `public/estilo.css` | Visual |
 | `render.yaml` | Configuração de deploy |

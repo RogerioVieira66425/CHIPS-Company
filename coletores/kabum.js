@@ -5,6 +5,7 @@
 const NOME = 'KaBuM!';
 const BASE = 'https://servicespub.prod.api.aws.grupokabum.com.br/catalog/v2/products';
 const LIMITE = Number(process.env.KABUM_LIMITE) || 12;
+const PRAZO_MS = Number(process.env.PRAZO_LOJA_MS) || 15000;
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
 // A API é aberta: nada para configurar.
@@ -57,6 +58,9 @@ async function buscar(termo) {
       'Sec-Fetch-Mode': 'cors',
       'Sec-Fetch-Site': 'same-site',
     },
+    // o fetch do Node nao tem prazo proprio: sem isso, uma conexao pendurada
+    // travaria a rodada inteira do agente
+    signal: AbortSignal.timeout(PRAZO_MS),
   });
 
   // A KaBuM! responde 404 quando a busca nao encontra nada: isso e resultado vazio, nao falha.

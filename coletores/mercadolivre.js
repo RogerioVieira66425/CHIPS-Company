@@ -9,6 +9,7 @@ const CLIENT_SECRET = String(process.env.ML_CLIENT_SECRET || '').trim().replace(
 const LIMITE = Number(process.env.ML_LIMITE) || 20;
 
 const NOME = 'Mercado Livre';
+const PRAZO_MS = Number(process.env.PRAZO_LOJA_MS) || 15000;
 
 let cache = { token: '', expira: 0 };
 
@@ -26,6 +27,7 @@ async function obterToken() {
   });
 
   const r = await fetch('https://api.mercadolibre.com/oauth/token', {
+    signal: AbortSignal.timeout(PRAZO_MS),
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
     body: corpo,
@@ -91,7 +93,10 @@ async function buscar(termo) {
     'https://api.mercadolibre.com/sites/' + SITE + '/search?q=' + encodeURIComponent(termo) +
     '&limit=' + LIMITE;
 
-  const r = await fetch(url, { headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' } });
+  const r = await fetch(url, {
+    headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' },
+    signal: AbortSignal.timeout(PRAZO_MS),
+  });
 
   if (r.status === 403) {
     // Desde 2025 o Mercado Livre restringiu /sites/$SITE/search: aplicacoes comuns

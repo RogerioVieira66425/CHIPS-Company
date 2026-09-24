@@ -22,9 +22,13 @@ const App = (function () {
     return e;
   };
   const celula = (texto, classe) => el('td', classe, texto);
+  /* O endereco vem da pagina da loja: so vale http(s). Um "javascript:" ali
+     viraria execucao de script dentro do nosso site. */
+  const enderecoSeguro = (url) => (/^https?:\/\//i.test(String(url || '')) ? String(url) : '');
+
   const link = (texto, url, classe) => {
     const a = el('a', classe || 'link-externo', texto);
-    a.href = url;
+    a.href = enderecoSeguro(url);
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
     return a;
@@ -32,8 +36,6 @@ const App = (function () {
 
   let produtos = [];
   let detalhe = null;
-  let usuarioAtual = null;
-  let ehAdmin = false;
   let vistaAtual = 'busca';
   let ofertasDaBusca = [];   // resultado completo da ultima busca
   let buscaAtual = null;     // dados da busca (termo, origem, data)
@@ -72,13 +74,21 @@ const App = (function () {
     ['Cabo e adaptador', /cabo|adaptador|hub/i],
   ];
 
+  /* Faixas de preco. O rotulo e montado na hora para acompanhar o idioma
+     escolhido; os limites e que definem o filtro. */
   const FAIXAS = [
-    ['ate100', 'Até R$ 100', 0, 100],
-    ['100a300', 'R$ 100 a R$ 300', 100, 300],
-    ['300a600', 'R$ 300 a R$ 600', 300, 600],
-    ['600a1200', 'R$ 600 a R$ 1.200', 600, 1200],
-    ['acima1200', 'Acima de R$ 1.200', 1200, Infinity],
+    ['ate100', 0, 100],
+    ['100a300', 100, 300],
+    ['300a600', 300, 600],
+    ['600a1200', 600, 1200],
+    ['acima1200', 1200, Infinity],
   ];
+
+  const rotuloFaixa = ([, min, max]) => (
+    min === 0 ? t('faixa.ate', { valor: dinheiroRedondo(max) })
+      : max === Infinity ? t('faixa.acima', { valor: dinheiroRedondo(min) })
+        : t('faixa.entre', { de: dinheiroRedondo(min), ate: dinheiroRedondo(max) })
+  );
 
   const marcaDe = (titulo) => {
     const t = String(titulo || '').toLowerCase();
@@ -109,12 +119,6 @@ const App = (function () {
     return dados;
   }
 
-  function dadosForm(form) {
-    const o = {};
-    new FormData(form).forEach((v, k) => { o[k] = v; });
-    return o;
-  }
-
   const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 
   /* ================= NAVEGACAO ================= */
@@ -123,29 +127,14 @@ const App = (function () {
     $('#vista-busca').classList.toggle('oculto', vista !== 'busca');
     $('#vista-detalhe').classList.toggle('oculto', vista !== 'detalhe');
     $('#vista-metricas').classList.toggle('oculto', vista !== 'metricas');
-    $('#vista-admin').classList.toggle('oculto', vista !== 'admin');
-    if (vista === 'admin') carregarAdmin().catch((e) => toast(e.message, true));
     if (vista === 'metricas') carregarMetricas().catch((e) => toast(e.message, true));
     renderMenu();
     window.scrollTo({ top: 0 });
   }
 
-  /* O visitante ve so a busca: o topo fica limpo.
-     Quem administra ganha o menu para circular entre as telas.
-     As metricas continuam acessiveis pelo endereco /metricas. */
+  /* O site nao tem areas restritas: o topo fica limpo. */
   function renderMenu() {
-    const menu = $('#menu');
-    menu.innerHTML = '';
-    if (!ehAdmin) return;
-
-    const botao = (rotulo, vista) => {
-      const b = el('button', 'item-menu' + (vistaAtual === vista ? ' ativo' : ''), rotulo);
-      b.addEventListener('click', () => mostrar(vista));
-      return b;
-    };
-    menu.appendChild(botao('Buscar', 'busca'));
-    menu.appendChild(botao('Métricas', 'metricas'));
-    menu.appendChild(botao('⚙️ Admin', 'admin'));
+    $('#menu').innerHTML = '';
   }
 
   /* ---------- frase da capa: muda a cada visita ---------- */
@@ -370,14 +359,7 @@ const App = (function () {
     ordem = 'preco';
     pagina = 1;
 
-    // detalhes tecnicos de cada fonte so interessam a quem administra
-    const erros = $('#res-erros');
-    erros.innerHTML = '';
-    if (ehAdmin) {
-      (r.fontes || []).filter((f) => f.erro).forEach((f) => {
-        erros.appendChild(el('p', 'aviso', f.fonte + ': ' + f.erro));
-      });
-    }
+    $('#res-erros').innerHTML = '';
 
     montarIntro(busca);
     montarFiltros();
@@ -409,11 +391,11 @@ const App = (function () {
 
   function montarFiltros() {
     const unicos = (campo) => [...new Set(ofertasDaBusca.map((o) => o[campo]))].sort();
-    const faixasComOfertas = FAIXAS.filter(([, , min, max]) =>
+    const faixasComOfertas = FAIXAS.filter(([, min, max]) =>
       ofertasDaBusca.some((o) => o.preco_total >= min && o.preco_total < max));
 
     encherSelect($('#filtro-preco'),
-      [['', t('filtro.qualquer')]].concat(faixasComOfertas.map(([chave, texto]) => [chave, texto])), filtros.preco);
+      [['', t('filtro.qualquer')]].concat(faixasComOfertas.map((f) => [f[0], rotuloFaixa(f)])), filtros.preco);
     encherSelect($('#filtro-ordem'),
       ORDENS.map(([chave, rotulo]) => [chave, t(rotulo)]), ordem);
     encherSelect($('#filtro-marca'),
@@ -454,7 +436,7 @@ const App = (function () {
     if (filtros.marca && o.marca !== filtros.marca) return false;
     if (filtros.categoria && o.categoria !== filtros.categoria) return false;
     if (!como.ignorarLoja && filtros.loja && o.loja !== filtros.loja) return false;
-    if (faixa && !(o.preco_total >= faixa[2] && o.preco_total < faixa[3])) return false;
+    if (faixa && !(o.preco_total >= faixa[1] && o.preco_total < faixa[2])) return false;
     return true;
   }
 
@@ -834,26 +816,7 @@ const App = (function () {
     if (produto) { abrirDetalhe(produto.id); return; }
 
     // sem produto acompanhado nao ha serie de precos para analisar
-    if (!ehAdmin) { toast(t('analise.semHistorico')); return; }
-
-    const nome = curto(oferta.titulo, 70);
-    if (!window.confirm(t('analise.perguntaAdmin', { nome }))) return;
-    try {
-      const novo = await pedir('/api/produtos', {
-        method: 'POST',
-        body: {
-          nome,
-          termo: (buscaAtual && buscaAtual.termo) || nome,
-          categoria: oferta.categoria || 'Outros',
-          preco_alvo: 0,
-        },
-      });
-      await carregarProdutos();
-      toast(t('analise.criado'));
-      abrirDetalhe(novo.id);
-    } catch (e) {
-      toast(e.message, true);
-    }
+    toast(t('analise.semHistorico'));
   }
 
   function botaoAnalise(oferta, classe) {
@@ -1105,24 +1068,7 @@ const App = (function () {
       tr.appendChild(celula(String(p.ofertas), 'dir'));
       tr.appendChild(celula(dataHora(p.ultima_coleta)));
 
-      const tdAcoes = el('td', 'dir');
-      if (ehAdmin) {
-        const btnColeta = el('button', 'mini', '🔄');
-        btnColeta.title = 'Atualizar preços deste produto';
-        btnColeta.addEventListener('click', () => coletar(p.id, btnColeta));
-        const btnExcluir = el('button', 'mini', '🗑');
-        btnExcluir.title = 'Parar de acompanhar';
-        btnExcluir.addEventListener('click', async () => {
-          if (!confirm('Remover "' + p.nome + '" e todo o histórico dele?')) return;
-          try {
-            await pedir('/api/produtos/' + p.id, { method: 'DELETE' });
-            toast('Produto removido.');
-            carregarProdutos();
-          } catch (err) { toast(err.message, true); }
-        });
-        tdAcoes.append(btnColeta, btnExcluir);
-      }
-      tr.appendChild(tdAcoes);
+      tr.appendChild(el('td', 'dir'));
 
       tb.appendChild(tr);
     });
@@ -1140,7 +1086,6 @@ const App = (function () {
   }
 
   $('#det-voltar').addEventListener('click', () => mostrar('busca'));
-  $('#det-coletar').addEventListener('click', () => { if (detalhe) coletar(detalhe.produto.id); });
 
   function renderDetalhe() {
     const d = detalhe;
@@ -1332,120 +1277,6 @@ const App = (function () {
   const btnMetricas = $('#met-atualizar');
   if (btnMetricas) btnMetricas.addEventListener('click', () => carregarMetricas().catch((e) => toast(e.message, true)));
 
-  /* ================= ADMINISTRACAO ================= */
-  async function coletar(id, botao) {
-    if (botao) { botao.disabled = true; botao.textContent = '⏳'; }
-    try {
-      const r = await pedir('/api/produtos/' + id + '/coletar', { method: 'POST' });
-      const falhas = r.relatorio.filter((f) => f.erro);
-      if (falhas.length) toast(falhas.map((f) => f.fonte + ': ' + f.erro).join(' | '), true);
-      else toast(r.relatorio.reduce((t, f) => t + f.encontrados, 0) + ' oferta(s) coletada(s).');
-      await carregarProdutos();
-      if (detalhe && detalhe.produto.id === id) { detalhe = r.detalhe; renderDetalhe(); }
-    } catch (err) {
-      toast(err.message, true);
-    } finally {
-      if (botao) { botao.disabled = false; botao.textContent = '🔄'; }
-    }
-  }
-
-  const formProduto = $('#form-produto');
-  if (formProduto) {
-    formProduto.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      try {
-        const p = await pedir('/api/produtos', { method: 'POST', body: dadosForm(e.target) });
-        e.target.reset();
-        await carregarProdutos();
-        toast('Produto adicionado ao acompanhamento.');
-        coletar(p.id);
-      } catch (err) { toast(err.message, true); }
-    });
-  }
-
-  const btnColetarTodos = $('#btn-coletar-todos');
-  if (btnColetarTodos) {
-    btnColetarTodos.addEventListener('click', async (e) => {
-      if (!produtos.length) { toast('Nenhum produto acompanhado.', true); return; }
-      e.target.disabled = true;
-      for (const p of produtos) await coletar(p.id);
-      e.target.disabled = false;
-      toast('Coleta concluída.');
-    });
-  }
-
-  async function carregarAdmin() {
-    const usuarios = await pedir('/api/admin/usuarios');
-    const soma = (campo) => usuarios.reduce((t, u) => t + u[campo], 0);
-    $('#admin-total-usuarios').textContent = usuarios.length;
-    $('#admin-total-produtos').textContent = soma('produtos');
-    $('#admin-total-coletas').textContent = soma('coletas');
-    $('#admin-total-ofertas').textContent = soma('ofertas');
-
-    const tb = $('#tbody-admin');
-    tb.innerHTML = '';
-    usuarios.forEach((u) => {
-      const tr = el('tr');
-      tr.appendChild(celula('#' + u.id));
-
-      const tdNome = el('td', '', u.nome);
-      if (u.admin) {
-        const et = el('span', 'etiqueta oficial', 'admin');
-        et.style.marginLeft = '6px';
-        tdNome.appendChild(et);
-      }
-      tr.appendChild(tdNome);
-
-      tr.appendChild(celula(u.email));
-      tr.appendChild(celula(u.criado_em.slice(0, 10).split('-').reverse().join('/')));
-      tr.appendChild(celula(String(u.produtos), 'dir'));
-      tr.appendChild(celula(String(u.coletas), 'dir'));
-      tr.appendChild(celula(String(u.ofertas), 'dir'));
-      tr.appendChild(celula(u.sessoes > 0 ? 'ativa' : '—', 'dir ' + (u.sessoes > 0 ? 'positivo' : 'neutro')));
-
-      const tdAcoes = el('td', 'dir');
-      const btnSenha = el('button', 'mini', '🔑');
-      btnSenha.title = 'Definir nova senha';
-      btnSenha.addEventListener('click', async () => {
-        const senha = prompt('Nova senha para ' + u.nome + ' (mínimo 8 caracteres):');
-        if (!senha) return;
-        try {
-          await pedir('/api/admin/usuarios/' + u.id + '/senha', { method: 'POST', body: { senha } });
-          toast('Senha redefinida.');
-          if (usuarioAtual && u.id === usuarioAtual.id) location.reload();
-          else carregarAdmin();
-        } catch (err) { toast(err.message, true); }
-      });
-      tdAcoes.appendChild(btnSenha);
-      tr.appendChild(tdAcoes);
-
-      tb.appendChild(tr);
-    });
-  }
-
-  const btnAdminAtualizar = $('#admin-atualizar');
-  if (btnAdminAtualizar) btnAdminAtualizar.addEventListener('click', () => carregarAdmin().catch((e) => toast(e.message, true)));
-
-  /* ---------- login (so em /admin) ---------- */
-  $('#form-entrar').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    try {
-      await pedir('/api/login', { method: 'POST', body: dadosForm(e.target) });
-      location.href = '/';
-    } catch (err) {
-      const aviso = $('#aviso-login');
-      aviso.textContent = err.message;
-      aviso.classList.remove('oculto');
-    }
-  });
-
-  $('#btn-voltar-site').addEventListener('click', () => { location.href = '/'; });
-
-  $('#btn-sair').addEventListener('click', async () => {
-    await pedir('/api/logout', { method: 'POST' }).catch(() => {});
-    location.href = '/';
-  });
-
   /* ================= IDIOMA ================= */
   function montarSeletorIdioma() {
     const botao = $('#idioma-botao');
@@ -1509,34 +1340,12 @@ const App = (function () {
   (async function iniciar() {
     I18N.traduzirPagina();
     montarSeletorIdioma();
-    try {
-      usuarioAtual = await pedir('/api/eu');
-      ehAdmin = Boolean(usuarioAtual && usuarioAtual.admin);
-    } catch {
-      usuarioAtual = null;
-      ehAdmin = false;
-    }
-
-    const caminho = location.pathname.replace(/\/+$/, '');
-    const querAdmin = caminho === '/admin';
-    const querMetricas = caminho === '/metricas';
-
-    if (querAdmin && !usuarioAtual) {
-      $('#tela-login').classList.remove('oculto');
-      document.querySelector('header').classList.add('oculto');
-      return;
-    }
-
-    document.querySelectorAll('.so-admin').forEach((e) => e.classList.toggle('oculto', !ehAdmin));
-    $('#btn-sair').classList.toggle('oculto', !usuarioAtual);
-    $('#ola').textContent = usuarioAtual ? usuarioAtual.nome : '';
-
-
 
     await carregarProdutos();
     carregarSugestoes();
     escreverFrase();
-    mostrar(querAdmin && ehAdmin ? 'admin' : querMetricas ? 'metricas' : 'busca');
+    // /metricas abre direto o painel de operacao; o resto e a busca
+    mostrar(location.pathname.replace(/\/+$/, '') === '/metricas' ? 'metricas' : 'busca');
     $('#campo-busca').focus();
   })();
 
