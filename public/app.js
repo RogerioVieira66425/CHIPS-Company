@@ -509,7 +509,9 @@ const App = (function () {
     caixa.classList.toggle('vazia', !comparacao);
 
     if (!comparacao || !comparacao.melhor) {
-      caixa.appendChild(el('p', '', t('estado.semFiltro')));
+      caixa.appendChild(el('p', '', ofertasDaBusca.length
+        ? t('estado.semFiltro')
+        : t('estado.semOfertas', { termo: (buscaAtual && buscaAtual.termo) || '' })));
       return;
     }
 
@@ -690,7 +692,9 @@ const App = (function () {
 
     const inicio = (pagina - 1) * POR_PAGINA;
     const campeao = listaVisivel.slice().sort((a, b) => a.preco_total - b.preco_total)[0];
-    renderCartoes($('#ofertas'), listaVisivel.slice(inicio, inicio + POR_PAGINA), campeao);
+    // lista vazia por causa dos filtros ou porque a busca nao achou nada: sao avisos diferentes
+    renderCartoes($('#ofertas'), listaVisivel.slice(inicio, inicio + POR_PAGINA), campeao, false,
+      ofertasDaBusca.length ? null : { titulo: t('res.vazioBuscaTitulo'), texto: t('res.vazioBuscaTexto') });
     renderPaginacao(total, paginas, inicio);
   }
 
