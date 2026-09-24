@@ -255,12 +255,25 @@ function formatarBusca(linha) {
   };
 }
 
+/* So vale reaproveitar um resultado bom: se a coleta daquela hora voltou
+   vazia - lojas fora do ar, navegador que nao abriu -, o visitante seguinte
+   receberia a mesma tela vazia por meia hora. */
+function resultadoUtil(linha) {
+  try {
+    const r = JSON.parse(linha.resultado || '{}');
+    return Number(r.relevantes) > 0;
+  } catch (e) {
+    return false;
+  }
+}
+
 function buscaRecente(termo) {
   const linha = db.prepare(
     "SELECT * FROM buscas WHERE termo = ? AND status = 'pronta' ORDER BY atualizado_em DESC LIMIT 1"
   ).get(termo);
   if (!linha) return null;
-  return Date.now() - new Date(linha.atualizado_em).getTime() < VALIDADE_BUSCA_MS ? linha : null;
+  if (Date.now() - new Date(linha.atualizado_em).getTime() >= VALIDADE_BUSCA_MS) return null;
+  return resultadoUtil(linha) ? linha : null;
 }
 
 /* A busca sai da fila quando o agente a pega. Se ele cair no meio do caminho,
