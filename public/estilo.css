@@ -392,8 +392,9 @@ main.conteudo { flex: 1 0 auto; }
 /* na capa o rodape encosta no fim sem empurrar a busca do centro */
 body.capa .rodape-site { margin-top: 0; }
 
-/* o conteudo fica sempre acima da animacao */
-header.top, main.conteudo, .rodape-site, .tela-login { position: relative; z-index: 1; }
+/* o conteudo fica sempre acima do video de fundo. O cabecalho fica de fora:
+   ele e sticky, e position: relative aqui o soltaria do topo ao rolar. */
+main.conteudo, .rodape-site, .tela-login { position: relative; z-index: 1; }
 
 /* ---------- entrada da capa: os elementos surgem em sequencia ---------- */
 @keyframes surgir {
