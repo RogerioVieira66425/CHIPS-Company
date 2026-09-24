@@ -576,13 +576,13 @@ const App = (function () {
       }
       tr.appendChild(tdTitulo);
 
-      tr.appendChild(celula(t('condicao.' + o.condicao) || o.condicao, o.condicao === 'usado' ? 'negativo' : ''));
-
-      // preco que era (riscado na loja) e o desconto que ele representa
+      /* Ordem pensada para quem compara: primeiro o preco que decide a compra,
+         depois a prova do desconto e, por ultimo, a condicao — que quase sempre
+         e "novo" e so interessa quando foge do esperado. */
       const precoDe = Number(o.preco_de) || 0;
       const temDesconto = precoDe > o.preco;
-      tr.appendChild(celula(temDesconto ? dinheiro(precoDe) : '—', 'dir riscado'));
-      // preco atual: quando a loja cobra frete, ele entra somado logo abaixo
+
+      // preco atual: quando a loja cobra frete, a composicao aparece logo abaixo
       const tdAtual = el('td', 'dir pagar ' + (i === 0 ? 'positivo' : ''));
       tdAtual.appendChild(el('b', '', dinheiro(o.preco_total)));
       if (o.frete > 0) {
@@ -590,10 +590,12 @@ const App = (function () {
       }
       tr.appendChild(tdAtual);
 
+      tr.appendChild(celula(temDesconto ? dinheiro(precoDe) : '—', 'dir riscado'));
       tr.appendChild(celula(
         temDesconto ? '-' + Math.round(((precoDe - o.preco) / precoDe) * 100) + '%' : '—',
         'dir ' + (temDesconto ? 'desconto' : 'neutro')
       ));
+      tr.appendChild(celula(t('condicao.' + o.condicao) || o.condicao, o.condicao === 'usado' ? 'negativo' : 'neutro'));
 
       const tdAcao = el('td', 'dir');
       if (o.url) tdAcao.appendChild(link(t('tabela.comprar'), o.url, 'mini-botao'));
