@@ -888,9 +888,20 @@ body {
 .go { height: 42px; border-radius: 999px; background: var(--soft); color: var(--ink); font-size: 13.5px; }
 .go:hover { background: var(--ink); color: #fff; }
 
+/* acoes do cartao: analise (historico de preco) antes do link da loja */
+.card-acoes { display: flex; gap: 8px; }
+.card-acoes .go { flex: 1; }
+.btn.analise {
+  height: 42px; padding: 0 14px; gap: 6px; flex: none;
+  border-radius: 999px; background: #fff; border: 1px solid var(--line);
+  color: var(--ink); font-size: 13px; font-weight: 700;
+}
+.btn.analise:hover { border-color: var(--line-2); background: var(--soft); }
+.btn.analise svg { color: var(--brand); }
+
 .list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
 .row {
-  display: grid; grid-template-columns: 120px minmax(0,1fr) 120px 80px 190px;
+  display: grid; grid-template-columns: 120px minmax(0,1fr) 120px 80px 250px;
   align-items: center; gap: 16px; padding: 16px 20px; border-bottom: 1px solid var(--line);
   background: #fff; transition: background .15s; animation: entrar .3s var(--ease) both;
 }
@@ -904,7 +915,9 @@ body {
 .row .t:hover { text-decoration: underline; }
 .row .p { text-align: right; }
 .row .p .price { font-size: 17px; }
-.row .go { height: 36px; font-size: 13px; width: 100%; }
+.row .a { display: flex; gap: 8px; justify-content: flex-end; }
+.row .go { height: 36px; font-size: 13px; flex: 1; }
+.row .btn.analise { height: 36px; padding: 0 12px; }
 .row.win .price { color: var(--pos); }
 
 .vazio-ofertas { padding: 60px 20px; text-align: center; color: var(--muted); border: 1px dashed var(--line-2); border-radius: var(--r-lg); }

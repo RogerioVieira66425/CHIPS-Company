@@ -294,6 +294,11 @@ const App = (function () {
     'stroke-linecap="round" stroke-linejoin="round"/></svg>';
   const ICONE_LINK = '<svg width="14" height="14" viewBox="0 0 12 12" aria-hidden="true">' +
     '<path d="M4 2h6v6M10 2 3 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+  const ICONE_ANALISE = '<svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">' +
+    '<path d="M2.5 13.5h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>' +
+    '<rect x="3.5" y="8" width="2.4" height="3.6" rx="1" fill="currentColor"/>' +
+    '<rect x="7" y="5" width="2.4" height="6.6" rx="1" fill="currentColor"/>' +
+    '<rect x="10.5" y="2.5" width="2.4" height="9.1" rx="1" fill="currentColor"/></svg>';
   const ICONE_INFO = '<svg width="16" height="16" viewBox="0 0 20 20" aria-hidden="true">' +
     '<circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="1.7"/>' +
     '<path d="M10 9v5M10 6.2v.1" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>';
@@ -689,15 +694,15 @@ const App = (function () {
   }
 
   /* ---------- ofertas em grade ou em lista ---------- */
-  function renderCartoes(destino, lista, campeao, forcarLista) {
+  function renderCartoes(destino, lista, campeao, forcarLista, aviso) {
     destino.innerHTML = '';
     const emLista = forcarLista || vista === 'lista';
 
     if (!lista.length) {
       destino.className = '';
       const vazio = el('div', 'vazio-ofertas');
-      vazio.appendChild(el('b', '', t('res.vazioTitulo')));
-      vazio.appendChild(document.createTextNode(t('res.vazioTexto')));
+      vazio.appendChild(el('b', '', (aviso && aviso.titulo) || t('res.vazioTitulo')));
+      vazio.appendChild(document.createTextNode((aviso && aviso.texto) || t('res.vazioTexto')));
       destino.appendChild(vazio);
       return;
     }
@@ -741,6 +746,58 @@ const App = (function () {
     return ir;
   }
 
+  /* O historico de preco so existe para os produtos acompanhados, entao a
+     analise procura qual deles corresponde ao anuncio: todos os termos da
+     busca cadastrada precisam aparecer no titulo da oferta. */
+  const semAcento = (texto) => String(texto || '').toLowerCase().normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')      // tira o acento sem partir a palavra
+    .replace(/[^a-z0-9]+/g, ' ').trim();
+
+  function produtoDaOferta(oferta) {
+    const alvo = semAcento(oferta.titulo);
+    return produtos.find((p) => {
+      const palavras = semAcento(p.termo || p.nome).split(' ').filter((x) => x.length >= 3);
+      return palavras.length > 0 && palavras.every((x) => alvo.indexOf(x) !== -1);
+    });
+  }
+
+  async function abrirAnalise(oferta) {
+    const produto = produtoDaOferta(oferta);
+    if (produto) { abrirDetalhe(produto.id); return; }
+
+    // sem produto acompanhado nao ha serie de precos para analisar
+    if (!ehAdmin) { toast(t('analise.semHistorico')); return; }
+
+    const nome = curto(oferta.titulo, 70);
+    if (!window.confirm(t('analise.perguntaAdmin', { nome }))) return;
+    try {
+      const novo = await pedir('/api/produtos', {
+        method: 'POST',
+        body: {
+          nome,
+          termo: (buscaAtual && buscaAtual.termo) || nome,
+          categoria: oferta.categoria || 'Outros',
+          preco_alvo: 0,
+        },
+      });
+      await carregarProdutos();
+      toast(t('analise.criado'));
+      abrirDetalhe(novo.id);
+    } catch (e) {
+      toast(e.message, true);
+    }
+  }
+
+  function botaoAnalise(oferta, classe) {
+    const b = el('button', 'btn analise' + (classe ? ' ' + classe : ''));
+    b.type = 'button';
+    b.innerHTML = ICONE_ANALISE;
+    b.appendChild(document.createTextNode(t('res.analise')));
+    b.title = t('res.analiseDica');
+    b.addEventListener('click', () => abrirAnalise(oferta));
+    return b;
+  }
+
   function cartaoOferta(o, i, campeao) {
     const venceu = o === campeao;
     const cartao = el('article', 'card' + (venceu ? ' win' : ''));
@@ -766,7 +823,10 @@ const App = (function () {
     precos.appendChild(el('span', 'cond', t('condicao.' + o.condicao) || o.condicao));
     cartao.appendChild(precos);
 
-    cartao.appendChild(botaoLoja(o, 'btn go'));
+    const acoes = el('div', 'card-acoes');
+    acoes.appendChild(botaoAnalise(o));
+    acoes.appendChild(botaoLoja(o, 'btn go'));
+    cartao.appendChild(acoes);
     return cartao;
   }
 
@@ -796,6 +856,7 @@ const App = (function () {
     linha.appendChild(marca);
 
     const acao = el('span', 'a');
+    acao.appendChild(botaoAnalise(o));
     acao.appendChild(botaoLoja(o, 'btn go'));
     linha.appendChild(acao);
     return linha;
@@ -1055,7 +1116,10 @@ const App = (function () {
 
     renderGrafico(d.historico);
     const maisBarata = d.ofertas.slice().sort((a, b) => a.preco_total - b.preco_total)[0];
-    renderCartoes($('#det-ofertas'), d.ofertas, maisBarata, true);
+    renderCartoes($('#det-ofertas'), d.ofertas, maisBarata, true, {
+      titulo: 'Nenhuma oferta coletada ainda',
+      texto: 'Use "Atualizar preços agora" para consultar as lojas e começar o histórico.',
+    });
   }
 
   function renderGrafico(historico) {
