@@ -36,7 +36,7 @@ const App = (function () {
   let buscaAtual = null;     // dados da busca (termo, origem, data)
   let filtros = { marca: '', categoria: '', loja: '', preco: '' };
   let pagina = 1;
-  const POR_PAGINA = 10;
+  const POR_PAGINA = 15;
 
   /* Marcas conhecidas do mercado gamer: usadas para classificar o anuncio pelo titulo. */
   const MARCAS = [
