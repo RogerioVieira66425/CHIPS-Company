@@ -788,10 +788,12 @@ const App = (function () {
     return selo;
   }
 
-  function marcaDesconto(o, venceu) {
+  function marcaDesconto(o, venceu, comBarra) {
     if (venceu) return el('span', 'win-tag', '★ ' + t('res.menorPreco'));
     const desconto = descontoDe(o);
-    return desconto ? el('span', 'disc num', '-' + desconto + '%') : el('span', '');
+    if (desconto) return el('span', 'disc num', '-' + desconto + '%');
+    // na lista a coluna nunca fica vazia: sem desconto, entra uma barra
+    return el('span', comBarra ? 'sem-desconto' : '', comBarra ? '—' : '');
   }
 
   function blocoPreco(o) {
@@ -917,7 +919,7 @@ const App = (function () {
     precos.className = 'p';
     linha.appendChild(precos);
 
-    const marca = marcaDesconto(o, venceu);
+    const marca = marcaDesconto(o, venceu, true);
     marca.classList.add('d');
     linha.appendChild(marca);
 

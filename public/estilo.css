@@ -887,7 +887,7 @@ body {
 .store { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; }
 .dot { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; font-size: 11px; font-weight: 800; color: #fff; background: var(--ink); }
 .disc { font-size: 12px; font-weight: 800; padding: 4px 9px; border-radius: 999px; background: var(--pos-soft); color: var(--pos); }
-.win-tag { font-size: 11px; font-weight: 800; padding: 4px 9px; border-radius: 999px; background: var(--pos); color: #fff; display: inline-flex; align-items: center; gap: 4px; }
+.win-tag { font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 999px; background: var(--pos); color: #fff; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .card h3 {
   margin: 0; font-size: 14.5px; font-weight: 600; line-height: 1.45;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; min-height: 63px;
@@ -916,7 +916,7 @@ body {
 
 .list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
 .row {
-  display: grid; grid-template-columns: 120px minmax(0,1fr) 120px 80px 250px;
+  display: grid; grid-template-columns: 120px minmax(0,1fr) 120px 132px 250px;
   align-items: center; gap: 16px; padding: 16px 20px; border-bottom: 1px solid var(--line);
   background: #fff; transition: background .15s; animation: entrar .3s var(--ease) both;
 }
@@ -929,6 +929,9 @@ body {
 }
 .row .t:hover { text-decoration: underline; }
 .row .p { text-align: right; }
+/* coluna do desconto: selo centralizado e uma barra quando nao ha desconto */
+.row .d { justify-self: center; text-align: center; }
+.row .sem-desconto { color: var(--muted); font-weight: 700; }
 .row .p .price { font-size: 17px; }
 .row .a { display: flex; gap: 8px; justify-content: flex-end; }
 .row .go { height: 36px; font-size: 13px; flex: 1; }
