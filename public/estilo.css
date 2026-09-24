@@ -801,6 +801,9 @@ body {
 /* o fundo da pagina e branco gelo: sem borda e fundo branco o cartao sumia */
 .stat {
   border-radius: var(--r-lg); padding: 24px; text-align: center;
+  /* o cartao cresce junto com o ranking ao lado: o texto fica no meio
+     em vez de deixar um vazio embaixo quando o filtro encurta a lista */
+  display: flex; flex-direction: column; justify-content: center;
   background: #fff; border: 1px solid var(--line);
   box-shadow: 0 1px 2px rgba(16,20,28,.05), 0 6px 18px rgba(16,20,28,.04);
 }
