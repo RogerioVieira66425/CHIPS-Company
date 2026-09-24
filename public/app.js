@@ -289,21 +289,32 @@ const App = (function () {
   };
   const corDaLoja = (loja) => COR_LOJA[loja] || '#0d0f12';
 
-  /* Marca da loja: public/lojas/<nome-da-loja>.svg. Sem arquivo, o cartao
-     escreve o nome da loja no lugar da imagem. */
-  const arquivoDaMarca = (loja) => '/lojas/' + String(loja || '').toLowerCase()
+  /* Marca da loja: public/lojas/<nome-da-loja>.png (ou .svg). Sem arquivo,
+     o cartao escreve o nome da loja no lugar da imagem. */
+  const FORMATOS_MARCA = ['.png', '.svg'];
+
+  /* lojas cuja marca e clara sobre fundo escuro: a placa acompanha */
+  const MARCA_ESCURA = ['Setup Ninja'];
+
+  const chaveDaLoja = (loja) => String(loja || '').toLowerCase()
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.svg';
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
   function marcaDaLoja(loja) {
-    const caixa = el('div', 'hero-logo');
+    const caixa = el('div', 'hero-logo' + (MARCA_ESCURA.indexOf(loja) !== -1 ? ' escura' : ''));
     const img = document.createElement('img');
-    img.src = arquivoDaMarca(loja);
     img.alt = loja || '';
+
+    let formato = 0;
+    const carregar = () => { img.src = '/lojas/' + chaveDaLoja(loja) + FORMATOS_MARCA[formato]; };
     img.addEventListener('error', () => {
+      formato += 1;
+      if (formato < FORMATOS_MARCA.length) { carregar(); return; }
       caixa.classList.add('sem-marca');
       caixa.textContent = loja || '';
     });
+    carregar();
+
     caixa.appendChild(img);
     return caixa;
   }

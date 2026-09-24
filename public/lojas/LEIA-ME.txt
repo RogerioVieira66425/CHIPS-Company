@@ -2,19 +2,22 @@ Marcas das lojas
 ================
 
 Cada arquivo deste diretorio e mostrado no cartao da oferta recomendada,
-no canto superior direito, sobre uma placa branca.
+no canto superior direito.
 
 O nome do arquivo vem do nome da loja em minusculas, sem acento e com
 hifen no lugar do espaco:
 
-  KaBuM!        -> kabum.svg
-  Setup Ninja   -> setup-ninja.svg
-  Mercado Livre -> mercado-livre.svg
+  KaBuM!        -> kabum.png
+  Setup Ninja   -> setup-ninja.png
+  Mercado Livre -> mercado-livre.png
 
-Os arquivos que estao aqui sao apenas o nome da loja escrito na cor que
-ela usa no site. Para exibir o logotipo oficial, substitua o arquivo
-mantendo o mesmo nome (SVG e o formato preferido; PNG tambem funciona se
-o nome terminar em .svg for trocado no codigo).
+A interface procura primeiro o .png e depois o .svg. Se nenhum dos dois
+existir, escreve o nome da loja no lugar da imagem, entao nada quebra.
 
-Se o arquivo de uma loja nao existir, a interface escreve o nome da loja
-no lugar da imagem, entao nada quebra.
+As marcas ficam sobre uma placa branca, que serve a logotipos escuros. Se
+o logotipo for claro sobre fundo escuro, acrescente o nome da loja em
+MARCA_ESCURA (public/app.js) para a placa acompanhar - e o caso da Setup
+Ninja.
+
+Os logotipos sao marcas registradas das lojas e aparecem aqui apenas para
+identificar de onde vem cada oferta.

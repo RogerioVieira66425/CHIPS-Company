@@ -742,11 +742,13 @@ body {
 .hero-logo {
   position: absolute; top: 28px; right: 28px; z-index: 2;
   display: flex; align-items: center; justify-content: center;
-  min-width: 96px; max-width: 45%; height: 46px; padding: 8px 14px;
+  max-width: 45%; height: 50px; padding: 9px 14px;
   background: #fff; border-radius: 14px;
   box-shadow: 0 8px 24px -12px rgba(0,0,0,.6);
 }
-.hero-logo img { max-width: 100%; max-height: 100%; display: block; }
+.hero-logo img { height: 100%; width: auto; max-width: 160px; display: block; object-fit: contain; }
+/* marca clara sobre fundo escuro: a placa vira escura para nao emoldurar */
+.hero-logo.escura { background: #0f0f11; box-shadow: none; }
 .hero-logo.sem-marca { font-size: 14px; font-weight: 800; color: var(--ink); letter-spacing: -.01em; }
 .hero .chips { padding-right: 150px; }
 .chips { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -965,7 +967,7 @@ body {
   .intro h1 { font-size: 32px; }
   .hero { padding: 24px; }
   .hero-price { font-size: 48px; }
-  .hero-logo { top: 20px; right: 20px; height: 38px; min-width: 80px; }
+  .hero-logo { top: 20px; right: 20px; height: 40px; }
   .hero .chips { padding-right: 110px; }
   .tile { padding: 22px 20px; }
   .rank-row { grid-template-columns: 22px 70px minmax(0,1fr) 82px; }
