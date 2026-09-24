@@ -87,6 +87,12 @@ async function abrirDeVerdade() {
 
   navegador = { processo, endereco, perfil };
 
+  // se o Chrome cair ou for fechado a mao, a proxima consulta abre outro em
+  // vez de insistir num endereco morto
+  processo.once('exit', () => {
+    if (navegador && navegador.processo === processo) navegador = null;
+  });
+
   const encerrar = () => fechar();
   process.once('exit', encerrar);
   process.once('SIGINT', () => { encerrar(); process.exit(0); });
@@ -242,16 +248,28 @@ function comAba(wsUrl, url, script, esperaMs, visitarAntes, interacao) {
   });
 }
 
+/* Abre uma aba nova no Chrome ja em execucao. */
+async function novaAba(endereco) {
+  const alvo = endereco + '/json/new?' + encodeURIComponent('about:blank');
+  const r = await fetch(alvo, { method: 'PUT' }).catch(() => fetch(alvo));
+  return r.json();
+}
+
 /* API publica: abre a url e devolve o que o script coletar. */
 async function extrair(url, script, opcoes) {
   const o = opcoes || {};
-  const { endereco } = await abrirNavegador();
+  let sessao = await abrirNavegador();
+  let aba = await novaAba(sessao.endereco).catch(() => null);
 
-  // cria uma aba nova
-  const r = await fetch(endereco + '/json/new?' + encodeURIComponent('about:blank'), { method: 'PUT' })
-    .catch(() => fetch(endereco + '/json/new?' + encodeURIComponent('about:blank')));
-  const aba = await r.json();
+  // o Chrome pode ter sido fechado entre uma coleta e outra: descarta o que
+  // ficou para tras e abre um novo antes de desistir
+  if (!aba || !aba.webSocketDebuggerUrl) {
+    fechar();
+    sessao = await abrirNavegador();
+    aba = await novaAba(sessao.endereco).catch(() => null);
+  }
   if (!aba || !aba.webSocketDebuggerUrl) throw new Error('Nao consegui abrir uma aba no navegador.');
+  const endereco = sessao.endereco;
 
   try {
     return await comAba(aba.webSocketDebuggerUrl, url, script, o.esperaMs, o.visitarAntes, o.interacao);
