@@ -794,3 +794,36 @@ body.capa .chip:hover { background: rgba(255,255,255,.2); color: #fff; }
   color: var(--texto-fraco);
   opacity: 1;
 }
+
+/* ---------- seletor de idioma com bandeira ---------- */
+.idioma { position: relative; }
+.idioma-botao {
+  display: flex; align-items: center; gap: 8px;
+  background: #17181c; border: 1px solid #2a2b31; color: #e8eaee;
+  border-radius: 8px; padding: 5px 10px; font: inherit; font-size: 12px; cursor: pointer;
+}
+.idioma-botao:hover { border-color: var(--acao); }
+.idioma-botao .seta { color: #8b8f98; font-size: 10px; }
+
+.bandeira {
+  width: 20px; height: 14px; flex: none;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.18);
+}
+
+.idioma-lista {
+  position: absolute; right: 0; top: calc(100% + 6px);
+  list-style: none; margin: 0; padding: 4px;
+  background: #17181c; border: 1px solid #2a2b31; border-radius: 10px;
+  box-shadow: 0 10px 26px rgba(0,0,0,.45);
+  z-index: 30; min-width: 168px;
+}
+.idioma-lista li { margin: 0; }
+.idioma-opcao {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  background: transparent; border: 0; color: #e8eaee;
+  padding: 8px 10px; border-radius: 7px; font: inherit; font-size: 13px; cursor: pointer;
+  text-align: left;
+}
+.idioma-opcao:hover { background: #22242a; }
+.idioma-opcao.ativa { color: #fff; background: rgba(210, 31, 55, .22); }

@@ -210,6 +210,30 @@ const I18N = (function () {
     },
   };
 
+  /* Bandeiras desenhadas em SVG: no Windows o emoji de bandeira aparece como
+     as letras do pais ("BR"), entao o desenho e feito aqui mesmo. */
+  const BANDEIRAS = {
+    pt: '<svg viewBox="0 0 28 20" class="bandeira" aria-hidden="true">' +
+        '<rect width="28" height="20" fill="#009b3a"/>' +
+        '<path d="M14 2.6 25.4 10 14 17.4 2.6 10Z" fill="#fedf00"/>' +
+        '<circle cx="14" cy="10" r="4.1" fill="#002776"/>' +
+        '<path d="M10.2 8.6a9 9 0 0 1 7.6 1.9" stroke="#fff" stroke-width="1.1" fill="none"/></svg>',
+    en: '<svg viewBox="0 0 28 20" class="bandeira" aria-hidden="true">' +
+        '<rect width="28" height="20" fill="#b22234"/>' +
+        '<g fill="#fff"><rect y="2.3" width="28" height="1.5"/><rect y="5.4" width="28" height="1.5"/>' +
+        '<rect y="8.5" width="28" height="1.5"/><rect y="11.6" width="28" height="1.5"/>' +
+        '<rect y="14.7" width="28" height="1.5"/><rect y="17.8" width="28" height="1.5"/></g>' +
+        '<rect width="12" height="10.8" fill="#3c3b6e"/>' +
+        '<g fill="#fff"><circle cx="2.6" cy="2.3" r=".7"/><circle cx="6" cy="2.3" r=".7"/><circle cx="9.4" cy="2.3" r=".7"/>' +
+        '<circle cx="4.3" cy="4.6" r=".7"/><circle cx="7.7" cy="4.6" r=".7"/>' +
+        '<circle cx="2.6" cy="6.9" r=".7"/><circle cx="6" cy="6.9" r=".7"/><circle cx="9.4" cy="6.9" r=".7"/>' +
+        '<circle cx="4.3" cy="9.2" r=".7"/><circle cx="7.7" cy="9.2" r=".7"/></g></svg>',
+    es: '<svg viewBox="0 0 28 20" class="bandeira" aria-hidden="true">' +
+        '<rect width="28" height="20" fill="#c60b1e"/>' +
+        '<rect y="5" width="28" height="10" fill="#ffc400"/>' +
+        '<rect x="4.5" y="8" width="3.4" height="4.6" rx=".6" fill="#c60b1e"/></svg>',
+  };
+
   const DISPONIVEIS = [
     ['pt', 'Português'],
     ['en', 'English'],
@@ -262,5 +286,5 @@ const I18N = (function () {
   const idioma = () => atual;
   const formatoData = () => (atual === 'pt' ? 'pt-BR' : atual === 'es' ? 'es-ES' : 'en-US');
 
-  return { t, definir, idioma, traduzirPagina, disponiveis: DISPONIVEIS, formatoData };
+  return { t, definir, idioma, traduzirPagina, disponiveis: DISPONIVEIS, bandeiras: BANDEIRAS, formatoData };
 })();

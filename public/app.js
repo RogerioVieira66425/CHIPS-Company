@@ -980,17 +980,53 @@ const App = (function () {
 
   /* ================= IDIOMA ================= */
   function montarSeletorIdioma() {
-    const select = $('#seletor-idioma');
-    if (!select) return;
-    select.innerHTML = '';
+    const botao = $('#idioma-botao');
+    const lista = $('#idioma-lista');
+    if (!botao || !lista) return;
+
+    const nomeDe = (codigo) => (I18N.disponiveis.find(([c]) => c === codigo) || [, ''])[1];
+
+    const desenharBotao = () => {
+      const atual = I18N.idioma();
+      botao.innerHTML = I18N.bandeiras[atual] + '<span>' + nomeDe(atual) + '</span><span class="seta">▾</span>';
+    };
+
+    const fechar = () => {
+      lista.classList.add('oculto');
+      botao.setAttribute('aria-expanded', 'false');
+    };
+
+    lista.innerHTML = '';
     I18N.disponiveis.forEach(([codigo, nome]) => {
-      const op = document.createElement('option');
-      op.value = codigo;
-      op.textContent = nome;
-      select.appendChild(op);
+      const item = document.createElement('li');
+      const opcao = document.createElement('button');
+      opcao.type = 'button';
+      opcao.className = 'idioma-opcao' + (codigo === I18N.idioma() ? ' ativa' : '');
+      opcao.setAttribute('role', 'option');
+      opcao.innerHTML = I18N.bandeiras[codigo] + '<span>' + nome + '</span>';
+      opcao.addEventListener('click', () => {
+        I18N.definir(codigo);
+        lista.querySelectorAll('.idioma-opcao').forEach((b, i) => {
+          b.classList.toggle('ativa', I18N.disponiveis[i][0] === codigo);
+        });
+        desenharBotao();
+        fechar();
+      });
+      item.appendChild(opcao);
+      lista.appendChild(item);
     });
-    select.value = I18N.idioma();
-    select.addEventListener('change', () => I18N.definir(select.value));
+
+    desenharBotao();
+
+    botao.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const aberto = !lista.classList.contains('oculto');
+      lista.classList.toggle('oculto', aberto);
+      botao.setAttribute('aria-expanded', String(!aberto));
+    });
+
+    document.addEventListener('click', fechar);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fechar(); });
   }
 
   // ao trocar de idioma, redesenha o que foi montado por JavaScript
