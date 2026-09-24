@@ -798,7 +798,12 @@ body {
 .note svg { flex: none; color: var(--info); margin-top: 1px; }
 
 .mini-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.stat { border-radius: var(--r-lg); padding: 22px 24px; background: var(--soft); }
+/* o fundo da pagina e branco gelo: sem borda e fundo branco o cartao sumia */
+.stat {
+  border-radius: var(--r-lg); padding: 24px; text-align: center;
+  background: #fff; border: 1px solid var(--line);
+  box-shadow: 0 1px 2px rgba(16,20,28,.05), 0 6px 18px rgba(16,20,28,.04);
+}
 .stat-l { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
 .stat-v { font-size: 28px; font-weight: 800; letter-spacing: -.03em; line-height: 1.1; }
 .stat-v.pos { color: var(--pos); }
@@ -810,9 +815,9 @@ body {
 /* ---------- barra de ferramentas ---------- */
 .toolbar {
   position: sticky; top: 72px; z-index: 10;
-  background: rgba(255,255,255,.9);
+  background: rgba(242,244,247,.92);
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-  margin-top: 48px; padding: 14px 0; border-bottom: 1px solid var(--line);
+  margin-top: 28px; padding: 14px 0; border-bottom: 1px solid var(--line);
 }
 .toolbar-in { display: flex; align-items: center; gap: 12px; }
 .pills { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; padding: 2px; }
