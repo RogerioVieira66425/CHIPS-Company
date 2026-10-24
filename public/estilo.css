@@ -999,3 +999,28 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .card, .row, .fill { animation: none !important; transition: none !important; }
 }
+
+/* ---------- tela de analise do produto ---------- */
+/* o cabecalho de coluna numerica segue a mesma direita da coluna:
+   a regra generica do th (text-align: left) sobrepunha a classe .dir */
+.tabela th.dir, .tabela td.dir { text-align: right; }
+
+/* faixa de precos: o menor e o maior preco do produto nas pontas, a oferta
+   como um marcador sobre a barra */
+.an-faixa { padding: 22px 4px 8px; }
+.an-trilho {
+  position: relative; height: 10px; border-radius: 999px;
+  background: linear-gradient(90deg, #12805c 0%, #d9dee6 55%, #c8102e 100%);
+}
+.an-trilho > span {
+  position: absolute; top: 50%; width: 20px; height: 20px; border-radius: 50%;
+  background: #ffffff; border: 3px solid var(--texto);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 2px 8px rgba(16, 20, 28, .25);
+}
+.an-legenda {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 12px; flex-wrap: wrap; margin-top: 12px;
+  font-size: 13px; color: var(--texto-fraco);
+}
+.an-legenda #an-min, .an-legenda #an-max { font-weight: 700; color: var(--texto); }
