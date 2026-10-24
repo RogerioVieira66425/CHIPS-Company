@@ -1028,3 +1028,6 @@ body {
 /* botao de compra nas tabelas: cor de acao da marca */
 .mini-botao.botao-acao { background: var(--acao); border-color: var(--acao); color: #ffffff; font-weight: 700; }
 .mini-botao.botao-acao:hover { background: var(--acao-clara); border-color: var(--acao-clara); color: #ffffff; }
+
+/* colunas numericas da analise: cabecalho e valores centralizados */
+.tabela th.cen, .tabela td.cen { text-align: center; }

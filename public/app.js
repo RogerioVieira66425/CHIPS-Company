@@ -899,10 +899,10 @@ const App = (function () {
     d.lojas.forEach((l) => {
       const tr = el('tr');
       tr.appendChild(el('td', 'ticker', l.loja));
-      tr.appendChild(celula(String(l.ofertas), 'dir'));
-      tr.appendChild(celula(dinheiro(l.menor), 'dir positivo'));
-      tr.appendChild(celula(dinheiro(l.mediana), 'dir'));
-      tr.appendChild(celula(dinheiro(l.maior), 'dir'));
+      tr.appendChild(celula(String(l.ofertas), 'cen'));
+      tr.appendChild(celula(dinheiro(l.menor), 'cen positivo'));
+      tr.appendChild(celula(dinheiro(l.mediana), 'cen'));
+      tr.appendChild(celula(dinheiro(l.maior), 'cen'));
       tbLojas.appendChild(tr);
     });
 
@@ -916,9 +916,9 @@ const App = (function () {
       a.title = o.titulo;
       td.appendChild(a);
       tr.appendChild(td);
-      tr.appendChild(celula(dinheiro(o.preco), 'dir'));
+      tr.appendChild(celula(dinheiro(o.preco), 'cen'));
       const v = o.referencia > 0 ? o.variacao : null;
-      tr.appendChild(celula(v === null ? '—' : pct(v), 'dir ' + (v < 0 ? 'positivo' : (v > 0 ? 'negativo' : ''))));
+      tr.appendChild(celula(v === null ? '—' : pct(v), 'cen ' + (v < 0 ? 'positivo' : (v > 0 ? 'negativo' : ''))));
       tr.appendChild(celula(t(SITUACAO[o.situacao] || 'situacao.media'), ''));
       const acao = el('td', 'dir');
       if (o.url) acao.appendChild(link(t('tabela.comprar'), o.url, 'mini-botao botao-acao'));
