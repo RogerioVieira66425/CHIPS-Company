@@ -69,17 +69,14 @@ function podeBuscar(req) {
    pagina de loja viraria execucao de script dentro do nosso site. */
 const urlSegura = (u) => (/^https?:\/\//i.test(String(u || '')) ? String(u) : '');
 
-/* ---------- coletores e analise ---------- */
+/* ---------- busca e analise ----------
+   As ofertas vem do banco (ia.js). Os coletores de loja continuam no projeto,
+   mas nao sao mais chamados pelo site. */
 let cacheDiagnostico = { quando: 0, dados: null };
-// Quando o agente local esta ativo, ele atende as buscas: tem mais lojas que o servidor.
+// registro de quando o agente antigo deu sinal: ainda lido pela fila de ingestao
 let ultimoSinalDoAgente = 0;
-const AGENTE_ATIVO_MS = 60000;
-const agenteAtivo = () => Date.now() - ultimoSinalDoAgente < AGENTE_ATIVO_MS;
-const coletores = [
-  require('./coletores/kabum.js'),
-  require('./coletores/mercadolivre.js'),
-];
 const analise = require('./analise.js');
+const ia = require('./ia.js');
 
 /* ---------- helpers HTTP ---------- */
 function json(res, status, dados) {
@@ -179,25 +176,19 @@ async function detalheProduto(userId, id) {
   };
 }
 
-/* Executa todos os coletores configurados e grava o resultado. */
+/* Pesquisa o produto no banco e grava uma coleta por loja encontrada. */
 async function coletarPrecos(userId, produto) {
   const agora = new Date().toISOString();
   const relatorio = [];
 
-  for (const coletor of coletores) {
-    if (!coletor.configurado()) {
-      relatorio.push({ fonte: coletor.nome, encontrados: 0, erro: 'Fonte nao configurada.' });
-      continue;
-    }
-    let ofertas = [];
-    let erro = '';
-    try {
-      ofertas = await coletor.buscar(produto.termo);
-    } catch (e) {
-      erro = e.message;
-    }
+  // a coleta le o banco de ofertas: uma "fonte" por loja encontrada
+  const pesquisa = await ia.pesquisar(produto.termo);
+  for (const fonte of pesquisa.fontes) {
+    // o historico guarda as 40 ofertas mais baratas de cada loja, nao o catalogo inteiro
+    const ofertas = fonte.ofertas.slice(0, 40);
+    const erro = '';
 
-    const coleta = (await db.run('INSERT INTO coletas (produto_id, user_id, fonte, executado_em, encontrados, erro) VALUES (?,?,?,?,?,?)', produto.id, userId, coletor.nome, agora, ofertas.length, erro));
+    const coleta = (await db.run('INSERT INTO coletas (produto_id, user_id, fonte, executado_em, encontrados, erro) VALUES (?,?,?,?,?,?)', produto.id, userId, fonte.fonte, agora, ofertas.length, erro));
 
     for (const o of ofertas) {
       await db.run(
@@ -208,16 +199,16 @@ async function coletarPrecos(userId, produto) {
       );
     }
 
-    relatorio.push({ fonte: coletor.nome, encontrados: ofertas.length, erro });
+    relatorio.push({ fonte: fonte.fonte, encontrados: ofertas.length, erro });
   }
 
   (await db.run('UPDATE produtos SET atualizado_em = ? WHERE id = ?', agora, produto.id));
   return { executado_em: agora, relatorio };
 }
 
-/* ---------- buscas publicas (fila) ----------
-   O visitante pede uma busca; quem executa e quem alcancar as lojas:
-   o proprio servidor (quando roda em rede brasileira) ou o agente local. */
+/* ---------- buscas publicas ----------
+   O visitante pede uma busca e ela e respondida pelo banco de ofertas. As lojas
+   nao sao mais consultadas em tempo real. */
 const VALIDADE_BUSCA_MS = 30 * 60 * 1000; // resultado vale 30 minutos
 
 function normalizarTermo(t) {
@@ -275,35 +266,11 @@ async function devolverBuscasTravadas() {
 
 /* Tenta executar aqui mesmo. Devolve true quando conseguiu falar com alguma loja. */
 async function executarBuscaLocalmente(id, termo) {
-  const inicio = Date.now();
-
-  // as lojas sao consultadas ao mesmo tempo: sao sites diferentes
-  const fontes = await Promise.all(coletores.map(async (coletor) => {
-    if (!coletor.configurado()) {
-      return { fonte: coletor.nome, erro: 'Fonte nao configurada.', ofertas: [], ms: 0 };
-    }
-    const t = Date.now();
-    try {
-      return { fonte: coletor.nome, erro: '', ofertas: await coletor.buscar(termo), ms: Date.now() - t };
-    } catch (e) {
-      return { fonte: coletor.nome, erro: e.message, ofertas: [], ms: Date.now() - t };
-    }
-  }));
-
-  if (!fontes.some((f) => !f.erro)) return false;
-  const duracao = Date.now() - inicio;
-
-  const todas = fontes.reduce((acc, f) => acc.concat(f.ofertas), []);
-  const filtrado = analise.filtrarRelevantes(todas, termo);
-  const resultado = {
-    fontes,
-    comparacao: analise.compararLojas(filtrado.ofertas),
-    relevantes: filtrado.ofertas.length,
-    total_bruto: todas.length,
-    poucas_correspondencias: Boolean(filtrado.poucasCorrespondencias),
-    duracao_ms: duracao,
-  };
-  (await db.run("UPDATE buscas SET status = 'pronta', resultado = ?, erro = '', origem = 'servidor', atualizado_em = ? WHERE id = ?", JSON.stringify(resultado), new Date().toISOString(), id));
+  const pesquisa = await ia.pesquisar(termo);
+  await db.run(
+    "UPDATE buscas SET status = 'pronta', resultado = ?, erro = '', origem = 'banco', atualizado_em = ? WHERE id = ?",
+    JSON.stringify(pesquisa), new Date().toISOString(), id
+  );
   return true;
 }
 
@@ -402,19 +369,9 @@ async function api(req, res, rota) {
     if (cacheDiagnostico.dados && agora - cacheDiagnostico.quando < 5 * 60 * 1000) {
       return json(res, 200, cacheDiagnostico.dados);
     }
-    const fontes = [];
-    for (const coletor of coletores) {
-      if (!coletor.configurado()) {
-        fontes.push({ fonte: coletor.nome, ok: false, mensagem: 'Sem credenciais configuradas.' });
-        continue;
-      }
-      try {
-        const ofertas = await coletor.buscar('mouse gamer');
-        fontes.push({ fonte: coletor.nome, ok: true, mensagem: ofertas.length + ' oferta(s) na consulta de teste.' });
-      } catch (e) {
-        fontes.push({ fonte: coletor.nome, ok: false, mensagem: e.message });
-      }
-    }
+    const fontes = (await ia.resumo()).por_loja.map((l) => ({
+      fonte: l.loja, ok: true, mensagem: l.ofertas + ' oferta(s) no banco.',
+    }));
     cacheDiagnostico = { quando: agora, dados: { verificado_em: new Date().toISOString(), fontes } };
     return json(res, 200, cacheDiagnostico.dados);
   }
@@ -544,13 +501,7 @@ async function api(req, res, rota) {
     const info = (await db.run("INSERT INTO buscas (termo, status, resultado, erro, origem, criado_em, atualizado_em) VALUES (?,'pendente','','','',?,?)", t, agora, agora));
     const id = Number(info.lastInsertRowid);
 
-    // com agente ativo, a busca vai para a fila dele (mais lojas);
-    // sem agente, o proprio servidor tenta responder na hora
-    if (!agenteAtivo()) {
-      try {
-        await executarBuscaLocalmente(id, t);
-      } catch (e) { /* segue para a fila do agente */ }
-    }
+    await executarBuscaLocalmente(id, t);
 
     const linha = (await db.get('SELECT * FROM buscas WHERE id = ?', id));
     return json(res, linha.status === 'pronta' ? 200 : 202, formatarBusca(linha));
@@ -576,8 +527,6 @@ async function api(req, res, rota) {
   /* ---------- dados enriquecidos pela IA (Supabase, so leitura) ----------
      Respondem 503 enquanto DATABASE_URL nao estiver definida no servidor. */
   if (rota.indexOf('/api/ia/') === 0 && metodo === 'GET') {
-    const ia = require('./ia.js');
-    if (!ia.disponivel()) return json(res, 503, { erro: 'Banco nao configurado: defina DATABASE_URL no servidor.' });
     const parametros = Object.fromEntries(new URL(req.url, 'http://x').searchParams);
     try {
       if (rota === '/api/ia/resumo') return json(res, 200, await ia.resumo());
@@ -589,7 +538,8 @@ async function api(req, res, rota) {
 
   /* ---------- leitura publica: o catalogo da vitrine ---------- */
   if (rota === '/api/fontes' && metodo === 'GET') {
-    return json(res, 200, coletores.map((c) => ({ chave: c.chave, nome: c.nome, configurado: c.configurado() })));
+    const lojas = await db.all('SELECT DISTINCT nome_loja AS nome FROM ofertas_ia ORDER BY nome_loja');
+    return json(res, 200, lojas.map((l) => ({ nome: l.nome, configurado: true })));
   }
 
   if (rota === '/api/produtos' && metodo === 'GET') {
@@ -693,20 +643,8 @@ async function api(req, res, rota) {
     const { termo } = await lerCorpo(req);
     const t = String(termo || '').trim();
     if (!t) return json(res, 400, { erro: 'Informe o que voce quer buscar.' });
-    const saida = [];
-    for (const coletor of coletores) {
-      if (!coletor.configurado()) {
-        saida.push({ fonte: coletor.nome, erro: 'Fonte nao configurada.', ofertas: [] });
-        continue;
-      }
-      try {
-        saida.push({ fonte: coletor.nome, erro: '', ofertas: await coletor.buscar(t) });
-      } catch (e) {
-        saida.push({ fonte: coletor.nome, erro: e.message, ofertas: [] });
-      }
-    }
-    const todas = saida.reduce((acc, f) => acc.concat(f.ofertas), []);
-    return json(res, 200, { termo: t, fontes: saida, comparacao: analise.compararLojas(todas) });
+    const pesquisa = await ia.pesquisar(t);
+    return json(res, 200, { termo: t, fontes: pesquisa.fontes, comparacao: pesquisa.comparacao });
   }
 
 

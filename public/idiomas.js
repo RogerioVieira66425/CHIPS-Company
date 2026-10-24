@@ -18,6 +18,7 @@ const I18N = (function () {
 
       'res.eyebrow': 'Resultado da busca',
       'origem.servidor': 'servidor',
+      'origem.banco': 'banco de ofertas',
       'origem.agente': 'agente coletor',
       'insight.economia': 'Comprando na {lojaMin} em vez da {lojaMax} você economiza {dif} — {pct} do valor mais caro.',
       'insight.variacao': 'O menor preço de cada loja vai de {min} na {lojaMin} a {max} na {lojaMax} — {dif} de diferença, ainda que sejam modelos diferentes.',
@@ -129,6 +130,7 @@ const I18N = (function () {
 
       'res.eyebrow': 'Search result',
       'origem.servidor': 'server',
+      'origem.banco': 'offers database',
       'origem.agente': 'collector agent',
       'insight.economia': 'Buying at {lojaMin} instead of {lojaMax} saves you {dif} — {pct} of the most expensive price.',
       'insight.variacao': 'The cheapest price in each store ranges from {min} at {lojaMin} to {max} at {lojaMax} — {dif} apart, although they are different models.',
@@ -240,6 +242,7 @@ const I18N = (function () {
 
       'res.eyebrow': 'Resultado de la búsqueda',
       'origem.servidor': 'servidor',
+      'origem.banco': 'banco de ofertas',
       'origem.agente': 'agente recolector',
       'insight.economia': 'Comprando en {lojaMin} en vez de {lojaMax} ahorras {dif} — {pct} del valor más caro.',
       'insight.variacao': 'El precio más bajo de cada tienda va de {min} en {lojaMin} a {max} en {lojaMax} — {dif} de diferencia, aunque sean modelos distintos.',

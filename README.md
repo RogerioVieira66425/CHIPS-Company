@@ -222,6 +222,11 @@ sistema deixa claro na tela quando o valor é apenas o preço do produto.
 
 ## Banco de dados
 
+**A busca lê só do banco de ofertas.** As lojas não são mais consultadas em tempo real,
+nem pelo agente nem pela API: as ofertas entram pelo importador (CSV) e o site responde a
+partir delas. No Render, `DATABASE_URL` é obrigatória: sem ela, a base fica vazia e nenhuma
+busca encontra nada.
+
 O sistema grava em **Postgres no Supabase** quando a variável `DATABASE_URL` está definida
 (string do botão *Connect* → *Session pooler*). Sem ela, usa um arquivo SQLite local
 (`precos.db`), para testar na sua máquina.

@@ -1,23 +1,24 @@
 'use strict';
-/* Importa o CSV de dados enriquecidos para a tabela ofertas_ia do Supabase.
+/* Importa o CSV de dados enriquecidos para a tabela ofertas_ia.
 
-   Uso (no seu computador, com a string de conexao do Supabase):
-     set DATABASE_URL=postgres://...   (Windows)
-     node scripts/importar-csv.js "C:\Users\roger\Downloads\dados_enriquecidos_ia.csv"
+   Uso (no seu computador):
+     npm run importar-ia -- "C:\Users\roger\Downloads\dados_enriquecidos_ia.csv"
 
-   Recria a tabela inteira a cada execucao, para nao duplicar linhas. */
+   Com DATABASE_URL definida, grava no Supabase; sem ela, no SQLite local.
+   Recria a tabela inteira a cada execucao, para nao duplicar linhas. Se a
+   gravacao falhar no meio, rode de novo: a tabela e recriada do zero. */
 
 const fs = require('node:fs');
-const { Pool } = require('pg');
+const db = require('../db.js');
+const { textoDeBusca } = require('../ia.js');
 
 const arquivo = process.argv[2];
-const url = String(process.env.DATABASE_URL || '').trim();
-if (!arquivo || !url) {
-  console.error('\n  Informe o CSV e defina DATABASE_URL.\n  node scripts/importar-csv.js "caminho\\do\\arquivo.csv"\n');
+if (!arquivo) {
+  console.error('\n  Informe o CSV: npm run importar-ia -- "caminho\\do\\arquivo.csv"\n');
   process.exit(1);
 }
 
-// Separador ';' com campos entre aspas: uma linha pode ter ';' dentro de um titulo.
+// Separador ';' com campos entre aspas: um titulo pode ter ';' dentro.
 function linhaCsv(linha) {
   const campos = [];
   let atual = '';
@@ -65,50 +66,37 @@ const numero = (v) => {
     if (c.length !== cab.length || reg.preco === null || !reg.produto || !reg.loja) {
       descartadas.push(i + 2);
     } else {
+      reg.texto = textoDeBusca(reg.produto + ' ' + reg.titulo + ' ' + reg.loja);
       validas.push(reg);
     }
   });
 
-  const pool = new Pool({ connectionString: url, ssl: { rejectUnauthorized: false }, max: 2 });
-  let cliente;
-  try {
-    cliente = await pool.connect();
-  } catch (e) {
-    console.error('\n  Nao consegui conectar ao banco: ' + e.message + '\n  Confira a DATABASE_URL (Session pooler, com a senha).\n');
-    await pool.end().catch(() => {});
-    process.exit(1);
-  }
-  try {
-    await cliente.query('BEGIN');
-    await cliente.query('TRUNCATE public.ofertas_ia RESTART IDENTITY');
+  console.log('  ' + (db.usaPostgres() ? 'Destino: Supabase' : 'Destino: SQLite local'));
+  await db.iniciar();
+  await db.run('DELETE FROM ofertas_ia');
 
-    const LOTE = 500;
-    for (let inicio = 0; inicio < validas.length; inicio += LOTE) {
-      const lote = validas.slice(inicio, inicio + LOTE);
-      const valores = [];
-      const linhasSql = lote.map((r, k) => {
-        const b = k * 8;
-        valores.push(r.produto, r.titulo, r.loja, r.preco, r.referencia, r.variacao, r.situacao, r.url);
-        return '($' + (b + 1) + ',$' + (b + 2) + ',$' + (b + 3) + ',$' + (b + 4) + ',$' + (b + 5) + ',$' + (b + 6) + ',$' + (b + 7) + ',$' + (b + 8) + ')';
-      });
-      await cliente.query(
-        'INSERT INTO public.ofertas_ia (nome_produto_padronizado, nome_oferta_original, nome_loja, preco, preco_referencia_base, variacao_vs_base, situacao_compra, url_oferta) VALUES ' +
-        linhasSql.join(','),
-        valores
-      );
-      process.stdout.write('\r  gravadas ' + Math.min(inicio + LOTE, validas.length) + ' de ' + validas.length);
-    }
-    await cliente.query('COMMIT');
-    console.log('\n\n  Importacao concluida.');
-    console.log('  gravadas:   ' + validas.length);
-    console.log('  descartadas (linhas quebradas no arquivo): ' + descartadas.length +
-      (descartadas.length ? ' -> ' + descartadas.slice(0, 10).join(', ') : ''));
-  } catch (e) {
-    await cliente.query('ROLLBACK');
-    console.error('\n  Erro, nada foi gravado: ' + e.message + '\n');
-    process.exitCode = 1;
-  } finally {
-    cliente.release();
-    await pool.end();
+  const LOTE = 400;
+  for (let inicio = 0; inicio < validas.length; inicio += LOTE) {
+    const lote = validas.slice(inicio, inicio + LOTE);
+    const valores = [];
+    const grupos = lote.map((r) => {
+      valores.push(r.produto, r.titulo, r.loja, r.preco, r.referencia, r.variacao, r.situacao, r.url, r.texto);
+      return '(?,?,?,?,?,?,?,?,?)';
+    });
+    await db.run(
+      'INSERT INTO ofertas_ia (nome_produto_padronizado, nome_oferta_original, nome_loja, preco, preco_referencia_base, ' +
+      'variacao_vs_base, situacao_compra, url_oferta, texto_busca) VALUES ' + grupos.join(','),
+      ...valores
+    );
+    process.stdout.write('\r  gravadas ' + Math.min(inicio + LOTE, validas.length) + ' de ' + validas.length);
   }
-})();
+
+  console.log('\n\n  Importacao concluida.');
+  console.log('  gravadas:   ' + validas.length);
+  console.log('  descartadas (linhas quebradas no arquivo): ' + descartadas.length +
+    (descartadas.length ? ' -> ' + descartadas.slice(0, 10).join(', ') : ''));
+  await db.fechar();
+})().catch((e) => {
+  console.error('\n  Erro na importacao: ' + e.message + '\n  Rode de novo para refazer a tabela do zero.\n');
+  process.exit(1);
+});
