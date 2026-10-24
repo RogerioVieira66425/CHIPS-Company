@@ -159,7 +159,7 @@ const I18N = (function () {
       'pagina.proxima': 'Próxima →',
       'pagina.info': 'mostrando {de}–{ate} de {total} ofertas',
 
-      'rodape.frase': 'Engenharia de Software e Soluções Digitais',
+      'rodape.frase': 'Engenharia de Computação e Soluções Digitais',
       'idioma.rotulo': 'Idioma',
     },
 
@@ -314,7 +314,7 @@ const I18N = (function () {
       'pagina.proxima': 'Next →',
       'pagina.info': 'showing {de}–{ate} of {total} offers',
 
-      'rodape.frase': 'Software Engineering and Digital Solutions',
+      'rodape.frase': 'Computer Engineering and Digital Solutions',
       'idioma.rotulo': 'Language',
     },
 
@@ -469,7 +469,7 @@ const I18N = (function () {
       'pagina.proxima': 'Siguiente →',
       'pagina.info': 'mostrando {de}–{ate} de {total} ofertas',
 
-      'rodape.frase': 'Ingeniería de Software y Soluciones Digitales',
+      'rodape.frase': 'Ingeniería de Computación y Soluciones Digitales',
       'idioma.rotulo': 'Idioma',
     },
   };
