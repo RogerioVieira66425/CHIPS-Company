@@ -161,6 +161,69 @@
 </main>
 
 <!-- ---------- MÉTRICAS (público: dados do TCC) ---------- -->
+<!-- ---------- ANÁLISE DE UM PRODUTO (abre ao clicar em Análise) ---------- -->
+<main id="vista-analise" class="conteudo oculto">
+  <div class="cabecalho-tela">
+    <div>
+      <p class="eyebrow" data-i18n="analise.eyebrow">Análise do produto</p>
+      <h1 id="an-titulo"></h1>
+      <p id="an-sub" class="sub"></p>
+    </div>
+    <button id="an-voltar" class="botao fantasma" type="button" data-i18n="analise.voltar">← Voltar à busca</button>
+  </div>
+
+  <section class="kpis">
+    <article class="kpi"><h3 data-i18n="analise.precoAtual">Preço desta oferta</h3><strong id="an-preco">—</strong><span id="an-preco-sub" class="variacao neutro"></span></article>
+    <article class="kpi"><h3 data-i18n="analise.referencia">Preço de referência</h3><strong id="an-referencia">—</strong><span id="an-referencia-sub" class="variacao neutro"></span></article>
+    <article class="kpi"><h3 data-i18n="analise.variacao">Variação em relação à referência</h3><strong id="an-variacao">—</strong><span id="an-variacao-sub" class="variacao neutro"></span></article>
+    <article class="kpi"><h3 data-i18n="analise.situacao">Avaliação da IA</h3><strong id="an-situacao">—</strong><span id="an-situacao-sub" class="variacao neutro"></span></article>
+  </section>
+
+  <section class="painel">
+    <h2 data-i18n="analise.posicao">Onde esta oferta está entre todas</h2>
+    <div id="an-faixa" class="an-faixa"><div class="an-trilho"><span id="an-marcador"></span></div></div>
+    <div class="an-legenda"><span id="an-min"></span><span id="an-pos"></span><span id="an-max"></span></div>
+  </section>
+
+  <div class="grade">
+    <section class="painel">
+      <h2 data-i18n="analise.estatisticas">Números do produto</h2>
+      <table class="tabela">
+        <tbody id="an-stats"></tbody>
+      </table>
+    </section>
+    <section class="painel">
+      <h2 data-i18n="analise.historico">Histórico de preço</h2>
+      <p id="an-historico-texto" class="dica"></p>
+      <button id="an-acompanhado" class="botao oculto" type="button" data-i18n="analise.verAcompanhamento">Ver acompanhamento deste produto</button>
+    </section>
+  </div>
+
+  <section class="painel">
+    <h2 data-i18n="analise.porLoja">Melhor preço de cada loja</h2>
+    <table class="tabela">
+      <thead><tr>
+        <th data-i18n="analise.loja">Loja</th><th class="dir" data-i18n="analise.ofertas">Ofertas</th>
+        <th class="dir" data-i18n="analise.menor">Menor</th><th class="dir" data-i18n="analise.mediana">Mediana</th>
+        <th class="dir" data-i18n="analise.maior">Maior</th>
+      </tr></thead>
+      <tbody id="an-lojas"></tbody>
+    </table>
+  </section>
+
+  <section class="painel">
+    <h2 data-i18n="analise.todas">Todas as ofertas deste produto</h2>
+    <table class="tabela">
+      <thead><tr>
+        <th data-i18n="analise.loja">Loja</th><th data-i18n="analise.anuncio">Anúncio</th>
+        <th class="dir" data-i18n="analise.preco">Preço</th><th class="dir" data-i18n="analise.variacao2">Variação</th>
+        <th data-i18n="analise.situacao2">Avaliação</th><th></th>
+      </tr></thead>
+      <tbody id="an-ofertas"></tbody>
+    </table>
+  </section>
+</main>
+
 <main id="vista-metricas" class="conteudo oculto">
   <div class="cabecalho-tela">
     <div>

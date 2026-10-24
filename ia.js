@@ -74,6 +74,9 @@ function paraOferta(r) {
     url: String(r.url_oferta || ''),
     id_externo: '',
     situacao: r.situacao_compra,
+    produto: r.nome_produto_padronizado,
+    referencia: referencia || 0,
+    variacao: Number(r.variacao_vs_base) || 0,
   };
 }
 
@@ -91,7 +94,7 @@ async function pesquisar(termo) {
   const condicoes = palavras.map(() => 'texto_busca LIKE ?').join(' AND ');
   const linhas = await db.all(
     'SELECT nome_produto_padronizado, nome_oferta_original, nome_loja, preco, preco_referencia_base, ' +
-    '  situacao_compra, url_oferta FROM ofertas_ia WHERE ' + condicoes + ' ORDER BY preco ASC LIMIT 400',
+    '  variacao_vs_base, situacao_compra, url_oferta FROM ofertas_ia WHERE ' + condicoes + ' ORDER BY preco ASC LIMIT 400',
     ...palavras.map((p) => '%' + p + '%')
   );
 
@@ -115,4 +118,86 @@ async function pesquisar(termo) {
   };
 }
 
-module.exports = { resumo, ofertas, pesquisar, textoDeBusca, SITUACOES };
+/* Analise de um produto: tudo o que a base sabe sobre ele, a partir das ofertas
+   do mesmo produto padronizado. "titulo" escolhe a oferta que a pessoa abriu. */
+const mediana = (v) => {
+  if (!v.length) return 0;
+  const o = v.slice().sort((a, b) => a - b);
+  const m = Math.floor(o.length / 2);
+  return o.length % 2 ? o[m] : (o[m - 1] + o[m]) / 2;
+};
+const arredonda = (v) => Math.round(v * 100) / 100;
+
+/* Mesmo modelo, para a analise: quase todas as palavras do titulo escolhido
+   aparecem no outro titulo, e vice-versa. Mais rigido que o parecidos() da
+   comparacao: codigos de chipset (A520, B450) nao bastam para juntar modelos. */
+const PALAVRAS_FRACAS = ['com', 'para', 'sem', 'the', 'kit', 'preto', 'branco', 'branca', 'cor', 'gamer', 'usb', 'rgb', 'led'];
+function palavrasDoTitulo(texto) {
+  return new Set(textoDeBusca(texto).split(' ').filter((p) => p.length >= 3 && PALAVRAS_FRACAS.indexOf(p) === -1));
+}
+function mesmoModelo(a, b) {
+  const pa = palavrasDoTitulo(a);
+  const pb = palavrasDoTitulo(b);
+  if (!pa.size || !pb.size) return false;
+  let emB = 0;
+  pa.forEach((p) => { if (pb.has(p)) emB += 1; });
+  let emA = 0;
+  pb.forEach((p) => { if (pa.has(p)) emA += 1; });
+  return emB / pa.size >= 0.8 && emA / pb.size >= 0.6;
+}
+
+async function analiseDoProduto(produto, titulo) {
+  if (!produto) return null;
+  const linhas = await db.all(
+    'SELECT nome_produto_padronizado, nome_oferta_original, nome_loja, preco, preco_referencia_base, ' +
+    '  variacao_vs_base, situacao_compra, url_oferta FROM ofertas_ia WHERE nome_produto_padronizado = ? ' +
+    '  ORDER BY preco ASC LIMIT 400',
+    produto
+  );
+  if (!linhas.length) return null;
+
+  // o agrupamento da IA junta produtos diferentes (ex.: placa-mae e placa decorativa).
+  // So fica o que e o mesmo modelo da oferta escolhida: mesmo codigo ou mesmas palavras.
+  const todas = linhas.map(paraOferta);
+  const base = todas.find((o) => o.titulo === titulo) || todas[0];
+  const ofertas = todas.filter((o) => o === base || mesmoModelo(base.titulo, o.titulo));
+  const precos = ofertas.map((o) => o.preco);
+  const referencias = ofertas.map((o) => o.referencia).filter((v) => v > 0);
+
+  // a oferta que a pessoa abriu; sem titulo, a mais barata
+  const escolhida = ofertas.find((o) => o.titulo === titulo) || ofertas[0];
+  const menorPreco = Math.min(...precos);
+  const maiorPreco = Math.max(...precos);
+  const abaixoDela = ofertas.filter((o) => o.preco < escolhida.preco).length;
+
+  const porLoja = new Map();
+  ofertas.forEach((o) => {
+    if (!porLoja.has(o.loja)) porLoja.set(o.loja, []);
+    porLoja.get(o.loja).push(o.preco);
+  });
+  const lojas = [...porLoja.entries()]
+    .map(([loja, v]) => ({ loja, ofertas: v.length, menor: arredonda(Math.min(...v)), mediana: arredonda(mediana(v)), maior: arredonda(Math.max(...v)) }))
+    .sort((a, b) => a.menor - b.menor);
+
+  return {
+    produto,
+    oferta: escolhida,
+    situacao: escolhida.situacao,
+    referencia: arredonda(mediana(referencias)),
+    variacao_pct: arredonda(escolhida.variacao),
+    estatisticas: {
+      ofertas: ofertas.length,
+      menor: arredonda(menorPreco),
+      mediana: arredonda(mediana(precos)),
+      media: arredonda(precos.reduce((a, b) => a + b, 0) / precos.length),
+      maior: arredonda(maiorPreco),
+      posicao_pct: arredonda((abaixoDela / ofertas.length) * 100),
+    },
+    lojas,
+    ofertas,
+    // a base guarda um preco por oferta, sem serie no tempo: o historico vem do acompanhamento
+    tem_serie_historica: false,
+  };
+}
+
+module.exports = { resumo, ofertas, pesquisar, analiseDoProduto, textoDeBusca, SITUACOES };

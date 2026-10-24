@@ -127,6 +127,7 @@ const App = (function () {
     $('#vista-busca').classList.toggle('oculto', vista !== 'busca');
     $('#vista-detalhe').classList.toggle('oculto', vista !== 'detalhe');
     $('#vista-metricas').classList.toggle('oculto', vista !== 'metricas');
+    $('#vista-analise').classList.toggle('oculto', vista !== 'analise');
     if (vista === 'metricas') carregarMetricas().catch((e) => toast(e.message, true));
     renderMenu();
     window.scrollTo({ top: 0 });
@@ -817,13 +818,116 @@ const App = (function () {
     });
   }
 
+  /* Abre a tela de analise do produto da oferta: todas as ofertas do mesmo
+     produto na base, com a posicao da oferta escolhida. */
   async function abrirAnalise(oferta) {
-    const produto = produtoDaOferta(oferta);
-    if (produto) { abrirDetalhe(produto.id); return; }
-
-    // sem produto acompanhado nao ha serie de precos para analisar
-    toast(t('analise.semHistorico'));
+    let dados;
+    try {
+      dados = await pedir('/api/ia/analise?produto=' + encodeURIComponent(oferta.produto || oferta.titulo) +
+        '&titulo=' + encodeURIComponent(oferta.titulo || ''));
+    } catch (e) {
+      toast(e.message, true);
+      return;
+    }
+    renderAnalise(dados);
+    mostrar('analise');
   }
+
+  /* Rotulos e explicacoes da classificacao feita pela IA na base. */
+  const SITUACAO = {
+    'Boa Compra': 'situacao.boa',
+    'Preço Médio': 'situacao.media',
+    'Sem Histórico (Novo)': 'situacao.novo',
+    'Evitar': 'situacao.evitar',
+    'Anomalia (Isolada por IA)': 'situacao.anomalia',
+  };
+
+  function renderAnalise(d) {
+    const pct = (v) => (v > 0 ? '+' : '') + pctFmt(v);
+    const titulo = (d.oferta && d.oferta.titulo) || d.produto;
+    const est = d.estatisticas;
+
+    $('#an-titulo').textContent = curto(titulo, 90);
+    $('#an-sub').textContent = t('analise.resumoSub', { n: est.ofertas, lojas: d.lojas.length });
+
+    $('#an-preco').textContent = dinheiro(d.oferta.preco);
+    $('#an-preco-sub').textContent = d.oferta.loja;
+
+    $('#an-referencia').textContent = d.referencia > 0 ? dinheiro(d.referencia) : '—';
+    $('#an-referencia-sub').textContent = d.referencia > 0 ? t('analise.referenciaSub') : t('analise.semReferencia');
+
+    const variacao = $('#an-variacao');
+    variacao.textContent = d.referencia > 0 ? pct(d.variacao_pct) : '—';
+    variacao.className = d.variacao_pct < 0 ? 'positivo' : (d.variacao_pct > 0 ? 'negativo' : '');
+    $('#an-variacao-sub').textContent = t('analise.variacaoSub');
+
+    $('#an-situacao').textContent = t(SITUACAO[d.situacao] || 'situacao.media');
+    $('#an-situacao-sub').textContent = t((SITUACAO[d.situacao] || 'situacao.media') + '.dica');
+
+    // faixa de precos: onde a oferta cai entre o menor e o maior preco do produto
+    const amplitude = est.maior - est.menor;
+    const pos = amplitude > 0 ? ((d.oferta.preco - est.menor) / amplitude) * 100 : 50;
+    $('#an-marcador').style.left = pos.toFixed(1) + '%';
+    $('#an-min').textContent = t('analise.menorDe') + ' ' + dinheiro(est.menor);
+    $('#an-max').textContent = dinheiro(est.maior) + ' ' + t('analise.maiorDe');
+    $('#an-pos').textContent = t('analise.maisBaratoQue', { pct: pctFmt(est.posicao_pct) });
+
+    const stats = [
+      [t('analise.mediana'), dinheiro(est.mediana)],
+      [t('analise.media'), dinheiro(est.media)],
+      [t('analise.ofertasTotal'), String(est.ofertas)],
+      [t('analise.lojasTotal'), String(d.lojas.length)],
+    ];
+    $('#an-stats').innerHTML = '';
+    stats.forEach(([rotulo, valor]) => {
+      const tr = el('tr');
+      tr.appendChild(el('td', '', rotulo));
+      tr.appendChild(el('td', 'dir num', valor));
+      $('#an-stats').appendChild(tr);
+    });
+
+    const acompanhado = produtoDaOferta(d.oferta);
+    $('#an-historico-texto').textContent = acompanhado
+      ? t('analise.historicoAcompanhado')
+      : t('analise.historicoVazio');
+    const btnAcomp = $('#an-acompanhado');
+    btnAcomp.classList.toggle('oculto', !acompanhado);
+    btnAcomp.onclick = acompanhado ? () => abrirDetalhe(acompanhado.id) : null;
+
+    const tbLojas = $('#an-lojas');
+    tbLojas.innerHTML = '';
+    d.lojas.forEach((l) => {
+      const tr = el('tr');
+      tr.appendChild(el('td', 'ticker', l.loja));
+      tr.appendChild(celula(String(l.ofertas), 'dir'));
+      tr.appendChild(celula(dinheiro(l.menor), 'dir positivo'));
+      tr.appendChild(celula(dinheiro(l.mediana), 'dir'));
+      tr.appendChild(celula(dinheiro(l.maior), 'dir'));
+      tbLojas.appendChild(tr);
+    });
+
+    const tbOfertas = $('#an-ofertas');
+    tbOfertas.innerHTML = '';
+    d.ofertas.forEach((o) => {
+      const tr = el('tr', o.titulo === d.oferta.titulo && o.loja === d.oferta.loja ? 'melhor-linha' : '');
+      tr.appendChild(celula(o.loja, 'ticker'));
+      const td = el('td', 'titulo-oferta');
+      const a = link(curto(o.titulo, 60), o.url);
+      a.title = o.titulo;
+      td.appendChild(a);
+      tr.appendChild(td);
+      tr.appendChild(celula(dinheiro(o.preco), 'dir'));
+      const v = o.referencia > 0 ? o.variacao : null;
+      tr.appendChild(celula(v === null ? '—' : pct(v), 'dir ' + (v < 0 ? 'positivo' : (v > 0 ? 'negativo' : ''))));
+      tr.appendChild(celula(t(SITUACAO[o.situacao] || 'situacao.media'), ''));
+      const acao = el('td', 'dir');
+      if (o.url) acao.appendChild(link(t('tabela.comprar'), o.url, 'mini-botao'));
+      tr.appendChild(acao);
+      tbOfertas.appendChild(tr);
+    });
+  }
+
+  $('#an-voltar').addEventListener('click', () => mostrar('busca'));
 
   function botaoAnalise(oferta, classe) {
     const b = el('button', 'btn analise' + (classe ? ' ' + classe : ''));
