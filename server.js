@@ -29,13 +29,11 @@ function tokenValido(req) {
    gravado. */
 const VITRINE = { id: 0 };
 
-function garantirVitrine() {
-  const existente = db.prepare('SELECT id FROM usuarios WHERE admin = 1 ORDER BY id LIMIT 1').get() ||
-    db.prepare('SELECT id FROM usuarios ORDER BY id LIMIT 1').get();
+async function garantirVitrine() {
+  const existente = (await db.get('SELECT id FROM usuarios WHERE admin = 1 ORDER BY id LIMIT 1')) ||
+    (await db.get('SELECT id FROM usuarios ORDER BY id LIMIT 1'));
   if (existente) { VITRINE.id = existente.id; return; }
-  const info = db.prepare(
-    'INSERT INTO usuarios (email, nome, senha_hash, salt, criado_em, admin) VALUES (?,?,?,?,?,1)'
-  ).run('vitrine', 'Vitrine', '', '', new Date().toISOString());
+  const info = (await db.run('INSERT INTO usuarios (email, nome, senha_hash, salt, criado_em, admin) VALUES (?,?,?,?,?,1)', 'vitrine', 'Vitrine', '', '', new Date().toISOString()));
   VITRINE.id = Number(info.lastInsertRowid);
 }
 
@@ -123,20 +121,16 @@ const num = (v) => {
 /* Todo o catalogo publico pertence a vitrine. */
 const donoDaVitrine = () => VITRINE.id;
 
-function listarProdutos(userId) {
-  const produtos = db.prepare('SELECT * FROM produtos WHERE user_id = ? ORDER BY nome').all(userId);
-  return produtos.map((p) => {
-    const melhor = db.prepare(
-      'SELECT loja, preco_total, coletado_em, url, titulo FROM ofertas WHERE produto_id = ? ' +
+async function listarProdutos(userId) {
+  const produtos = (await db.all('SELECT * FROM produtos WHERE user_id = ? ORDER BY nome', userId));
+  return Promise.all(produtos.map(async (p) => {
+    const melhor = (await db.get('SELECT loja, preco_total, coletado_em, url, titulo FROM ofertas WHERE produto_id = ? ' +
       'AND coleta_id IN (SELECT c.id FROM coletas c WHERE c.produto_id = ? AND c.executado_em = ' +
     '  (SELECT MAX(c2.executado_em) FROM coletas c2 WHERE c2.produto_id = c.produto_id AND c2.fonte = c.fonte)) ' +
-      'ORDER BY preco_total LIMIT 1'
-    ).get(p.id, p.id);
-    const total = db.prepare(
-      'SELECT COUNT(*) AS n FROM ofertas WHERE produto_id = ? ' +
+      'ORDER BY preco_total LIMIT 1', p.id, p.id));
+    const total = (await db.get('SELECT COUNT(*) AS n FROM ofertas WHERE produto_id = ? ' +
       'AND coleta_id IN (SELECT c.id FROM coletas c WHERE c.produto_id = ? AND c.executado_em = ' +
-      '  (SELECT MAX(c2.executado_em) FROM coletas c2 WHERE c2.produto_id = c.produto_id AND c2.fonte = c.fonte))'
-    ).get(p.id, p.id);
+      '  (SELECT MAX(c2.executado_em) FROM coletas c2 WHERE c2.produto_id = c.produto_id AND c2.fonte = c.fonte))', p.id, p.id));
     return Object.assign({}, p, {
       menor_preco: melhor ? melhor.preco_total : 0,
       melhor_loja: melhor ? melhor.loja : '',
@@ -145,38 +139,32 @@ function listarProdutos(userId) {
       ultima_coleta: melhor ? melhor.coletado_em : '',
       ofertas: total ? total.n : 0,
     });
-  });
+  }));
 }
 
-function produtoPorId(userId, id) {
-  return listarProdutos(userId).find((p) => p.id === id) || null;
+async function produtoPorId(userId, id) {
+  return (await listarProdutos(userId)).find((p) => p.id === id) || null;
 }
 
 /* Serie diaria: menor preco observado em cada dia (base do grafico e do veredito). */
-function historicoDiario(produtoId, dias) {
-  return db.prepare(
-    'SELECT substr(coletado_em, 1, 10) AS dia, MIN(preco_total) AS minimo, AVG(preco_total) AS media, COUNT(*) AS amostras ' +
-    'FROM ofertas WHERE produto_id = ? GROUP BY dia ORDER BY dia DESC LIMIT ?'
-  ).all(produtoId, dias || 90).reverse();
+async function historicoDiario(produtoId, dias) {
+  return (await db.all('SELECT substr(coletado_em, 1, 10) AS dia, MIN(preco_total) AS minimo, AVG(preco_total) AS media, COUNT(*) AS amostras ' +
+    'FROM ofertas WHERE produto_id = ? GROUP BY dia ORDER BY dia DESC LIMIT ?', produtoId, dias || 90)).reverse();
 }
 
-function detalheProduto(userId, id) {
-  const produto = db.prepare('SELECT * FROM produtos WHERE id = ? AND user_id = ?').get(id, userId);
+async function detalheProduto(userId, id) {
+  const produto = (await db.get('SELECT * FROM produtos WHERE id = ? AND user_id = ?', id, userId));
   if (!produto) return null;
 
-  const ultimaColeta = db.prepare(
-    'SELECT * FROM coletas WHERE produto_id = ? ORDER BY executado_em DESC, id DESC LIMIT 1'
-  ).get(id);
+  const ultimaColeta = (await db.get('SELECT * FROM coletas WHERE produto_id = ? ORDER BY executado_em DESC, id DESC LIMIT 1', id));
 
   // ofertas da coleta mais recente de cada fonte
-  const ofertas = db.prepare(
-    'SELECT * FROM ofertas WHERE produto_id = ? ' +
+  const ofertas = (await db.all('SELECT * FROM ofertas WHERE produto_id = ? ' +
     'AND coleta_id IN (SELECT c.id FROM coletas c WHERE c.produto_id = ? AND c.executado_em = ' +
     '  (SELECT MAX(c2.executado_em) FROM coletas c2 WHERE c2.produto_id = c.produto_id AND c2.fonte = c.fonte)) ' +
-    'ORDER BY preco_total'
-  ).all(id, id);
+    'ORDER BY preco_total', id, id));
 
-  const historico = historicoDiario(id, 90);
+  const historico = await historicoDiario(id, 90);
   const comparacao = analise.compararLojas(ofertas);
   const momento = analise.avaliarMomento(comparacao.melhor ? comparacao.melhor.preco_total : 0, historico);
 
@@ -209,25 +197,21 @@ async function coletarPrecos(userId, produto) {
       erro = e.message;
     }
 
-    const coleta = db.prepare(
-      'INSERT INTO coletas (produto_id, user_id, fonte, executado_em, encontrados, erro) VALUES (?,?,?,?,?,?)'
-    ).run(produto.id, userId, coletor.nome, agora, ofertas.length, erro);
+    const coleta = (await db.run('INSERT INTO coletas (produto_id, user_id, fonte, executado_em, encontrados, erro) VALUES (?,?,?,?,?,?)', produto.id, userId, coletor.nome, agora, ofertas.length, erro));
 
-    const inserir = db.prepare(
-      'INSERT INTO ofertas (coleta_id, produto_id, user_id, loja, titulo, preco, preco_de, frete, preco_total, condicao, vendedor, reputacao, vendidos, parcelas, url, id_externo, manual, coletado_em) ' +
-      'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)'
-    );
-    ofertas.forEach((o) => {
-      inserir.run(
+    for (const o of ofertas) {
+      await db.run(
+        'INSERT INTO ofertas (coleta_id, produto_id, user_id, loja, titulo, preco, preco_de, frete, preco_total, condicao, vendedor, reputacao, vendidos, parcelas, url, id_externo, manual, coletado_em) ' +
+        'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)',
         Number(coleta.lastInsertRowid), produto.id, userId, o.loja, o.titulo, o.preco, Number(o.preco_de) || 0,
         o.frete, o.preco_total, o.condicao, o.vendedor, o.reputacao, o.vendidos, o.parcelas, urlSegura(o.url), o.id_externo, agora
       );
-    });
+    }
 
     relatorio.push({ fonte: coletor.nome, encontrados: ofertas.length, erro });
   }
 
-  db.prepare('UPDATE produtos SET atualizado_em = ? WHERE id = ?').run(agora, produto.id);
+  (await db.run('UPDATE produtos SET atualizado_em = ? WHERE id = ?', agora, produto.id));
   return { executado_em: agora, relatorio };
 }
 
@@ -267,10 +251,8 @@ function resultadoUtil(linha) {
   }
 }
 
-function buscaRecente(termo) {
-  const linha = db.prepare(
-    "SELECT * FROM buscas WHERE termo = ? AND status = 'pronta' ORDER BY atualizado_em DESC LIMIT 1"
-  ).get(termo);
+async function buscaRecente(termo) {
+  const linha = (await db.get("SELECT * FROM buscas WHERE termo = ? AND status = 'pronta' ORDER BY atualizado_em DESC LIMIT 1", termo));
   if (!linha) return null;
   if (Date.now() - new Date(linha.atualizado_em).getTime() >= VALIDADE_BUSCA_MS) return null;
   return resultadoUtil(linha) ? linha : null;
@@ -283,14 +265,12 @@ function buscaRecente(termo) {
 const EXECUCAO_MAX_MS = 3 * 60 * 1000;
 const PENDENTE_MAX_MS = 15 * 60 * 1000;
 
-function devolverBuscasTravadas() {
+async function devolverBuscasTravadas() {
   const travadas = new Date(Date.now() - EXECUCAO_MAX_MS).toISOString();
-  db.prepare("UPDATE buscas SET status = 'pendente' WHERE status = 'executando' AND atualizado_em < ?")
-    .run(travadas);
+  (await db.run("UPDATE buscas SET status = 'pendente' WHERE status = 'executando' AND atualizado_em < ?", travadas));
 
   const antigas = new Date(Date.now() - PENDENTE_MAX_MS).toISOString();
-  db.prepare("UPDATE buscas SET status = 'falhou', erro = ?, atualizado_em = ? WHERE status = 'pendente' AND criado_em < ?")
-    .run('A busca expirou antes de o coletor atender.', new Date().toISOString(), antigas);
+  (await db.run("UPDATE buscas SET status = 'falhou', erro = ?, atualizado_em = ? WHERE status = 'pendente' AND criado_em < ?", 'A busca expirou antes de o coletor atender.', new Date().toISOString(), antigas));
 }
 
 /* Tenta executar aqui mesmo. Devolve true quando conseguiu falar com alguma loja. */
@@ -323,16 +303,13 @@ async function executarBuscaLocalmente(id, termo) {
     poucas_correspondencias: Boolean(filtrado.poucasCorrespondencias),
     duracao_ms: duracao,
   };
-  db.prepare("UPDATE buscas SET status = 'pronta', resultado = ?, erro = '', origem = 'servidor', atualizado_em = ? WHERE id = ?")
-    .run(JSON.stringify(resultado), new Date().toISOString(), id);
+  (await db.run("UPDATE buscas SET status = 'pronta', resultado = ?, erro = '', origem = 'servidor', atualizado_em = ? WHERE id = ?", JSON.stringify(resultado), new Date().toISOString(), id));
   return true;
 }
 
 /* ---------- metricas de operacao (capitulo de resultados do TCC) ---------- */
-function calcularMetricas() {
-  const buscas = db.prepare(
-    "SELECT termo, status, origem, resultado, criado_em, atualizado_em FROM buscas ORDER BY id DESC LIMIT 500"
-  ).all();
+async function calcularMetricas() {
+  const buscas = (await db.all("SELECT termo, status, origem, resultado, criado_em, atualizado_em FROM buscas ORDER BY id DESC LIMIT 500"));
 
   const porLoja = new Map();
   const duracoes = [];
@@ -394,16 +371,12 @@ function calcularMetricas() {
       : (ordenadas[ordenadas.length / 2 - 1] + ordenadas[ordenadas.length / 2]) / 2)
     : 0;
 
-  const porDia = db.prepare(
-    "SELECT substr(criado_em, 1, 10) AS dia, COUNT(*) AS buscas FROM buscas GROUP BY dia ORDER BY dia DESC LIMIT 30"
-  ).all().reverse();
+  const porDia = (await db.all("SELECT substr(criado_em, 1, 10) AS dia, COUNT(*) AS buscas FROM buscas GROUP BY dia ORDER BY dia DESC LIMIT 30")).reverse();
 
-  const termos = db.prepare(
-    "SELECT termo, COUNT(*) AS vezes FROM buscas GROUP BY termo ORDER BY vezes DESC, MAX(id) DESC LIMIT 10"
-  ).all();
+  const termos = (await db.all("SELECT termo, COUNT(*) AS vezes FROM buscas GROUP BY termo ORDER BY vezes DESC, MAX(id) DESC LIMIT 10"));
 
   return {
-    buscas_total: db.prepare('SELECT COUNT(*) AS n FROM buscas').get().n,
+    buscas_total: (await db.get('SELECT COUNT(*) AS n FROM buscas')).n,
     buscas_analisadas: buscas.length,
     buscas_prontas: prontas,
     tempo_medio_s: duracoes.length ? duracoes.reduce((a, b) => a + b, 0) / duracoes.length / 1000 : 0,
@@ -414,8 +387,8 @@ function calcularMetricas() {
     lojas,
     por_dia: porDia,
     termos,
-    produtos_monitorados: db.prepare('SELECT COUNT(*) AS n FROM produtos').get().n,
-    ofertas_historico: db.prepare('SELECT COUNT(*) AS n FROM ofertas').get().n,
+    produtos_monitorados: (await db.get('SELECT COUNT(*) AS n FROM produtos')).n,
+    ofertas_historico: (await db.get('SELECT COUNT(*) AS n FROM ofertas')).n,
   };
 }
 
@@ -456,21 +429,19 @@ async function api(req, res, rota) {
     /* fila de buscas pedidas pelos visitantes */
     if (rota === '/api/ingestao/buscas' && metodo === 'GET') {
       ultimoSinalDoAgente = Date.now();
-      devolverBuscasTravadas();
-      const linhas = db.prepare(
-        "SELECT id, termo FROM buscas WHERE status = 'pendente' ORDER BY id LIMIT 10"
-      ).all();
+      await devolverBuscasTravadas();
+      const linhas = (await db.all("SELECT id, termo FROM buscas WHERE status = 'pendente' ORDER BY id LIMIT 10"));
       const agora = new Date().toISOString();
-      linhas.forEach((b) => {
-        db.prepare("UPDATE buscas SET status = 'executando', atualizado_em = ? WHERE id = ?").run(agora, b.id);
-      });
+      for (const b of linhas) {
+        await db.run("UPDATE buscas SET status = 'executando', atualizado_em = ? WHERE id = ?", agora, b.id);
+      }
       return json(res, 200, linhas);
     }
 
     let mIng = rota.match(/^\/api\/ingestao\/buscas\/(\d+)$/);
     if (mIng && metodo === 'POST') {
       const id = Number(mIng[1]);
-      const linha = db.prepare('SELECT * FROM buscas WHERE id = ?').get(id);
+      const linha = (await db.get('SELECT * FROM buscas WHERE id = ?', id));
       if (!linha) return json(res, 404, { erro: 'Busca nao encontrada.' });
 
       const c = await lerCorpo(req);
@@ -489,20 +460,17 @@ async function api(req, res, rota) {
         duracao_ms: Number(c.duracao_ms) || 0,
       };
 
-      db.prepare('UPDATE buscas SET status = ?, resultado = ?, erro = ?, origem = ?, atualizado_em = ? WHERE id = ?')
-        .run(
-          encontrou || !c.erro ? 'pronta' : 'falhou',
+      (await db.run('UPDATE buscas SET status = ?, resultado = ?, erro = ?, origem = ?, atualizado_em = ? WHERE id = ?', encontrou || !c.erro ? 'pronta' : 'falhou',
           JSON.stringify(resultado),
           String(c.erro || ''),
           'agente',
           new Date().toISOString(),
-          id
-        );
+          id));
       return json(res, 200, { ok: true, ofertas: todas.length });
     }
 
     if (rota === '/api/ingestao/pendentes' && metodo === 'GET') {
-      const linhas = db.prepare('SELECT id, user_id, nome, termo FROM produtos ORDER BY id').all();
+      const linhas = (await db.all('SELECT id, user_id, nome, termo FROM produtos ORDER BY id'));
       return json(res, 200, linhas);
     }
 
@@ -515,49 +483,43 @@ async function api(req, res, rota) {
       if (!nome) return json(res, 400, { erro: 'Informe o nome do produto.' });
 
       const dono = { id: VITRINE.id };
-      const existente = db.prepare('SELECT * FROM produtos WHERE user_id = ? AND termo = ?').get(dono.id, termo);
+      const existente = (await db.get('SELECT * FROM produtos WHERE user_id = ? AND termo = ?', dono.id, termo));
       if (existente) return json(res, 200, { criado: false, produto: existente });
 
       const agora = new Date().toISOString();
-      const info = db.prepare(
-        'INSERT INTO produtos (user_id, nome, termo, categoria, preco_alvo, criado_em, atualizado_em) VALUES (?,?,?,?,?,?,?)'
-      ).run(dono.id, nome, termo, String(c.categoria || 'Outros'), num(c.preco_alvo) || 0, agora, agora);
-      const produto = db.prepare('SELECT * FROM produtos WHERE id = ?').get(Number(info.lastInsertRowid));
+      const info = (await db.run('INSERT INTO produtos (user_id, nome, termo, categoria, preco_alvo, criado_em, atualizado_em) VALUES (?,?,?,?,?,?,?)', dono.id, nome, termo, String(c.categoria || 'Outros'), num(c.preco_alvo) || 0, agora, agora));
+      const produto = (await db.get('SELECT * FROM produtos WHERE id = ?', Number(info.lastInsertRowid)));
       return json(res, 201, { criado: true, produto });
     }
 
     if (rota === '/api/ingestao' && metodo === 'POST') {
       const corpo = await lerCorpo(req);
-      const produto = db.prepare('SELECT * FROM produtos WHERE id = ?').get(Number(corpo.produto_id));
+      const produto = (await db.get('SELECT * FROM produtos WHERE id = ?', Number(corpo.produto_id)));
       if (!produto) return json(res, 404, { erro: 'Produto nao encontrado.' });
       const fonte = String(corpo.fonte || '').trim();
       if (!fonte) return json(res, 400, { erro: 'Informe a fonte.' });
 
       const ofertas = Array.isArray(corpo.ofertas) ? corpo.ofertas : [];
       const agora = new Date().toISOString();
-      const coleta = db.prepare(
-        'INSERT INTO coletas (produto_id, user_id, fonte, executado_em, encontrados, erro) VALUES (?,?,?,?,?,?)'
-      ).run(produto.id, produto.user_id, fonte, agora, ofertas.length, String(corpo.erro || ''));
+      const coleta = (await db.run('INSERT INTO coletas (produto_id, user_id, fonte, executado_em, encontrados, erro) VALUES (?,?,?,?,?,?)', produto.id, produto.user_id, fonte, agora, ofertas.length, String(corpo.erro || '')));
 
-      const inserir = db.prepare(
-        'INSERT INTO ofertas (coleta_id, produto_id, user_id, loja, titulo, preco, preco_de, frete, preco_total, condicao, vendedor, reputacao, vendidos, parcelas, url, id_externo, manual, coletado_em) ' +
-        'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)'
-      );
       let gravadas = 0;
-      ofertas.forEach((o) => {
+      for (const o of ofertas) {
         const preco = num(o.preco);
         const frete = num(o.frete) || 0;
-        if (!Number.isFinite(preco) || preco <= 0) return;
-        inserir.run(
+        if (!Number.isFinite(preco) || preco <= 0) continue;
+        await db.run(
+          'INSERT INTO ofertas (coleta_id, produto_id, user_id, loja, titulo, preco, preco_de, frete, preco_total, condicao, vendedor, reputacao, vendidos, parcelas, url, id_externo, manual, coletado_em) ' +
+          'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)',
           Number(coleta.lastInsertRowid), produto.id, produto.user_id,
           String(o.loja || fonte), String(o.titulo || ''), preco, num(o.preco_de) || 0, frete, preco + frete,
           o.condicao === 'usado' ? 'usado' : 'novo', String(o.vendedor || ''), String(o.reputacao || ''),
           Number(o.vendidos) || 0, Number(o.parcelas) || 0, urlSegura(o.url), String(o.id_externo || ''), agora
         );
         gravadas += 1;
-      });
+      }
 
-      db.prepare('UPDATE produtos SET atualizado_em = ? WHERE id = ?').run(agora, produto.id);
+      (await db.run('UPDATE produtos SET atualizado_em = ? WHERE id = ?', agora, produto.id));
       return json(res, 201, { ok: true, produto: produto.nome, fonte, gravadas });
     }
 
@@ -571,7 +533,7 @@ async function api(req, res, rota) {
     if (t.length < 2) return json(res, 400, { erro: 'Digite o que voce quer procurar.' });
 
     // resultado guardado nao custa consulta nenhuma: responde antes do limite
-    const recente = buscaRecente(t);
+    const recente = await buscaRecente(t);
     if (recente) return json(res, 200, formatarBusca(recente));
 
     if (!podeBuscar(req)) {
@@ -579,9 +541,7 @@ async function api(req, res, rota) {
     }
 
     const agora = new Date().toISOString();
-    const info = db.prepare(
-      "INSERT INTO buscas (termo, status, resultado, erro, origem, criado_em, atualizado_em) VALUES (?,'pendente','','','',?,?)"
-    ).run(t, agora, agora);
+    const info = (await db.run("INSERT INTO buscas (termo, status, resultado, erro, origem, criado_em, atualizado_em) VALUES (?,'pendente','','','',?,?)", t, agora, agora));
     const id = Number(info.lastInsertRowid);
 
     // com agente ativo, a busca vai para a fila dele (mais lojas);
@@ -592,26 +552,24 @@ async function api(req, res, rota) {
       } catch (e) { /* segue para a fila do agente */ }
     }
 
-    const linha = db.prepare('SELECT * FROM buscas WHERE id = ?').get(id);
+    const linha = (await db.get('SELECT * FROM buscas WHERE id = ?', id));
     return json(res, linha.status === 'pronta' ? 200 : 202, formatarBusca(linha));
   }
 
   let mBusca = rota.match(/^\/api\/buscas\/(\d+)$/);
   if (mBusca && metodo === 'GET') {
-    const linha = db.prepare('SELECT * FROM buscas WHERE id = ?').get(Number(mBusca[1]));
+    const linha = (await db.get('SELECT * FROM buscas WHERE id = ?', Number(mBusca[1])));
     if (!linha) return json(res, 404, { erro: 'Busca nao encontrada.' });
     return json(res, 200, formatarBusca(linha));
   }
 
   if (rota === '/api/metricas' && metodo === 'GET') {
-    return json(res, 200, calcularMetricas());
+    return json(res, 200, await calcularMetricas());
   }
 
   if (rota === '/api/buscas/populares' && metodo === 'GET') {
-    const linhas = db.prepare(
-      "SELECT termo, MAX(atualizado_em) AS quando, COUNT(*) AS vezes FROM buscas " +
-      "WHERE status = 'pronta' GROUP BY termo ORDER BY quando DESC LIMIT 12"
-    ).all();
+    const linhas = (await db.all("SELECT termo, MAX(atualizado_em) AS quando, COUNT(*) AS vezes FROM buscas " +
+      "WHERE status = 'pronta' GROUP BY termo ORDER BY quando DESC LIMIT 12"));
     return json(res, 200, linhas);
   }
 
@@ -635,12 +593,12 @@ async function api(req, res, rota) {
   }
 
   if (rota === '/api/produtos' && metodo === 'GET') {
-    return json(res, 200, listarProdutos(VITRINE.id));
+    return json(res, 200, await listarProdutos(VITRINE.id));
   }
 
   const mPublico = rota.match(/^\/api\/produtos\/(\d+)$/);
   if (mPublico && metodo === 'GET') {
-    const detalhe = detalheProduto(VITRINE.id, Number(mPublico[1]));
+    const detalhe = await detalheProduto(VITRINE.id, Number(mPublico[1]));
     if (!detalhe) return json(res, 404, { erro: 'Produto nao encontrado.' });
     return json(res, 200, detalhe);
   }
@@ -657,38 +615,33 @@ async function api(req, res, rota) {
     const alvo = num(preco_alvo) || 0;
     if (!Number.isFinite(alvo) || alvo < 0) return json(res, 400, { erro: 'Preco alvo invalido.' });
     const agora = new Date().toISOString();
-    const info = db.prepare(
-      'INSERT INTO produtos (user_id, nome, termo, categoria, preco_alvo, criado_em, atualizado_em) VALUES (?,?,?,?,?,?,?)'
-    ).run(VITRINE.id, n, t, String(categoria || 'Outros'), alvo, agora, agora);
-    return json(res, 201, produtoPorId(VITRINE.id, Number(info.lastInsertRowid)));
+    const info = (await db.run('INSERT INTO produtos (user_id, nome, termo, categoria, preco_alvo, criado_em, atualizado_em) VALUES (?,?,?,?,?,?,?)', VITRINE.id, n, t, String(categoria || 'Outros'), alvo, agora, agora));
+    return json(res, 201, await produtoPorId(VITRINE.id, Number(info.lastInsertRowid)));
   }
 
   let m = rota.match(/^\/api\/produtos\/(\d+)$/);
   if (m) {
     const id = Number(m[1]);
-    const produto = db.prepare('SELECT * FROM produtos WHERE id = ? AND user_id = ?').get(id, VITRINE.id);
+    const produto = (await db.get('SELECT * FROM produtos WHERE id = ? AND user_id = ?', id, VITRINE.id));
     if (!produto) return json(res, 404, { erro: 'Produto nao encontrado.' });
 
     if (metodo === 'PATCH') {
       const c = await lerCorpo(req);
       const alvo = c.preco_alvo === undefined ? produto.preco_alvo : num(c.preco_alvo);
       if (!Number.isFinite(alvo) || alvo < 0) return json(res, 400, { erro: 'Preco alvo invalido.' });
-      db.prepare('UPDATE produtos SET nome = ?, termo = ?, categoria = ?, preco_alvo = ?, atualizado_em = ? WHERE id = ?')
-        .run(
-          c.nome === undefined ? produto.nome : String(c.nome).trim() || produto.nome,
+      (await db.run('UPDATE produtos SET nome = ?, termo = ?, categoria = ?, preco_alvo = ?, atualizado_em = ? WHERE id = ?', c.nome === undefined ? produto.nome : String(c.nome).trim() || produto.nome,
           c.termo === undefined ? produto.termo : String(c.termo).trim() || produto.termo,
           c.categoria === undefined ? produto.categoria : String(c.categoria),
           alvo,
           new Date().toISOString(),
-          id
-        );
-      return json(res, 200, produtoPorId(VITRINE.id, id));
+          id));
+      return json(res, 200, await produtoPorId(VITRINE.id, id));
     }
 
     if (metodo === 'DELETE') {
-      db.prepare('DELETE FROM ofertas WHERE produto_id = ? AND user_id = ?').run(id, VITRINE.id);
-      db.prepare('DELETE FROM coletas WHERE produto_id = ? AND user_id = ?').run(id, VITRINE.id);
-      db.prepare('DELETE FROM produtos WHERE id = ?').run(id);
+      (await db.run('DELETE FROM ofertas WHERE produto_id = ? AND user_id = ?', id, VITRINE.id));
+      (await db.run('DELETE FROM coletas WHERE produto_id = ? AND user_id = ?', id, VITRINE.id));
+      (await db.run('DELETE FROM produtos WHERE id = ?', id));
       return json(res, 200, { ok: true });
     }
   }
@@ -697,17 +650,17 @@ async function api(req, res, rota) {
   m = rota.match(/^\/api\/produtos\/(\d+)\/coletar$/);
   if (m && metodo === 'POST') {
     const id = Number(m[1]);
-    const produto = db.prepare('SELECT * FROM produtos WHERE id = ? AND user_id = ?').get(id, VITRINE.id);
+    const produto = (await db.get('SELECT * FROM produtos WHERE id = ? AND user_id = ?', id, VITRINE.id));
     if (!produto) return json(res, 404, { erro: 'Produto nao encontrado.' });
     const resultado = await coletarPrecos(VITRINE.id, produto);
-    return json(res, 200, Object.assign(resultado, { detalhe: detalheProduto(VITRINE.id, id) }));
+    return json(res, 200, Object.assign(resultado, { detalhe: await detalheProduto(VITRINE.id, id) }));
   }
 
   /* ----- oferta lancada a mao (plano B e lojas sem API) ----- */
   m = rota.match(/^\/api\/produtos\/(\d+)\/ofertas$/);
   if (m && metodo === 'POST') {
     const id = Number(m[1]);
-    const produto = db.prepare('SELECT * FROM produtos WHERE id = ? AND user_id = ?').get(id, VITRINE.id);
+    const produto = (await db.get('SELECT * FROM produtos WHERE id = ? AND user_id = ?', id, VITRINE.id));
     if (!produto) return json(res, 404, { erro: 'Produto nao encontrado.' });
 
     const c = await lerCorpo(req);
@@ -719,24 +672,18 @@ async function api(req, res, rota) {
     if (!Number.isFinite(frete) || frete < 0) return json(res, 400, { erro: 'Frete invalido.' });
 
     const agora = new Date().toISOString();
-    const coleta = db.prepare(
-      "INSERT INTO coletas (produto_id, user_id, fonte, executado_em, encontrados, erro) VALUES (?,?,?,?,1,'')"
-    ).run(id, VITRINE.id, loja, agora);
+    const coleta = (await db.run("INSERT INTO coletas (produto_id, user_id, fonte, executado_em, encontrados, erro) VALUES (?,?,?,?,1,'')", id, VITRINE.id, loja, agora));
 
-    db.prepare(
-      'INSERT INTO ofertas (coleta_id, produto_id, user_id, loja, titulo, preco, frete, preco_total, condicao, vendedor, reputacao, vendidos, parcelas, url, id_externo, manual, coletado_em) ' +
-      "VALUES (?,?,?,?,?,?,?,?,?,'','',0,0,?,'',1,?)"
-    ).run(
-      Number(coleta.lastInsertRowid), id, VITRINE.id, loja, String(c.titulo || produto.nome),
+    (await db.run('INSERT INTO ofertas (coleta_id, produto_id, user_id, loja, titulo, preco, frete, preco_total, condicao, vendedor, reputacao, vendidos, parcelas, url, id_externo, manual, coletado_em) ' +
+      "VALUES (?,?,?,?,?,?,?,?,?,'','',0,0,?,'',1,?)", Number(coleta.lastInsertRowid), id, VITRINE.id, loja, String(c.titulo || produto.nome),
       preco, frete, preco + frete, ['novo', 'usado'].indexOf(c.condicao) === -1 ? 'novo' : c.condicao,
-      String(c.url || ''), agora
-    );
-    return json(res, 201, detalheProduto(VITRINE.id, id));
+      String(c.url || ''), agora));
+    return json(res, 201, await detalheProduto(VITRINE.id, id));
   }
 
   m = rota.match(/^\/api\/ofertas\/(\d+)$/);
   if (m && metodo === 'DELETE') {
-    const info = db.prepare('DELETE FROM ofertas WHERE id = ? AND user_id = ?').run(Number(m[1]), VITRINE.id);
+    const info = (await db.run('DELETE FROM ofertas WHERE id = ? AND user_id = ?', Number(m[1]), VITRINE.id));
     if (!info.changes) return json(res, 404, { erro: 'Oferta nao encontrada.' });
     return json(res, 200, { ok: true });
   }
@@ -806,8 +753,15 @@ const servidor = http.createServer((req, res) => {
   });
 });
 
-garantirVitrine();
-
-servidor.listen(PORTA, ENDERECO, () => {
-  console.log('\n  Comparador de Precos rodando em  http://localhost:' + PORTA + '\n  (Ctrl+C para parar)\n');
+/* o banco precisa estar pronto (tabelas criadas e vitrine existente) antes de
+   atender qualquer pedido */
+(async () => {
+  await db.iniciar();
+  await garantirVitrine();
+  servidor.listen(PORTA, ENDERECO, () => {
+    console.log('\n  Comparador de Precos rodando em  http://localhost:' + PORTA + '\n  (Ctrl+C para parar)\n');
+  });
+})().catch((e) => {
+  console.error('\n  Nao consegui preparar o banco: ' + e.message + '\n');
+  process.exit(1);
 });
