@@ -615,6 +615,20 @@ async function api(req, res, rota) {
     return json(res, 200, linhas);
   }
 
+  /* ---------- dados enriquecidos pela IA (Supabase, so leitura) ----------
+     Respondem 503 enquanto DATABASE_URL nao estiver definida no servidor. */
+  if (rota.indexOf('/api/ia/') === 0 && metodo === 'GET') {
+    const ia = require('./ia.js');
+    if (!ia.disponivel()) return json(res, 503, { erro: 'Banco nao configurado: defina DATABASE_URL no servidor.' });
+    const parametros = Object.fromEntries(new URL(req.url, 'http://x').searchParams);
+    try {
+      if (rota === '/api/ia/resumo') return json(res, 200, await ia.resumo());
+      if (rota === '/api/ia/ofertas') return json(res, 200, await ia.ofertas(parametros));
+    } catch (e) {
+      return json(res, 500, { erro: 'Falha ao ler o banco: ' + e.message });
+    }
+  }
+
   /* ---------- leitura publica: o catalogo da vitrine ---------- */
   if (rota === '/api/fontes' && metodo === 'GET') {
     return json(res, 200, coletores.map((c) => ({ chave: c.chave, nome: c.nome, configurado: c.configurado() })));

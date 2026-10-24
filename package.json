@@ -7,9 +7,13 @@
   "scripts": {
     "start": "node server.js",
     "coletar": "node agente.js",
-    "token": "node agente.js --token"
+    "token": "node agente.js --token",
+    "importar-ia": "node scripts/importar-csv.js"
   },
   "engines": {
     "node": ">=22.5"
+  },
+  "dependencies": {
+    "pg": "^8.13.0"
   }
 }

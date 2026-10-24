@@ -3,7 +3,7 @@ services:
     name: meus-investimentos
     runtime: node
     plan: free               # ATENCAO: no plano free nao existe disco persistente.
-    buildCommand: ""         # sem dependencias para instalar
+    buildCommand: "npm install --omit=dev"   # instala o driver pg (banco Supabase)
     startCommand: node server.js
     envVars:
       - key: NODE_ENV
@@ -13,6 +13,9 @@ services:
       - key: ML_CLIENT_ID
         sync: false
       - key: ML_CLIENT_SECRET
+        sync: false
+      # String de conexao do Supabase (Connect -> Session pooler). Sem ela, o site usa o SQLite local.
+      - key: DATABASE_URL
         sync: false
       # Token do agente coletor: e o que autoriza a escrita (o site nao tem login).
       # Preencha o valor no painel do Render (Environment), nao aqui no repositorio.
