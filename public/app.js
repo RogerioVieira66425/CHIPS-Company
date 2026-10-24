@@ -919,7 +919,7 @@ const App = (function () {
       tr.appendChild(celula(dinheiro(o.preco), 'cen'));
       const v = o.referencia > 0 ? o.variacao : null;
       tr.appendChild(celula(v === null ? '—' : pct(v), 'cen ' + (v < 0 ? 'positivo' : (v > 0 ? 'negativo' : ''))));
-      tr.appendChild(celula(t(SITUACAO[o.situacao] || 'situacao.media'), ''));
+      tr.appendChild(celula(t(SITUACAO[o.situacao] || 'situacao.media'), 'cen'));
       const acao = el('td', 'dir');
       if (o.url) acao.appendChild(link(t('tabela.comprar'), o.url, 'mini-botao botao-acao'));
       tr.appendChild(acao);
