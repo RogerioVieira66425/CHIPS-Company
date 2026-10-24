@@ -147,13 +147,20 @@ function mesmoModelo(a, b) {
 }
 
 async function analiseDoProduto(produto, titulo) {
-  if (!produto) return null;
-  const linhas = await db.all(
+  const porProduto = (nome) => db.all(
     'SELECT nome_produto_padronizado, nome_oferta_original, nome_loja, preco, preco_referencia_base, ' +
     '  variacao_vs_base, situacao_compra, url_oferta FROM ofertas_ia WHERE nome_produto_padronizado = ? ' +
     '  ORDER BY preco ASC LIMIT 400',
-    produto
+    nome
   );
+
+  let linhas = produto ? await porProduto(produto) : [];
+  // o nome do produto pode nao ser o da base (resultado guardado antes, por exemplo):
+  // entao procura o produto pelo titulo da oferta que a pessoa abriu
+  if (!linhas.length && titulo) {
+    const achado = await db.get('SELECT nome_produto_padronizado AS produto FROM ofertas_ia WHERE nome_oferta_original = ? LIMIT 1', titulo);
+    if (achado) linhas = await porProduto(achado.produto);
+  }
   if (!linhas.length) return null;
 
   // o agrupamento da IA junta produtos diferentes (ex.: placa-mae e placa decorativa).
