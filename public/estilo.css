@@ -928,12 +928,12 @@ body {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .row .t:hover { text-decoration: underline; }
-.row .p { text-align: right; }
+.row .p { text-align: center; }
 /* coluna do desconto: selo centralizado e uma barra quando nao ha desconto */
 .row .d { justify-self: center; text-align: center; }
 .row .sem-desconto { color: var(--muted); font-weight: 700; }
 .row .p .price { font-size: 17px; }
-.row .a { display: flex; gap: 8px; justify-content: flex-end; }
+.row .a { display: flex; gap: 8px; justify-content: center; }
 .row .go { height: 36px; font-size: 13px; flex: 1; }
 .row .btn.analise { height: 36px; padding: 0 12px; }
 .row.win .price { color: var(--pos); }
