@@ -928,7 +928,10 @@ body {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .row .t:hover { text-decoration: underline; }
-.row .p { text-align: center; }
+.row .p { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.row .p > div { display: flex; flex-direction: column; align-items: center; }
+/* sem preco antigo, nao reserva a linha de cima: o preco fica no centro da linha */
+.row .old:empty { min-height: 0; }
 /* coluna do desconto: selo centralizado e uma barra quando nao ha desconto */
 .row .d { justify-self: center; text-align: center; }
 .row .sem-desconto { color: var(--muted); font-weight: 700; }
