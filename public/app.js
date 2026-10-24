@@ -894,6 +894,15 @@ const App = (function () {
     btnAcomp.classList.toggle('oculto', !acompanhado);
     btnAcomp.onclick = acompanhado ? () => abrirDetalhe(acompanhado.id) : null;
 
+    // grafico de linha da evolucao: so existe para produto acompanhado, com coletas em dias diferentes
+    const areaGrafico = $('#an-grafico');
+    areaGrafico.innerHTML = '';
+    if (acompanhado) {
+      pedir('/api/produtos/' + acompanhado.id)
+        .then((det) => renderGrafico(det.historico, '#an-grafico'))
+        .catch(() => {});
+    }
+
     const tbLojas = $('#an-lojas');
     tbLojas.innerHTML = '';
     d.lojas.forEach((l) => {
@@ -1245,8 +1254,8 @@ const App = (function () {
     });
   }
 
-  function renderGrafico(historico) {
-    const destino = $('#det-grafico');
+  function renderGrafico(historico, seletor) {
+    const destino = $(seletor || '#det-grafico');
     destino.innerHTML = '';
     if (!historico || historico.length < 2) {
       destino.appendChild(el('p', 'vazio', 'O gráfico aparece quando houver coletas em pelo menos dois dias diferentes.'));
