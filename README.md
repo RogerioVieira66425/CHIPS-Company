@@ -220,6 +220,25 @@ testado na KaBuM!, Pichau e Terabyte, com digitação caractere a caractere, cli
 janela visível. Por isso o frete continua entrando como zero (ou pelo lançamento manual), e o
 sistema deixa claro na tela quando o valor é apenas o preço do produto.
 
+## Banco de dados
+
+O sistema grava em **Postgres no Supabase** quando a variável `DATABASE_URL` está definida
+(string do botão *Connect* → *Session pooler*). Sem ela, usa um arquivo SQLite local
+(`precos.db`), para testar na sua máquina.
+
+- As tabelas são criadas sozinhas na primeira inicialização, nos dois casos.
+- No Render, a variável fica em *Environment*. No plano gratuito o SQLite some a cada deploy;
+  o Supabase não.
+- Os dados enriquecidos pela IA (`ofertas_ia`) são carregados a partir do CSV:
+
+```
+npm run importar-ia -- "C:\Users\roger\Downloads\dados_enriquecidos_ia.csv"
+```
+
+(com `DATABASE_URL` definida na sessão do PowerShell: `$env:DATABASE_URL="..."`)
+
+Leitura: `/api/ia/resumo` e `/api/ia/ofertas?situacao=Boa%20Compra&loja=KaBuM!&q=teclado`.
+
 ## Segurança
 
 O site é público e não guarda conta nem senha de ninguém: não há login, sessão nem dado
