@@ -1024,3 +1024,7 @@ body {
   font-size: 13px; color: var(--texto-fraco);
 }
 .an-legenda #an-min, .an-legenda #an-max { font-weight: 700; color: var(--texto); }
+
+/* botao de compra nas tabelas: cor de acao da marca */
+.mini-botao.botao-acao { background: var(--acao); border-color: var(--acao); color: #ffffff; font-weight: 700; }
+.mini-botao.botao-acao:hover { background: var(--acao-clara); border-color: var(--acao-clara); color: #ffffff; }
