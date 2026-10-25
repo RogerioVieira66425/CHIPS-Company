@@ -542,7 +542,7 @@ async function api(req, res, rota) {
 
   /* ---------- leitura publica: o catalogo da vitrine ---------- */
   if (rota === '/api/fontes' && metodo === 'GET') {
-    const lojas = await db.all('SELECT DISTINCT nome_loja AS nome FROM ofertas_ia ORDER BY nome_loja');
+    const lojas = await db.all('SELECT DISTINCT loja AS nome FROM ofertas_dia ORDER BY nome');
     return json(res, 200, lojas.map((l) => ({ nome: l.nome, configurado: true })));
   }
 
