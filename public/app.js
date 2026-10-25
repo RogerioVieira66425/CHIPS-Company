@@ -1289,11 +1289,19 @@ const App = (function () {
       svg.appendChild(rotulo);
     });
 
+    // sombra da linha: um filtro do proprio SVG, desfocado e deslocado para baixo
+    const defs = document.createElementNS(ns, 'defs');
+    defs.innerHTML = '<filter id="sombra-linha" x="-10%" y="-20%" width="120%" height="150%">' +
+      '<feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#4c8dff" flood-opacity="0.45"/></filter>';
+    svg.appendChild(defs);
+
     const linha = document.createElementNS(ns, 'polyline');
     linha.setAttribute('points', historico.map((h, i) => x(i) + ',' + y(h.minimo)).join(' '));
     linha.setAttribute('fill', 'none');
     linha.setAttribute('stroke', '#4c8dff');
-    linha.setAttribute('stroke-width', '2');
+    linha.setAttribute('stroke-width', '3');
+    linha.setAttribute('stroke-linejoin', 'round');
+    linha.setAttribute('filter', 'url(#sombra-linha)');
     svg.appendChild(linha);
 
     historico.forEach((h, i) => {
