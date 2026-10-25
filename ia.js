@@ -262,15 +262,15 @@ async function analiseDoProduto(produto, titulo) {
     amostras: v.length,
   }));
 
-  const referencias = coletas.map((r) => Number(r.preco_medio_historico)).filter((v) => v > 0);
-  const situacao = avaliarPeloHistorico(escolhida.preco, precos, historico.length, escolhida.situacao);
+  // a avaliacao vale para a oferta escolhida e para cada oferta da lista, com o mesmo criterio
+  ofertas.forEach((o) => { o.situacao = avaliarPeloHistorico(o.preco, precos, historico.length, o.situacao); });
   return {
     produto: nome,
     dia,
     oferta: escolhida,
-    situacao,
-    referencia: arredonda(mediana(referencias)),
-    variacao_pct: arredonda(escolhida.variacao),
+    situacao: escolhida.situacao,
+    referencia: arredonda(mediana(precos)),
+    variacao_pct: arredonda(((escolhida.preco - mediana(precos)) / mediana(precos)) * 100),
     estatisticas: {
       ofertas: precos.length,
       menor: arredonda(Math.min(...precos)),
