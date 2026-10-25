@@ -1060,7 +1060,7 @@ body {
 .tabela-lojas th, .tabela-lojas td { border: 1px solid #0a0a0b; }
 .tabela-lojas th:first-child, .tabela-lojas td:first-child { text-align: center; }
 .tabela th.h-preto { background: #0a0a0b; color: #fff; }
-.tabela-lojas td.c-cinza { background: #f1f3f6; }
+.tabela-lojas td.c-cinza { background: #ffffff; }
 .tabela-lojas td.c-verde { background: #e6f4ee; color: var(--verde); font-weight: 700; }
 .tabela-lojas td.c-azul { background: #e9effb; color: var(--info); font-weight: 700; }
 .tabela-lojas td.c-vermelho { background: #fbe9ec; color: var(--vermelho); font-weight: 700; }
