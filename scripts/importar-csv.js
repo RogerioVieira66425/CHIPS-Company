@@ -54,7 +54,9 @@ function lerArquivo(caminho) {
   const idx = (nome) => cab.indexOf(nome);
 
   const validas = [];
+  const vistos = new Set();
   let descartadas = 0;
+  let repetidas = 0;
   linhas.slice(1).forEach((l) => {
     const c = linhaCsv(l, sep);
     const get = (nome) => (idx(nome) === -1 ? '' : (c[idx(nome)] || '').trim());
@@ -73,14 +75,19 @@ function lerArquivo(caminho) {
       situacao: get('situacao_compra') || null,
     };
     // linha quebrada no arquivo: colunas a mais ou a menos, ou sem preco / sem data
-    if (c.length !== cab.length || reg.preco === null || !reg.id_produto || !reg.nome || !reg.loja || !reg.dia) {
+    // preco 9999,99 e valor de preenchimento da base, nao preco real
+    if (c.length !== cab.length || reg.preco === null || reg.preco === 9999.99 || !reg.id_produto || !reg.nome || !reg.loja || !reg.dia) {
       descartadas += 1;
     } else {
+      // mesmo produto, loja, dia, nome e preco no mesmo arquivo: entra uma vez so
+      const chave = [reg.id_produto, reg.loja, reg.dia, reg.nome, reg.preco].join('|');
+      if (vistos.has(chave)) { repetidas += 1; return; }
+      vistos.add(chave);
       reg.texto = textoDeBusca(reg.nome + ' ' + reg.categoria + ' ' + reg.loja);
       validas.push(reg);
     }
   });
-  return { sep, validas, descartadas };
+  return { sep, validas, descartadas, repetidas };
 }
 
 (async () => {
@@ -88,7 +95,7 @@ function lerArquivo(caminho) {
   for (const caminho of arquivos) {
     const r = lerArquivo(caminho);
     const nome = caminho.split(/[\\/]/).pop();
-    console.log('  ' + nome + ': separador "' + r.sep + '", ' + r.validas.length + ' linhas validas, ' + r.descartadas + ' descartadas');
+    console.log('  ' + nome + ': separador "' + r.sep + '", ' + r.validas.length + ' linhas validas, ' + r.descartadas + ' descartadas, ' + r.repetidas + ' repetidas');
     todas.push(...r.validas);
   }
   if (!todas.length) { console.error('\n  Nenhuma linha valida nos arquivos.\n'); process.exit(1); }

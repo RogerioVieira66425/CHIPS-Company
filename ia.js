@@ -10,7 +10,7 @@ const db = require('./db.js');
 const analise = require('./analise.js');
 
 // troque ao mudar as regras de busca: invalida os resultados guardados
-const VERSAO_BUSCA = 7;
+const VERSAO_BUSCA = 8;
 
 const SITUACOES = ['Boa Compra', 'Preço Médio', 'Sem Histórico (Novo)', 'Evitar', 'Anomalia (Isolada por IA)', 'Bom Momento'];
 
@@ -109,7 +109,9 @@ async function ofertas(filtro) {
   const f = filtro || {};
   const condicoes = ['dia = ?'];
   const valores = [dia];
-  if (SITUACOES.indexOf(f.situacao) !== -1) { condicoes.push('situacao = ?'); valores.push(f.situacao); }
+  // situacao desconhecida nao e ignorada: filtro que nao existe nao traz nada
+  if (f.situacao && SITUACOES.indexOf(f.situacao) === -1) return { dia, pagina: 1, limite: 0, ofertas: [] };
+  if (f.situacao) { condicoes.push('situacao = ?'); valores.push(f.situacao); }
   if (f.loja) { condicoes.push('loja = ?'); valores.push(String(f.loja).slice(0, 60)); }
   if (f.q) { condicoes.push('texto_busca LIKE ?'); valores.push('%' + textoDeBusca(String(f.q).slice(0, 80)) + '%'); }
 
@@ -142,7 +144,15 @@ async function pesquisar(termo) {
     dia, ...palavras.map((p) => '%' + p + '%')
   );
 
-  const encontradas = linhas.map(paraOferta);
+  // preco 9999,99 e valor de preenchimento da base, nao preco real; anuncio repetido aparece uma vez
+  const vistos = new Set();
+  const encontradas = linhas.map(paraOferta).filter((o) => {
+    if (o.preco === 9999.99) return false;
+    const chave = o.id_produto + '|' + o.loja + '|' + o.titulo;
+    if (vistos.has(chave)) return false;
+    vistos.add(chave);
+    return true;
+  });
   // acessorios continuam na lista, mas marcados: a tela os coloca no fim
   const marcadas = encontradas.map((o) => Object.assign(o, { acessorio: ehAcessorio(o.titulo, palavras) }));
   const principais = marcadas.filter((o) => !o.acessorio);
