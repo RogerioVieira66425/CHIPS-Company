@@ -10,7 +10,7 @@ const db = require('./db.js');
 const analise = require('./analise.js');
 
 // troque ao mudar as regras de busca: invalida os resultados guardados
-const VERSAO_BUSCA = 8;
+const VERSAO_BUSCA = 9;
 
 const SITUACOES = ['Boa Compra', 'Preço Médio', 'Sem Histórico (Novo)', 'Evitar', 'Anomalia (Isolada por IA)', 'Bom Momento'];
 
@@ -140,7 +140,7 @@ async function pesquisar(termo) {
   const condicoes = palavras.map(() => 'texto_busca LIKE ?').join(' AND ');
   const linhas = await db.all(
     'SELECT id_produto, nome_produto, categoria, preco, loja, url, dia, preco_medio_historico, variacao_pct, situacao ' +
-    'FROM ofertas_dia WHERE dia = ? AND ' + condicoes + ' ORDER BY preco ASC LIMIT 400',
+    'FROM ofertas_dia WHERE dia = ? AND ' + condicoes + ' ORDER BY preco ASC LIMIT 3000',
     dia, ...palavras.map((p) => '%' + p + '%')
   );
 
