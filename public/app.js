@@ -999,10 +999,10 @@ const App = (function () {
     d.lojas.forEach((l) => {
       const tr = el('tr');
       tr.appendChild(el('td', 'ticker', l.loja));
-      tr.appendChild(celula(String(l.ofertas), 'cen'));
-      tr.appendChild(celula(dinheiro(l.menor), 'cen positivo'));
-      tr.appendChild(celula(dinheiro(l.mediana), 'cen'));
-      tr.appendChild(celula(dinheiro(l.maior), 'cen'));
+      tr.appendChild(celula(String(l.ofertas), 'cen c-cinza'));
+      tr.appendChild(celula(dinheiro(l.menor), 'cen c-verde'));
+      tr.appendChild(celula(dinheiro(l.mediana), 'cen c-azul'));
+      tr.appendChild(celula(dinheiro(l.maior), 'cen c-vermelho'));
       tbLojas.appendChild(tr);
     });
 
