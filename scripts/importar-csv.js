@@ -1,25 +1,26 @@
 'use strict';
-/* Importa o CSV de dados enriquecidos para a tabela ofertas_ia.
+/* Importa as coletas diarias (um CSV por dia) para a tabela ofertas_dia.
 
-   Uso (no seu computador):
-     npm run importar-ia -- "C:\Users\roger\Downloads\dados_enriquecidos_ia.csv"
+   Uso (no seu computador), um ou mais arquivos:
+     npm run importar-ia -- "C:\Users\roger\Downloads\Ofertas 20-10.csv" "...21-10.csv" "...22-10.csv"
 
+   Os arquivos podem usar ';' ou ',' como separador: o script detecta sozinho.
    Com DATABASE_URL definida, grava no Supabase; sem ela, no SQLite local.
-   Recria a tabela inteira a cada execucao, para nao duplicar linhas. Se a
-   gravacao falhar no meio, rode de novo: a tabela e recriada do zero. */
+   Apaga o conteudo atual da tabela e grava tudo de novo: o que for passado
+   vira o padrao. Se a gravacao falhar no meio, rode de novo. */
 
 const fs = require('node:fs');
 const db = require('../db.js');
 const { textoDeBusca } = require('../ia.js');
 
-const arquivo = process.argv[2];
-if (!arquivo) {
-  console.error('\n  Informe o CSV: npm run importar-ia -- "caminho\\do\\arquivo.csv"\n');
+const arquivos = process.argv.slice(2);
+if (!arquivos.length) {
+  console.error('\n  Informe os CSVs: npm run importar-ia -- "caminho\\um.csv" "caminho\\dois.csv"\n');
   process.exit(1);
 }
 
-// Separador ';' com campos entre aspas: um titulo pode ter ';' dentro.
-function linhaCsv(linha) {
+// Campos entre aspas podem ter o separador dentro (titulos com ';' ou ',').
+function linhaCsv(linha, sep) {
   const campos = [];
   let atual = '';
   let aspas = false;
@@ -27,7 +28,7 @@ function linhaCsv(linha) {
     const c = linha[i];
     if (c === '"') {
       if (aspas && linha[i + 1] === '"') { atual += '"'; i++; } else { aspas = !aspas; }
-    } else if (c === ';' && !aspas) {
+    } else if (c === sep && !aspas) {
       campos.push(atual); atual = '';
     } else {
       atual += c;
@@ -38,63 +39,83 @@ function linhaCsv(linha) {
 }
 
 const numero = (v) => {
-  const n = Number(String(v || '').replace(',', '.'));
+  const texto = String(v || '').trim();
+  if (!texto) return null;
+  const n = Number(texto.replace(',', '.'));
   return Number.isFinite(n) ? n : null;
 };
 
-(async () => {
-  const texto = fs.readFileSync(arquivo, 'utf8').replace(/^\uFEFF/, '');
+/* Le um arquivo e devolve as linhas ja no formato da tabela. */
+function lerArquivo(caminho) {
+  const texto = fs.readFileSync(caminho, 'utf8').replace(/^\uFEFF/, '');
   const linhas = texto.split(/\r?\n/).filter(Boolean);
-  const cab = linhaCsv(linhas[0]);
+  const sep = linhas[0].indexOf(';') !== -1 ? ';' : ',';
+  const cab = linhaCsv(linhas[0], sep);
   const idx = (nome) => cab.indexOf(nome);
 
   const validas = [];
-  const descartadas = [];
-  linhas.slice(1).forEach((l, i) => {
-    const c = linhaCsv(l);
+  let descartadas = 0;
+  linhas.slice(1).forEach((l) => {
+    const c = linhaCsv(l, sep);
+    const get = (nome) => (idx(nome) === -1 ? '' : (c[idx(nome)] || '').trim());
+    const coletado = get('data_coleta');
     const reg = {
-      produto: c[idx('nome_produto_padronizado')] || '',
-      titulo: c[idx('nome_oferta_original')] || '',
-      loja: c[idx('nome_loja')] || '',
-      preco: numero(c[idx('preco')]),
-      referencia: numero(c[idx('preco_referencia_base')]),
-      variacao: numero(c[idx('variacao_vs_base')]),
-      situacao: c[idx('situacao_compra')] || '',
-      url: c[idx('url_oferta')] || '',
+      id_produto: get('id_produto_externo'),
+      nome: get('nome_produto'),
+      categoria: get('categoria_produto'),
+      preco: numero(get('preco')),
+      loja: get('nome_loja'),
+      url: get('url_oferta'),
+      coletado_em: coletado,
+      dia: coletado.slice(0, 10),
+      medio: numero(get('preco_medio_historico')),
+      variacao: numero(get('variacao_percentual')),
+      situacao: get('situacao_compra') || null,
     };
-    // linha quebrada no arquivo original: colunas a mais ou a menos, ou sem preco
-    if (c.length !== cab.length || reg.preco === null || !reg.produto || !reg.loja) {
-      descartadas.push(i + 2);
+    // linha quebrada no arquivo: colunas a mais ou a menos, ou sem preco / sem data
+    if (c.length !== cab.length || reg.preco === null || !reg.id_produto || !reg.nome || !reg.loja || !reg.dia) {
+      descartadas += 1;
     } else {
-      reg.texto = textoDeBusca(reg.produto + ' ' + reg.titulo + ' ' + reg.loja);
+      reg.texto = textoDeBusca(reg.nome + ' ' + reg.categoria + ' ' + reg.loja);
       validas.push(reg);
     }
   });
+  return { sep, validas, descartadas };
+}
+
+(async () => {
+  const todas = [];
+  for (const caminho of arquivos) {
+    const r = lerArquivo(caminho);
+    const nome = caminho.split(/[\\/]/).pop();
+    console.log('  ' + nome + ': separador "' + r.sep + '", ' + r.validas.length + ' linhas validas, ' + r.descartadas + ' descartadas');
+    todas.push(...r.validas);
+  }
+  if (!todas.length) { console.error('\n  Nenhuma linha valida nos arquivos.\n'); process.exit(1); }
 
   console.log('  ' + (db.usaPostgres() ? 'Destino: Supabase' : 'Destino: SQLite local'));
   await db.iniciar();
-  await db.run('DELETE FROM ofertas_ia');
+  await db.run('DELETE FROM ofertas_dia');
 
   const LOTE = 400;
-  for (let inicio = 0; inicio < validas.length; inicio += LOTE) {
-    const lote = validas.slice(inicio, inicio + LOTE);
+  for (let inicio = 0; inicio < todas.length; inicio += LOTE) {
+    const lote = todas.slice(inicio, inicio + LOTE);
     const valores = [];
     const grupos = lote.map((r) => {
-      valores.push(r.produto, r.titulo, r.loja, r.preco, r.referencia, r.variacao, r.situacao, r.url, r.texto);
-      return '(?,?,?,?,?,?,?,?,?)';
+      valores.push(r.id_produto, r.nome, r.categoria, r.preco, r.loja, r.url, r.coletado_em, r.dia,
+        r.medio, r.variacao, r.situacao, r.texto);
+      return '(?,?,?,?,?,?,?,?,?,?,?,?)';
     });
     await db.run(
-      'INSERT INTO ofertas_ia (nome_produto_padronizado, nome_oferta_original, nome_loja, preco, preco_referencia_base, ' +
-      'variacao_vs_base, situacao_compra, url_oferta, texto_busca) VALUES ' + grupos.join(','),
+      'INSERT INTO ofertas_dia (id_produto, nome_produto, categoria, preco, loja, url, coletado_em, dia, ' +
+      'preco_medio_historico, variacao_pct, situacao, texto_busca) VALUES ' + grupos.join(','),
       ...valores
     );
-    process.stdout.write('\r  gravadas ' + Math.min(inicio + LOTE, validas.length) + ' de ' + validas.length);
+    process.stdout.write('\r  gravadas ' + Math.min(inicio + LOTE, todas.length) + ' de ' + todas.length);
   }
 
-  console.log('\n\n  Importacao concluida.');
-  console.log('  gravadas:   ' + validas.length);
-  console.log('  descartadas (linhas quebradas no arquivo): ' + descartadas.length +
-    (descartadas.length ? ' -> ' + descartadas.slice(0, 10).join(', ') : ''));
+  const dias = new Set(todas.map((r) => r.dia));
+  console.log('\n\n  Importacao concluida: ' + todas.length + ' linhas em ' + dias.size + ' dia(s): ' + [...dias].sort().join(', '));
   await db.fechar();
 })().catch((e) => {
   console.error('\n  Erro na importacao: ' + e.message + '\n  Rode de novo para refazer a tabela do zero.\n');

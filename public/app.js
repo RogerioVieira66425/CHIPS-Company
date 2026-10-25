@@ -840,6 +840,7 @@ const App = (function () {
     'Sem Histórico (Novo)': 'situacao.novo',
     'Evitar': 'situacao.evitar',
     'Anomalia (Isolada por IA)': 'situacao.anomalia',
+    'Bom Momento': 'situacao.boa',
   };
 
   function renderAnalise(d) {
@@ -861,8 +862,8 @@ const App = (function () {
     variacao.className = d.variacao_pct < 0 ? 'positivo' : (d.variacao_pct > 0 ? 'negativo' : '');
     $('#an-variacao-sub').textContent = t('analise.variacaoSub');
 
-    $('#an-situacao').textContent = t(SITUACAO[d.situacao] || 'situacao.media');
-    $('#an-situacao-sub').textContent = t((SITUACAO[d.situacao] || 'situacao.media') + '.dica');
+    $('#an-situacao').textContent = t(SITUACAO[d.situacao] || 'situacao.novo');
+    $('#an-situacao-sub').textContent = t((SITUACAO[d.situacao] || 'situacao.novo') + '.dica');
 
     // faixa de precos: onde a oferta cai entre o menor e o maior preco do produto
     const amplitude = est.maior - est.menor;
@@ -887,21 +888,18 @@ const App = (function () {
     });
 
     const acompanhado = produtoDaOferta(d.oferta);
-    $('#an-historico-texto').textContent = acompanhado
-      ? t('analise.historicoAcompanhado')
-      : t('analise.historicoVazio');
+    // evolucao do preco: a base tem uma foto por dia, entao o grafico vem da propria analise
+    const temSerie = Boolean(d.tem_serie_historica);
+    const texto = $('#an-historico-texto');
+    texto.textContent = temSerie ? '' : t('analise.historicoVazio');
+    texto.classList.toggle('oculto', temSerie);
     const btnAcomp = $('#an-acompanhado');
     btnAcomp.classList.toggle('oculto', !acompanhado);
     btnAcomp.onclick = acompanhado ? () => abrirDetalhe(acompanhado.id) : null;
 
-    // grafico de linha da evolucao: so existe para produto acompanhado, com coletas em dias diferentes
     const areaGrafico = $('#an-grafico');
     areaGrafico.innerHTML = '';
-    if (acompanhado) {
-      pedir('/api/produtos/' + acompanhado.id)
-        .then((det) => renderGrafico(det.historico, '#an-grafico'))
-        .catch(() => {});
-    }
+    if (temSerie) renderGrafico(d.historico, '#an-grafico');
 
     const tbLojas = $('#an-lojas');
     tbLojas.innerHTML = '';

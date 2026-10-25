@@ -93,21 +93,24 @@ CREATE INDEX IF NOT EXISTS idx_ofertas_produto ON ofertas(produto_id, coletado_e
 CREATE INDEX IF NOT EXISTS idx_coletas_produto ON coletas(produto_id, executado_em);
 CREATE INDEX IF NOT EXISTS idx_produtos_user ON produtos(user_id);
 
-CREATE TABLE IF NOT EXISTS ofertas_ia (
-  id                      INTEGER PRIMARY KEY AUTOINCREMENT,
-  nome_produto_padronizado TEXT NOT NULL,
-  nome_oferta_original    TEXT NOT NULL,
-  nome_loja               TEXT NOT NULL,
-  preco                   REAL NOT NULL,
-  preco_referencia_base   REAL,
-  variacao_vs_base        REAL,
-  situacao_compra         TEXT NOT NULL,
-  url_oferta              TEXT NOT NULL DEFAULT '',
-  texto_busca             TEXT NOT NULL DEFAULT '',
-  importado_em            TEXT NOT NULL DEFAULT ''
+
+CREATE TABLE IF NOT EXISTS ofertas_dia (
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  id_produto         TEXT NOT NULL,
+  nome_produto       TEXT NOT NULL,
+  categoria          TEXT NOT NULL DEFAULT '',
+  preco              REAL NOT NULL,
+  loja               TEXT NOT NULL,
+  url                TEXT NOT NULL DEFAULT '',
+  coletado_em        TEXT NOT NULL,
+  dia                TEXT NOT NULL,
+  preco_medio_historico REAL,
+  variacao_pct       REAL,
+  situacao           TEXT,
+  texto_busca        TEXT NOT NULL DEFAULT ''
 );
-CREATE INDEX IF NOT EXISTS idx_ofertas_ia_loja ON ofertas_ia(nome_loja);
-CREATE INDEX IF NOT EXISTS idx_ofertas_ia_situacao ON ofertas_ia(situacao_compra);
+CREATE INDEX IF NOT EXISTS idx_ofertas_dia_dia ON ofertas_dia(dia);
+CREATE INDEX IF NOT EXISTS idx_ofertas_dia_produto ON ofertas_dia(id_produto, dia);
 `;
 
 const ESQUEMA_POSTGRES = `
@@ -181,22 +184,24 @@ CREATE INDEX IF NOT EXISTS idx_ofertas_produto ON ofertas(produto_id, coletado_e
 CREATE INDEX IF NOT EXISTS idx_coletas_produto ON coletas(produto_id, executado_em);
 CREATE INDEX IF NOT EXISTS idx_produtos_user ON produtos(user_id);
 
-CREATE TABLE IF NOT EXISTS ofertas_ia (
-  id                      BIGSERIAL PRIMARY KEY,
-  nome_produto_padronizado TEXT NOT NULL,
-  nome_oferta_original    TEXT NOT NULL,
-  nome_loja               TEXT NOT NULL,
-  preco                   DOUBLE PRECISION NOT NULL,
-  preco_referencia_base   DOUBLE PRECISION,
-  variacao_vs_base        DOUBLE PRECISION,
-  situacao_compra         TEXT NOT NULL,
-  url_oferta              TEXT NOT NULL DEFAULT '',
-  texto_busca             TEXT NOT NULL DEFAULT '',
-  importado_em            TIMESTAMPTZ NOT NULL DEFAULT now()
+
+CREATE TABLE IF NOT EXISTS ofertas_dia (
+  id                 BIGSERIAL PRIMARY KEY,
+  id_produto         TEXT NOT NULL,
+  nome_produto       TEXT NOT NULL,
+  categoria          TEXT NOT NULL DEFAULT '',
+  preco              DOUBLE PRECISION NOT NULL,
+  loja               TEXT NOT NULL,
+  url                TEXT NOT NULL DEFAULT '',
+  coletado_em        TEXT NOT NULL,
+  dia                TEXT NOT NULL,
+  preco_medio_historico DOUBLE PRECISION,
+  variacao_pct       DOUBLE PRECISION,
+  situacao           TEXT,
+  texto_busca        TEXT NOT NULL DEFAULT ''
 );
-CREATE INDEX IF NOT EXISTS idx_ofertas_ia_loja ON ofertas_ia(nome_loja);
-CREATE INDEX IF NOT EXISTS idx_ofertas_ia_situacao ON ofertas_ia(situacao_compra);
-CREATE INDEX IF NOT EXISTS idx_ofertas_ia_texto ON ofertas_ia(texto_busca);
+CREATE INDEX IF NOT EXISTS idx_ofertas_dia_dia ON ofertas_dia(dia);
+CREATE INDEX IF NOT EXISTS idx_ofertas_dia_produto ON ofertas_dia(id_produto, dia);
 `;
 
 /* ---------- backends ---------- */
