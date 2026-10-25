@@ -1066,3 +1066,7 @@ body {
 .sugestoes-busca li button span:last-child { font-weight: 700; color: var(--pos); white-space: nowrap; }
 .voce-quis { margin: 0 0 12px; font-size: 14px; }
 .voce-quis button { border: 0; background: none; color: var(--destaque); font: inherit; font-weight: 700; cursor: pointer; text-decoration: underline; }
+
+/* na capa, a lista flutua logo abaixo do campo, sem empurrar o conteudo */
+.caixa-busca { position: relative; }
+#sugestoes-busca { position: absolute; top: calc(100% + 8px); left: 0; right: 0; max-width: none; margin: 0; z-index: 30; }
