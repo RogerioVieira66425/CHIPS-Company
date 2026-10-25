@@ -219,23 +219,25 @@ async function analiseDoProduto(produto, titulo) {
 
   const ofertas = atuais.map(paraOferta);
   const escolhida = ofertas.find((o) => o.titulo === titulo) || ofertas[0];
-  const precos = ofertas.map((o) => o.preco);
-  const abaixoDela = ofertas.filter((o) => o.preco < escolhida.preco).length;
+
+  // o produto inteiro: estatisticas, lojas, faixa e posicao saem de todas as coletas do historico
+  const coletas = await db.all(
+    'SELECT dia, loja, preco, preco_medio_historico FROM ofertas_dia WHERE nome_produto = ? ORDER BY dia', nome);
+  const precos = coletas.map((r) => Number(r.preco));
+  const abaixoDela = precos.filter((p) => p < escolhida.preco).length;
 
   const porLoja = new Map();
-  ofertas.forEach((o) => {
-    if (!porLoja.has(o.loja)) porLoja.set(o.loja, []);
-    porLoja.get(o.loja).push(o.preco);
+  coletas.forEach((r) => {
+    if (!porLoja.has(r.loja)) porLoja.set(r.loja, []);
+    porLoja.get(r.loja).push(Number(r.preco));
   });
   const lojas = [...porLoja.entries()]
     .map(([loja, v]) => ({ loja, ofertas: v.length, menor: arredonda(Math.min(...v)), mediana: arredonda(mediana(v)), maior: arredonda(Math.max(...v)) }))
     .sort((a, b) => a.menor - b.menor);
 
-  // evolucao: menor preco de cada dia em que o produto foi coletado
-  const todosOsDias = await db.all(
-    'SELECT dia, preco FROM ofertas_dia WHERE nome_produto = ? ORDER BY dia', nome);
+  // evolucao: menor preco de cada dia em que o produto foi coletado, somando as lojas
   const pordia = new Map();
-  todosOsDias.forEach((r) => {
+  coletas.forEach((r) => {
     if (!pordia.has(r.dia)) pordia.set(r.dia, []);
     pordia.get(r.dia).push(Number(r.preco));
   });
@@ -246,7 +248,7 @@ async function analiseDoProduto(produto, titulo) {
     amostras: v.length,
   }));
 
-  const referencias = ofertas.map((o) => o.referencia).filter((v) => v > 0);
+  const referencias = coletas.map((r) => Number(r.preco_medio_historico)).filter((v) => v > 0);
   return {
     produto: nome,
     dia,
@@ -255,12 +257,12 @@ async function analiseDoProduto(produto, titulo) {
     referencia: arredonda(mediana(referencias)),
     variacao_pct: arredonda(escolhida.variacao),
     estatisticas: {
-      ofertas: ofertas.length,
+      ofertas: precos.length,
       menor: arredonda(Math.min(...precos)),
       mediana: arredonda(mediana(precos)),
       media: arredonda(precos.reduce((a, b) => a + b, 0) / precos.length),
       maior: arredonda(Math.max(...precos)),
-      posicao_pct: arredonda((abaixoDela / ofertas.length) * 100),
+      posicao_pct: arredonda((abaixoDela / precos.length) * 100),
     },
     lojas,
     ofertas,
