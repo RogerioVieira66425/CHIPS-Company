@@ -9,6 +9,9 @@
 const db = require('./db.js');
 const analise = require('./analise.js');
 
+// troque ao mudar as regras de busca: invalida os resultados guardados
+const VERSAO_BUSCA = 4;
+
 const SITUACOES = ['Boa Compra', 'Preço Médio', 'Sem Histórico (Novo)', 'Evitar', 'Anomalia (Isolada por IA)', 'Bom Momento'];
 
 /* Texto de busca sem acento e em minusculas: "mecânico" e "mecanico" casam. */
@@ -168,6 +171,8 @@ async function pesquisar(termo) {
     sugestao: filtrado.ofertas.length < 3 ? await corrigir(termo) : null,
     acessorios_ocultos: encontradas.length - principais.length,
     so_acessorios: principais.length === 0 && encontradas.length > 0,
+    // versao das regras de busca: resultados guardados de outra versao nao sao reaproveitados
+    versao: VERSAO_BUSCA,
     duracao_ms: Date.now() - inicio,
     dia,
   };
@@ -325,4 +330,4 @@ async function corrigir(termo) {
   return mudou ? novas.join(' ') : null;
 }
 
-module.exports = { resumo, ofertas, pesquisar, analiseDoProduto, sugerir, corrigir, textoDeBusca, SITUACOES };
+module.exports = { resumo, ofertas, pesquisar, analiseDoProduto, sugerir, corrigir, textoDeBusca, SITUACOES, VERSAO_BUSCA };

@@ -236,7 +236,7 @@ function formatarBusca(linha) {
 function resultadoUtil(linha) {
   try {
     const r = JSON.parse(linha.resultado || '{}');
-    return Number(r.relevantes) > 0;
+    return Number(r.relevantes) > 0 && r.versao === ia.VERSAO_BUSCA;
   } catch (e) {
     return false;
   }
