@@ -301,7 +301,7 @@ code { background: #ffffff; padding: 1px 5px; border-radius: 4px; }
 
 /* gráfico de histórico */
 .grade-igual { align-items: stretch; }
-.dica.nota-grafico { background: #0a0a0b; border-left-color: #0a0a0b; color: #ffffff; }
+.dica.nota-grafico { margin-top: 20px; }
 .grafico { display: block; width: 100%; height: auto; }
 .filtros-dia { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 12px; }
 .filtros-dia .chip[aria-pressed="true"] { background: var(--acao); border-color: var(--acao); color: #fff; }
