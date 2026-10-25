@@ -895,6 +895,16 @@ const App = (function () {
   }
 
   /* Rotulos e explicacoes da classificacao feita pela IA na base. */
+  // padrao de cor das avaliacoes: verde boa compra, azul preco medio, vermelho evitar, ambar anomalia, cinza sem historico
+  const CLASSE_SITUACAO = {
+    'Boa Compra': 'situacao-boa',
+    'Bom Momento': 'situacao-boa',
+    'Preço Médio': 'situacao-media',
+    'Sem Histórico (Novo)': 'situacao-novo',
+    'Evitar': 'situacao-evitar',
+    'Anomalia (Isolada por IA)': 'situacao-anomalia',
+  };
+  const classeSituacao = (s) => CLASSE_SITUACAO[s] || 'situacao-media';
   const SITUACAO = {
     'Boa Compra': 'situacao.boa',
     'Preço Médio': 'situacao.media',
@@ -924,6 +934,7 @@ const App = (function () {
     $('#an-variacao-sub').textContent = t('analise.variacaoSub');
 
     $('#an-situacao').textContent = t(SITUACAO[d.situacao] || 'situacao.novo');
+    $('#an-situacao').className = classeSituacao(d.situacao);
     $('#an-situacao-sub').textContent = t((SITUACAO[d.situacao] || 'situacao.novo') + '.dica');
 
     // faixa de precos: onde a oferta cai entre o menor e o maior preco do produto.
@@ -1005,7 +1016,7 @@ const App = (function () {
       tr.appendChild(celula(dinheiro(o.preco), 'cen'));
       const v = o.referencia > 0 ? o.variacao : null;
       tr.appendChild(celula(v === null ? '—' : pct(v), 'cen ' + (v < 0 ? 'positivo' : (v > 0 ? 'negativo' : ''))));
-      tr.appendChild(celula(t(SITUACAO[o.situacao] || 'situacao.media'), 'cen'));
+      tr.appendChild(celula(t(SITUACAO[o.situacao] || 'situacao.media'), 'cen ' + classeSituacao(o.situacao)));
       const acao = el('td', 'dir');
       if (o.url) acao.appendChild(link(t('tabela.comprar'), o.url, 'mini-botao botao-acao'));
       tr.appendChild(acao);
