@@ -209,7 +209,8 @@ const App = (function () {
     function mostrar(itens) {
       lista.innerHTML = '';
       if (!itens.length) { fechar(); return; }
-      itens.forEach((s) => {
+      // poucas sugestoes, bem escolhidas: a lista so ajuda, nao substitui a busca
+      itens.slice(0, 6).forEach((s) => {
         const li = el('li');
         const b = el('button', '', '');
         b.type = 'button';
