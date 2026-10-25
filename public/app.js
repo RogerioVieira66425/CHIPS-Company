@@ -866,12 +866,19 @@ const App = (function () {
     $('#an-situacao-sub').textContent = t((SITUACAO[d.situacao] || 'situacao.novo') + '.dica');
 
     // faixa de precos: onde a oferta cai entre o menor e o maior preco do produto
+    // com uma oferta so (ou precos iguais) nao ha faixa para mostrar: a barra some
     const amplitude = est.maior - est.menor;
-    const pos = amplitude > 0 ? ((d.oferta.preco - est.menor) / amplitude) * 100 : 50;
-    $('#an-marcador').style.left = pos.toFixed(1) + '%';
-    $('#an-min').textContent = t('analise.menorDe') + ' ' + dinheiro(est.menor);
-    $('#an-max').textContent = dinheiro(est.maior) + ' ' + t('analise.maiorDe');
-    $('#an-pos').textContent = t('analise.maisBaratoQue', { pct: pctFmt(est.posicao_pct) });
+    const semFaixa = est.ofertas <= 1 || amplitude <= 0;
+    $('#an-faixa').classList.toggle('oculto', semFaixa);
+    $('#an-min').textContent = semFaixa ? '' : t('analise.menorDe') + ' ' + dinheiro(est.menor);
+    $('#an-max').textContent = semFaixa ? '' : dinheiro(est.maior) + ' ' + t('analise.maiorDe');
+    if (!semFaixa) {
+      const pos = ((d.oferta.preco - est.menor) / amplitude) * 100;
+      $('#an-marcador').style.left = pos.toFixed(1) + '%';
+    }
+    $('#an-pos').textContent = semFaixa
+      ? t('analise.unicaOferta')
+      : t('analise.maisBaratoQue', { pct: pctFmt(est.posicao_pct) });
 
     const stats = [
       [t('analise.mediana'), dinheiro(est.mediana)],
