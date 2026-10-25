@@ -198,47 +198,51 @@ const App = (function () {
     if (termo.length >= 2) buscar(termo);
   });
 
-  /* ---------- sugestoes enquanto digita ---------- */
-  let temporizadorSugestao = null;
-  const caixaSugestoes = () => $('#sugestoes-busca');
-  const esconderSugestoes = () => caixaSugestoes().classList.add('oculto');
+  /* ---------- sugestoes enquanto digita (caixa da capa e busca do topo) ---------- */
+  function ligarSugestoes(campoId, listaId) {
+    const campo = $(campoId);
+    const lista = $(listaId);
+    if (!campo || !lista) return;
+    let temporizador = null;
+    const fechar = () => lista.classList.remove('aberta');
 
-  function mostrarSugestoes(lista) {
-    const ul = caixaSugestoes();
-    ul.innerHTML = '';
-    if (!lista.length) { esconderSugestoes(); return; }
-    lista.forEach((s) => {
-      const li = el('li');
-      const b = el('button', '', '');
-      b.type = 'button';
-      b.appendChild(el('span', '', s.nome));
-      b.appendChild(el('span', '', dinheiro(s.menor)));
-      b.addEventListener('mousedown', (e) => { e.preventDefault(); escolherSugestao(s.nome); });
-      li.appendChild(b);
-      ul.appendChild(li);
+    function mostrar(itens) {
+      lista.innerHTML = '';
+      if (!itens.length) { fechar(); return; }
+      itens.forEach((s) => {
+        const li = el('li');
+        const b = el('button', '', '');
+        b.type = 'button';
+        b.appendChild(el('span', '', s.nome));
+        b.appendChild(el('span', '', dinheiro(s.menor)));
+        b.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          campo.value = s.nome;
+          fechar();
+          buscar(s.nome);
+        });
+        li.appendChild(b);
+        lista.appendChild(li);
+      });
+      lista.classList.add('aberta');
+    }
+
+    campo.addEventListener('input', () => {
+      clearTimeout(temporizador);
+      const termo = campo.value.trim();
+      if (termo.length < 2) { fechar(); return; }
+      temporizador = setTimeout(async () => {
+        try {
+          const itens = await pedir('/api/ia/sugerir?q=' + encodeURIComponent(termo));
+          if (campo.value.trim() === termo) mostrar(itens);
+        } catch (err) { fechar(); }
+      }, 250);
     });
-    ul.classList.remove('oculto');
+    campo.addEventListener('blur', () => setTimeout(fechar, 150));
+    campo.addEventListener('keydown', (e) => { if (e.key === 'Escape') fechar(); });
   }
-
-  function escolherSugestao(nome) {
-    $('#campo-busca').value = nome;
-    esconderSugestoes();
-    buscar(nome);
-  }
-
-  $('#campo-busca').addEventListener('input', (e) => {
-    clearTimeout(temporizadorSugestao);
-    const termo = e.target.value.trim();
-    if (termo.length < 2) { esconderSugestoes(); return; }
-    temporizadorSugestao = setTimeout(async () => {
-      try {
-        const lista = await pedir('/api/ia/sugerir?q=' + encodeURIComponent(termo));
-        if ($('#campo-busca').value.trim() === termo) mostrarSugestoes(lista);
-      } catch (err) { esconderSugestoes(); }
-    }, 250);
-  });
-  $('#campo-busca').addEventListener('blur', () => setTimeout(esconderSugestoes, 150));
-  $('#campo-busca').addEventListener('keydown', (e) => { if (e.key === 'Escape') esconderSugestoes(); });
+  ligarSugestoes('#campo-busca', '#sugestoes-busca');
+  ligarSugestoes('#campo-topo', '#sugestoes-topo');
 
   $('#busca-topo').addEventListener('submit', (e) => {
     e.preventDefault();

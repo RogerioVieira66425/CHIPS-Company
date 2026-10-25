@@ -1048,7 +1048,15 @@ body {
   list-style: none; margin: 8px auto 0; padding: 6px; max-width: 640px;
   background: #ffffff; border: 1px solid var(--borda); border-radius: 12px;
   box-shadow: 0 16px 36px -18px rgba(13,15,18,.45); text-align: left;
+  /* fechada: invisivel e sem clique; aberta: aparece com fade e leve descida */
+  opacity: 0; visibility: hidden; transform: translateY(-6px);
+  transition: opacity .2s ease, transform .2s ease, visibility .2s;
+  pointer-events: none;
 }
+.sugestoes-busca.aberta { opacity: 1; visibility: visible; transform: none; pointer-events: auto; }
+/* na barra do topo a lista flutua sobre a pagina, sem empurrar nada */
+.search { position: relative; }
+.sugestoes-topo { position: absolute; top: calc(100% + 8px); left: 0; right: 0; max-width: none; margin: 0; z-index: 30; }
 .sugestoes-busca li button {
   width: 100%; display: flex; justify-content: space-between; gap: 12px; align-items: center;
   padding: 10px 12px; border: 0; border-radius: 8px; background: transparent;
