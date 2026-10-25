@@ -195,6 +195,20 @@ async function pesquisar(termo) {
 
 /* Analise de um produto: ofertas do dia mais recente e evolucao nos dias anteriores.
    "titulo" escolhe a oferta que a pessoa abriu; o produto e achado pelo nome. */
+/* Avaliacao da oferta pelo historico do produto: compara o preco de hoje com o menor e a
+   mediana ja vistos. So a anomalia marcada pela IA no CSV prevalece sobre a regra. */
+function avaliarPeloHistorico(preco, precos, dias, situacaoAtual) {
+  if (situacaoAtual === 'Anomalia (Isolada por IA)') return situacaoAtual;
+  if (dias < 2) return 'Sem Histórico (Novo)';
+  const menor = Math.min(...precos);
+  const med = mediana(precos);
+  // preco que nunca mudou: nao ha o que comparar, e fica como preco medio
+  if (Math.max(...precos) === menor) return 'Preço Médio';
+  if (preco <= menor * 1.02 || preco < med * 0.95) return 'Boa Compra';
+  if (preco > med * 1.05) return 'Evitar';
+  return 'Preço Médio';
+}
+
 async function analiseDoProduto(produto, titulo) {
   const nomeBase = produto || titulo;
   if (!nomeBase) return null;
@@ -249,11 +263,12 @@ async function analiseDoProduto(produto, titulo) {
   }));
 
   const referencias = coletas.map((r) => Number(r.preco_medio_historico)).filter((v) => v > 0);
+  const situacao = avaliarPeloHistorico(escolhida.preco, precos, historico.length, escolhida.situacao);
   return {
     produto: nome,
     dia,
     oferta: escolhida,
-    situacao: escolhida.situacao,
+    situacao,
     referencia: arredonda(mediana(referencias)),
     variacao_pct: arredonda(escolhida.variacao),
     estatisticas: {
