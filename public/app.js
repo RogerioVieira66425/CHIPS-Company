@@ -1016,7 +1016,7 @@ const App = (function () {
       a.title = o.titulo;
       td.appendChild(a);
       tr.appendChild(td);
-      tr.appendChild(celula(dinheiro(o.preco), 'cen'));
+      tr.appendChild(celula(dinheiro(o.preco), 'cen c-azul'));
       const v = o.referencia > 0 ? o.variacao : null;
       tr.appendChild(celula(v === null ? '—' : pct(v), 'cen ' + (v < 0 ? 'positivo' : (v > 0 ? 'negativo' : ''))));
       tr.appendChild(celula(t(SITUACAO[o.situacao] || 'situacao.media'), 'cen ' + classeSituacao(o.situacao)));

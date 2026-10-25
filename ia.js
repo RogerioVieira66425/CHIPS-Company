@@ -263,7 +263,12 @@ async function analiseDoProduto(produto, titulo) {
   }));
 
   // a avaliacao vale para a oferta escolhida e para cada oferta da lista, com o mesmo criterio
-  ofertas.forEach((o) => { o.situacao = avaliarPeloHistorico(o.preco, precos, historico.length, o.situacao); });
+  const refHist = mediana(precos);
+  ofertas.forEach((o) => {
+    o.situacao = avaliarPeloHistorico(o.preco, precos, historico.length, o.situacao);
+    o.referencia = arredonda(refHist);
+    o.variacao = arredonda(((o.preco - refHist) / refHist) * 100);
+  });
   return {
     produto: nome,
     dia,
