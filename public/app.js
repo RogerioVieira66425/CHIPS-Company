@@ -1320,72 +1320,143 @@ const App = (function () {
     });
   }
 
+  /* Periodos do grafico, contados a partir do ultimo dia com coleta; 0 = tudo. */
+  const PERIODOS_GRAFICO = [
+    { chave: 'grafico.tudo', dias: 0 },
+    { chave: 'grafico.dias7', dias: 7 },
+    { chave: 'grafico.dias30', dias: 30 },
+  ];
+  const DIA_MS = 86400000;
+
   function renderGrafico(historico, seletor) {
     const destino = $(seletor || '#det-grafico');
     destino.innerHTML = '';
+    if (destino._observador) destino._observador.disconnect();
     if (!historico || historico.length < 2) {
       destino.appendChild(el('p', 'vazio', 'O gráfico aparece quando houver coletas em pelo menos dois dias diferentes.'));
       return;
     }
 
-    const largura = 560, altura = 220, margem = { topo: 16, dir: 12, baixo: 28, esq: 62 };
-    const valores = historico.map((h) => h.minimo);
-    const min = Math.min(...valores), max = Math.max(...valores);
-    const faixa = max - min || max * 0.1 || 1;
-    const x = (i) => margem.esq + (i / (historico.length - 1)) * (largura - margem.esq - margem.dir);
-    const y = (v) => margem.topo + (1 - (v - min + faixa * 0.1) / (faixa * 1.2)) * (altura - margem.topo - margem.baixo);
-
-    const ns = 'http://www.w3.org/2000/svg';
-    const svg = document.createElementNS(ns, 'svg');
-    svg.setAttribute('viewBox', '0 0 ' + largura + ' ' + altura);
-    svg.setAttribute('class', 'grafico');
-
-    [0, 0.5, 1].forEach((f) => {
-      // so o valor do eixo: sem linhas de grade, a evolucao do preco fica como a unica linha
-      const valor = min + faixa * f;
-      const rotulo = document.createElementNS(ns, 'text');
-      rotulo.setAttribute('x', 6); rotulo.setAttribute('y', y(valor) + 4);
-      rotulo.setAttribute('fill', '#97a1b2'); rotulo.setAttribute('font-size', '11');
-      rotulo.textContent = dinheiro(valor);
-      svg.appendChild(rotulo);
+    const dataDe = (dia) => Date.parse(dia + 'T00:00:00Z');
+    const filtros = el('div', 'filtros-dia');
+    const desenho = el('div');
+    let periodo = 0;
+    let ultimaLargura = 0;
+    const botoes = PERIODOS_GRAFICO.map((p) => {
+      const b = el('button', 'chip', t(p.chave));
+      b.type = 'button';
+      b.setAttribute('aria-pressed', 'false');
+      b.onclick = () => escolher(p.dias);
+      filtros.appendChild(b);
+      return { botao: b, dias: p.dias };
     });
 
-    // sombra da linha: um filtro do proprio SVG, desfocado e deslocado para baixo
-    const defs = document.createElementNS(ns, 'defs');
-    defs.innerHTML = '<filter id="sombra-linha" x="-10%" y="-20%" width="120%" height="150%">' +
-      '<feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#4c8dff" flood-opacity="0.45"/></filter>';
-    svg.appendChild(defs);
+    function pontosDoPeriodo() {
+      if (!periodo) return historico;
+      const corte = dataDe(historico[historico.length - 1].dia) - (periodo - 1) * DIA_MS;
+      return historico.filter((h) => dataDe(h.dia) >= corte);
+    }
 
-    const linha = document.createElementNS(ns, 'polyline');
-    linha.setAttribute('points', historico.map((h, i) => x(i) + ',' + y(h.minimo)).join(' '));
-    linha.setAttribute('fill', 'none');
-    linha.setAttribute('stroke', '#4c8dff');
-    linha.setAttribute('stroke-width', '3');
-    linha.setAttribute('stroke-linejoin', 'round');
-    linha.setAttribute('filter', 'url(#sombra-linha)');
-    svg.appendChild(linha);
+    function escolher(dias) {
+      periodo = dias;
+      botoes.forEach((x) => x.botao.setAttribute('aria-pressed', String(x.dias === dias)));
+      desenhar();
+    }
 
-    historico.forEach((h, i) => {
-      const c = document.createElementNS(ns, 'circle');
-      c.setAttribute('cx', x(i)); c.setAttribute('cy', y(h.minimo)); c.setAttribute('r', '3');
-      c.setAttribute('fill', h.minimo === min ? '#22c55e' : '#4c8dff');
-      const t = document.createElementNS(ns, 'title');
-      t.textContent = h.dia.split('-').reverse().join('/') + ': ' + dinheiro(h.minimo);
-      c.appendChild(t);
-      svg.appendChild(c);
-    });
+    function desenhar() {
+      desenho.innerHTML = '';
+      ultimaLargura = destino.clientWidth;
+      const pontos = pontosDoPeriodo();
+      if (pontos.length < 2) {
+        desenho.appendChild(el('p', 'vazio', t('grafico.semPeriodo')));
+        return;
+      }
 
-    [0, historico.length - 1].forEach((i) => {
-      const t = document.createElementNS(ns, 'text');
-      t.setAttribute('x', x(i)); t.setAttribute('y', altura - 8);
-      t.setAttribute('fill', '#97a1b2'); t.setAttribute('font-size', '11');
-      t.setAttribute('text-anchor', i === 0 ? 'start' : 'end');
-      t.textContent = historico[i].dia.slice(5).split('-').reverse().join('/');
-      svg.appendChild(t);
-    });
+      // a medida e a da tela: a linha vai de uma borda a outra do painel, sem esticar o desenho
+      const largura = Math.max(ultimaLargura || 560, 280), altura = 240;
+      const margem = { topo: 14, dir: 14, baixo: 30, esq: 14 };
+      const valores = pontos.map((h) => h.minimo);
+      const min = Math.min(...valores), max = Math.max(...valores);
+      const faixa = max - min;
+      const fundoY = altura - margem.baixo;
+      const x = (i) => margem.esq + (i / (pontos.length - 1)) * (largura - margem.esq - margem.dir);
+      const y = (v) => (faixa ? margem.topo + (1 - (v - min) / faixa) * (fundoY - margem.topo) : (fundoY + margem.topo) / 2);
 
-    destino.appendChild(svg);
-    destino.appendChild(el('p', 'dica', 'Cada ponto é o menor preço observado naquele dia, somando todas as lojas.'));
+      const ns = 'http://www.w3.org/2000/svg';
+      const criar = (nome, atributos) => {
+        const e = document.createElementNS(ns, nome);
+        Object.entries(atributos || {}).forEach(([k, v]) => e.setAttribute(k, v));
+        return e;
+      };
+      const svg = criar('svg', { viewBox: '0 0 ' + largura + ' ' + altura, class: 'grafico', role: 'img' });
+
+      // area e linha: gradiente de cima para baixo, com sombra suave na linha
+      const defs = criar('defs');
+      defs.innerHTML = '<linearGradient id="area-grafico" x1="0" y1="0" x2="0" y2="1">' +
+        '<stop offset="0" stop-color="#4c8dff" stop-opacity="0.28"/>' +
+        '<stop offset="1" stop-color="#4c8dff" stop-opacity="0"/></linearGradient>' +
+        '<filter id="sombra-linha" x="-10%" y="-20%" width="120%" height="150%">' +
+        '<feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#4c8dff" flood-opacity="0.45"/></filter>';
+      svg.appendChild(defs);
+
+      const coordenadas = pontos.map((h, i) => x(i) + ',' + y(h.minimo));
+      svg.appendChild(criar('polygon', {
+        points: [x(0) + ',' + fundoY].concat(coordenadas, [x(pontos.length - 1) + ',' + fundoY]).join(' '),
+        fill: 'url(#area-grafico)',
+      }));
+      svg.appendChild(criar('polyline', {
+        points: coordenadas.join(' '), fill: 'none', stroke: '#4c8dff', 'stroke-width': '3',
+        'stroke-linejoin': 'round', 'stroke-linecap': 'round', filter: 'url(#sombra-linha)',
+      }));
+
+      // valores maximo e minimo no canto do eixo, com contorno da cor do painel para ler sobre a linha
+      [[max, margem.topo + 12], [min, fundoY - 6]].forEach(([valor, ya]) => {
+        const rotulo = criar('text', { x: margem.esq, y: ya, fill: '#97a1b2', 'font-size': '11' });
+        rotulo.style.stroke = 'var(--fundo-2)';
+        rotulo.style.strokeWidth = '4px';
+        rotulo.style.paintOrder = 'stroke';
+        rotulo.textContent = dinheiro(valor);
+        svg.appendChild(rotulo);
+      });
+
+      pontos.forEach((h, i) => {
+        const c = criar('circle', {
+          cx: x(i), cy: y(h.minimo), r: '3.5', fill: h.minimo === min ? '#22c55e' : '#4c8dff',
+        });
+        const titulo = criar('title');
+        titulo.textContent = h.dia.split('-').reverse().join('/') + ': ' + dinheiro(h.minimo);
+        c.appendChild(titulo);
+        svg.appendChild(c);
+      });
+
+      // datas no eixo: todas quando cabem; senao, espacamento regular com o primeiro e o ultimo dia
+      const ultimo = pontos.length - 1;
+      const passo = Math.max(1, Math.ceil(ultimo / 5));
+      pontos.forEach((h, i) => {
+        if (i % passo !== 0 && i !== ultimo) return;
+        if (i !== ultimo && ultimo - i < passo) return;
+        const data = criar('text', {
+          x: x(i), y: altura - 8, fill: '#97a1b2', 'font-size': '11',
+          'text-anchor': i === 0 ? 'start' : i === ultimo ? 'end' : 'middle',
+        });
+        data.textContent = h.dia.slice(5).split('-').reverse().join('/');
+        svg.appendChild(data);
+      });
+
+      desenho.appendChild(svg);
+      desenho.appendChild(el('p', 'dica', 'Cada ponto é o menor preço observado naquele dia, somando todas as lojas.'));
+    }
+
+    destino.appendChild(filtros);
+    destino.appendChild(desenho);
+    escolher(0);
+    // quando a largura muda (redimensionar a tela ou a area aparecer), o desenho acompanha
+    if (window.ResizeObserver) {
+      destino._observador = new ResizeObserver(() => {
+        if (destino.clientWidth && destino.clientWidth !== ultimaLargura) desenhar();
+      });
+      destino._observador.observe(destino);
+    }
   }
 
   /* ================= METRICAS ================= */
