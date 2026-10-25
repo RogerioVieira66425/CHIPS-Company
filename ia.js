@@ -10,7 +10,7 @@ const db = require('./db.js');
 const analise = require('./analise.js');
 
 // troque ao mudar as regras de busca: invalida os resultados guardados
-const VERSAO_BUSCA = 4;
+const VERSAO_BUSCA = 5;
 
 const SITUACOES = ['Boa Compra', 'Preço Médio', 'Sem Histórico (Novo)', 'Evitar', 'Anomalia (Isolada por IA)', 'Bom Momento'];
 
@@ -143,17 +143,22 @@ async function pesquisar(termo) {
   );
 
   const encontradas = linhas.map(paraOferta);
-  // produto principal primeiro: so mostra acessorios quando nao ha outra coisa
-  const principais = encontradas.filter((o) => !ehAcessorio(o.titulo, palavras));
-  let todas = principais.length ? principais : encontradas;
-  // a expressao digitada inteira (ex.: "placa de video") tem prioridade: os titulos
-  // que a citam por inteiro ficam; os que so tem as palavras soltas entram se forem poucos
+  // acessorios continuam na lista, mas marcados: a tela os coloca no fim
+  const marcadas = encontradas.map((o) => Object.assign(o, { acessorio: ehAcessorio(o.titulo, palavras) }));
+  const principais = marcadas.filter((o) => !o.acessorio);
+  const acessorios = marcadas.filter((o) => o.acessorio);
+
+  // a expressao digitada inteira (ex.: "placa de video") tem prioridade entre os principais
+  let base = principais;
   if (palavras.length >= 2) {
-    const inteira = todas.filter((o) => textoDeBusca(o.titulo).indexOf(t) !== -1);
-    if (inteira.length >= 5) todas = inteira;
+    const inteira = principais.filter((o) => textoDeBusca(o.titulo).indexOf(t) !== -1);
+    if (inteira.length >= 5) base = inteira;
   }
   // todas as palavras digitadas precisam estar no nome do produto
-  const filtrado = analise.filtrarRelevantes(todas, termo, 1);
+  const filtradoPrincipais = analise.filtrarRelevantes(base, termo, 1);
+  const filtradoAcessorios = analise.filtrarRelevantes(acessorios, termo, 1);
+  const todas = filtradoPrincipais.ofertas.concat(filtradoAcessorios.ofertas);
+  const filtrado = { ofertas: filtradoPrincipais.ofertas, poucasCorrespondencias: filtradoPrincipais.poucasCorrespondencias };
 
   // uma "fonte" por loja, como as consultas antigas devolviam
   const porLoja = new Map();

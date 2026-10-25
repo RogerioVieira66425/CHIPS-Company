@@ -394,7 +394,7 @@ const App = (function () {
       return termos.filter((t) => alvo.indexOf(t) !== -1).length / termos.length >= 0.7;
     };
     const ofertas = (r.fontes || []).reduce((acc, f) => acc.concat(f.ofertas || []), []).filter((o) => combina(o.titulo));
-    ofertas.sort((a, b) => a.preco_total - b.preco_total);
+    ofertas.sort((a, b) => (a.acessorio ? 1 : 0) - (b.acessorio ? 1 : 0) || a.preco_total - b.preco_total);
 
     $('#resultado').classList.remove('oculto');
 
@@ -505,9 +505,11 @@ const App = (function () {
 
   function ordenar(lista) {
     const copia = lista.slice();
-    if (ordem === '-preco') copia.sort((a, b) => b.preco_total - a.preco_total);
-    else if (ordem === 'desconto') copia.sort((a, b) => descontoDe(b) - descontoDe(a));
-    else copia.sort((a, b) => a.preco_total - b.preco_total);
+    // acessorios sempre no fim, qualquer que seja a ordem escolhida
+    const criterio = (o) => (o.acessorio ? 1 : 0);
+    if (ordem === '-preco') copia.sort((a, b) => criterio(a) - criterio(b) || b.preco_total - a.preco_total);
+    else if (ordem === 'desconto') copia.sort((a, b) => criterio(a) - criterio(b) || descontoDe(b) - descontoDe(a));
+    else copia.sort((a, b) => criterio(a) - criterio(b) || a.preco_total - b.preco_total);
     return copia;
   }
 
@@ -522,6 +524,9 @@ const App = (function () {
   }
 
   function compararLocal(lista) {
+    // o "melhor" nunca e um acessorio, quando ha produto principal
+    const semAcessorio = lista.filter((o) => !o.acessorio);
+    lista = semAcessorio.length ? semAcessorio : lista;
     let base = lista.filter((o) => o.condicao === 'novo');
     if (!base.length) base = lista;
     if (!base.length) return { ranking: [], melhor: null, economia: 0, economia_pct: 0 };
