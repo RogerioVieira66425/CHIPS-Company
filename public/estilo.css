@@ -1064,6 +1064,8 @@ body {
 .tabela-lojas td.c-verde { background: #e6f4ee; color: var(--verde); font-weight: 700; }
 .tabela-lojas td.c-azul { background: #e9effb; color: var(--info); font-weight: 700; }
 .tabela-lojas td.c-vermelho { background: #fbe9ec; color: var(--vermelho); font-weight: 700; }
+.tabela-lojas td.c-verde, .tabela-lojas td.c-azul, .tabela-lojas td.c-vermelho { background: #ffffff; }
+.tabela-lojas tr.melhor-linha td:not(.dir) { background: #ffffff; }
 
 /* sugestoes enquanto digita */
 .sugestoes-busca {
