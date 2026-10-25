@@ -10,7 +10,7 @@ const db = require('./db.js');
 const analise = require('./analise.js');
 
 // troque ao mudar as regras de busca: invalida os resultados guardados
-const VERSAO_BUSCA = 5;
+const VERSAO_BUSCA = 6;
 
 const SITUACOES = ['Boa Compra', 'Preço Médio', 'Sem Histórico (Novo)', 'Evitar', 'Anomalia (Isolada por IA)', 'Bom Momento'];
 
@@ -27,7 +27,7 @@ function textoDeBusca(texto) {
 /* Acessorios: titulos que comecam com estas palavras, ou em que o termo so
    aparece depois de uma expressao de compatibilidade ("para PS5", "compativel
    com PS5"), sao acessorios do produto procurado, nao o produto. */
-const PALAVRAS_ACESSORIO = ['suporte', 'cabo', 'adaptador', 'dissipador', 'capa', 'protetor', 'case', 'bolsa', 'mousepad', 'pelicula', 'alca', 'skin', 'adesivo'];
+const PALAVRAS_ACESSORIO = ['suporte', 'cabo', 'adaptador', 'dissipador', 'capa', 'protetor', 'case', 'bolsa', 'mousepad', 'pelicula', 'alca', 'skin', 'adesivo', 'fonte'];
 const PALAVRAS_TIPO_DIFERENTE = ['captura', 'streaming'];
 const MARCADORES_COMPATIVEL = ['para', 'compativel', 'compativeis', 'compativeis', 'p'];
 
