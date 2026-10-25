@@ -1,0 +1,51 @@
+name: Pipeline de coleta e analise
+
+on:
+  schedule:
+    - cron: '0 3 * * *'   # 03:00 UTC = 00:00 em Brasilia
+  workflow_dispatch:
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - name: Conferir o segredo DATABASE_URL
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo 'Defina o segredo DATABASE_URL em Settings > Secrets and variables > Actions.'
+            exit 1
+          fi
+      - name: Baixar o codigo
+        uses: actions/checkout@v4
+
+      - name: Instalar Node e dependencias
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --omit=dev
+
+      - name: Instalar Python e dependencias
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - run: pip install requests pandas numpy scikit-learn selenium beautifulsoup4 matplotlib seaborn psycopg2-binary
+
+      - name: 1. Coletar ofertas (KaBuM e Amazon)
+        run: python pipeline/extracao_lojas.py
+
+      - name: 2. Gravar o dia na base do site
+        run: node scripts/importar-csv.js --adicionar pipeline/saida/ofertas_consolidadas.csv
+
+      - name: 3. Analise com IA
+        run: python pipeline/ml_model.py
+
+      - name: Guardar os resultados
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultado-pipeline-${{ github.run_number }}
+          path: pipeline/saida/
+          if-no-files-found: warn

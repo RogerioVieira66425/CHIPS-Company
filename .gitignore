@@ -5,3 +5,5 @@ precos.db-wal
 investimentos.db*
 *.log
 .DS_Store
+
+pipeline/saida/

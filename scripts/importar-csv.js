@@ -6,14 +6,18 @@
 
    Os arquivos podem usar ';' ou ',' como separador: o script detecta sozinho.
    Com DATABASE_URL definida, grava no Supabase; sem ela, no SQLite local.
-   Apaga o conteudo atual da tabela e grava tudo de novo: o que for passado
-   vira o padrao. Se a gravacao falhar no meio, rode de novo. */
+   Sem flag: apaga o conteudo atual da tabela e grava tudo de novo: o que for
+   passado vira o padrao. Com --adicionar: troca so os dias presentes nos
+   arquivos e mantem os outros. Se a gravacao falhar no meio, rode de novo. */
 
 const fs = require('node:fs');
 const db = require('../db.js');
 const { textoDeBusca } = require('../ia.js');
 
-const arquivos = process.argv.slice(2);
+// --adicionar: troca so os dias presentes nos arquivos e mantem os outros dias da base
+const args = process.argv.slice(2);
+const modoAdicionar = args.includes('--adicionar');
+const arquivos = args.filter((a) => !a.startsWith('--'));
 if (!arquivos.length) {
   console.error('\n  Informe os CSVs: npm run importar-ia -- "caminho\\um.csv" "caminho\\dois.csv"\n');
   process.exit(1);
@@ -102,7 +106,12 @@ function lerArquivo(caminho) {
 
   console.log('  ' + (db.usaPostgres() ? 'Destino: Supabase' : 'Destino: SQLite local'));
   await db.iniciar();
-  await db.run('DELETE FROM ofertas_dia');
+  if (modoAdicionar) {
+    const dias = [...new Set(todas.map((r) => r.dia))];
+    await db.run('DELETE FROM ofertas_dia WHERE dia IN (' + dias.map(() => '?').join(',') + ')', ...dias);
+  } else {
+    await db.run('DELETE FROM ofertas_dia');
+  }
 
   const LOTE = 400;
   for (let inicio = 0; inicio < todas.length; inicio += LOTE) {
