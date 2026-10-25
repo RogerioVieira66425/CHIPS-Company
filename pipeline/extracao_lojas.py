@@ -100,7 +100,7 @@ def extrair_kabum(alvos):
 def salvar_diagnostico(termo, html):
     """Guarda o HTML de uma pagina da Amazon que veio sem produtos, para investigar depois."""
     nome = re.sub(r'[^a-z0-9]+', '_', termo.lower()).strip('_')
-    with io.open(os.path.join(pasta_saida, f'amazon_vazia_{nome}.html'), 'w', encoding='utf-8') as f:
+    with open(os.path.join(pasta_saida, f'amazon_vazia_{nome}.html'), 'w', encoding='utf-8') as f:
         f.write(html)
 
 
