@@ -10,7 +10,7 @@ const db = require('./db.js');
 const analise = require('./analise.js');
 
 // troque ao mudar as regras de busca: invalida os resultados guardados
-const VERSAO_BUSCA = 6;
+const VERSAO_BUSCA = 7;
 
 const SITUACOES = ['Boa Compra', 'Preço Médio', 'Sem Histórico (Novo)', 'Evitar', 'Anomalia (Isolada por IA)', 'Bom Momento'];
 
