@@ -1460,7 +1460,7 @@ const App = (function () {
       });
 
       desenho.appendChild(svg);
-      desenho.appendChild(el('p', 'dica', 'Cada ponto é o menor preço observado naquele dia, somando todas as lojas.'));
+      desenho.appendChild(el('p', 'dica nota-grafico', 'Cada ponto é o menor preço observado naquele dia, somando todas as lojas.'));
     }
 
     destino.appendChild(filtros);
