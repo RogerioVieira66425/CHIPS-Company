@@ -1051,9 +1051,10 @@ body {
 .tabela th.cen, .tabela td.cen { text-align: center; }
 
 /* cabecalhos de preco coloridos pelo significado: menor verde, mediana azul, maior vermelho */
-.tabela th.h-verde { color: var(--verde); }
-.tabela th.h-azul { color: var(--info); }
-.tabela th.h-vermelho { color: var(--vermelho); }
+.tabela th.h-verde { background: var(--verde); color: #fff; }
+.tabela th.h-azul { background: var(--info); color: #fff; }
+.tabela th.h-vermelho { background: var(--vermelho); color: #fff; }
+.tabela th.h-cinza { background: var(--texto-fraco); color: #fff; }
 
 /* sugestoes enquanto digita */
 .sugestoes-busca {
