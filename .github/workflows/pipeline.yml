@@ -17,6 +17,7 @@ jobs:
             echo 'Defina o segredo DATABASE_URL em Settings > Secrets and variables > Actions.'
             exit 1
           fi
+
       - name: Baixar o codigo
         uses: actions/checkout@v4
 

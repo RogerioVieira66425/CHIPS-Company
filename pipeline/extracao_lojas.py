@@ -97,6 +97,13 @@ def extrair_kabum(alvos):
     return ofertas_totais
 
 
+def salvar_diagnostico(termo, html):
+    """Guarda o HTML de uma pagina da Amazon que veio sem produtos, para investigar depois."""
+    nome = re.sub(r'[^a-z0-9]+', '_', termo.lower()).strip('_')
+    with io.open(os.path.join(pasta_saida, f'amazon_vazia_{nome}.html'), 'w', encoding='utf-8') as f:
+        f.write(html)
+
+
 def extrair_amazon(alvos):
     print("\n[Amazon] Iniciando extração via Selenium com paginação...")
     ofertas_totais = []
@@ -123,11 +130,18 @@ def extrair_amazon(alvos):
                 url_busca = f"https://www.amazon.com.br/s?k={quote_plus(termo)}&page={pagina}"
                 print(f"     Acessando página {pagina}...")
 
-                driver.get(url_busca)
-                time.sleep(random.uniform(3.0, 5.0))
-
-                sopa = BeautifulSoup(driver.page_source, "html.parser")
-                blocos = sopa.select('div[data-component-type="s-search-result"]')
+                blocos = []
+                for tentativa in range(1, 4):
+                    driver.get(url_busca)
+                    time.sleep(random.uniform(3.0, 5.0))
+                    html = driver.page_source
+                    blocos = BeautifulSoup(html, "html.parser").select('div[data-component-type="s-search-result"]')
+                    # so a primeira pagina e repetida: pagina vazia depois dela e o fim do catalogo
+                    if blocos or pagina > 1:
+                        break
+                    salvar_diagnostico(termo, html)
+                    print(f"     -> Página 1 sem produtos (tentativa {tentativa} de 3). Aguardando...")
+                    time.sleep(random.uniform(20.0, 40.0))
 
                 if not blocos:
                     print(f"     -> Fim dos resultados na página {pagina}.")
