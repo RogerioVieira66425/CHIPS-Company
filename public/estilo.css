@@ -1042,3 +1042,19 @@ body {
 .tabela th.h-verde { color: var(--verde); }
 .tabela th.h-azul { color: var(--info); }
 .tabela th.h-vermelho { color: var(--vermelho); }
+
+/* sugestoes enquanto digita */
+.sugestoes-busca {
+  list-style: none; margin: 8px auto 0; padding: 6px; max-width: 640px;
+  background: #ffffff; border: 1px solid var(--borda); border-radius: 12px;
+  box-shadow: 0 16px 36px -18px rgba(13,15,18,.45); text-align: left;
+}
+.sugestoes-busca li button {
+  width: 100%; display: flex; justify-content: space-between; gap: 12px; align-items: center;
+  padding: 10px 12px; border: 0; border-radius: 8px; background: transparent;
+  color: var(--texto); font: inherit; font-size: 14px; cursor: pointer; text-align: left;
+}
+.sugestoes-busca li button:hover, .sugestoes-busca li button:focus { background: #f2f4f7; outline: none; }
+.sugestoes-busca li button span:last-child { font-weight: 700; color: var(--pos); white-space: nowrap; }
+.voce-quis { margin: 0 0 12px; font-size: 14px; }
+.voce-quis button { border: 0; background: none; color: var(--destaque); font: inherit; font-weight: 700; cursor: pointer; text-decoration: underline; }

@@ -531,6 +531,7 @@ async function api(req, res, rota) {
     try {
       if (rota === '/api/ia/resumo') return json(res, 200, await ia.resumo());
       if (rota === '/api/ia/ofertas') return json(res, 200, await ia.ofertas(parametros));
+      if (rota === '/api/ia/sugerir') return json(res, 200, await ia.sugerir(parametros.q || ''));
       if (rota === '/api/ia/analise') {
         const dados = await ia.analiseDoProduto(parametros.produto, parametros.titulo);
         return dados ? json(res, 200, dados) : json(res, 404, { erro: 'Produto nao encontrado na base.' });

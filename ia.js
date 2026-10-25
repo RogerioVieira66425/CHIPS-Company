@@ -21,6 +21,29 @@ function textoDeBusca(texto) {
     .trim();
 }
 
+/* Acessorios: titulos que comecam com estas palavras, ou em que o termo so
+   aparece depois de uma expressao de compatibilidade ("para PS5", "compativel
+   com PS5"), sao acessorios do produto procurado, nao o produto. */
+const PALAVRAS_ACESSORIO = ['suporte', 'cabo', 'adaptador', 'dissipador', 'capa', 'protetor', 'case', 'bolsa', 'mousepad', 'pelicula', 'alca', 'skin', 'adesivo'];
+const PALAVRAS_TIPO_DIFERENTE = ['captura', 'streaming'];
+const MARCADORES_COMPATIVEL = ['para', 'compativel', 'compativeis', 'compativeis', 'p'];
+
+function ehAcessorio(titulo, palavrasBusca) {
+  const tokens = textoDeBusca(titulo).split(' ').filter(Boolean);
+  if (!tokens.length) return false;
+  // "captura" e outro tipo de produto (placa de captura, nao placa de video)
+  const tipoDiferente = tokens.some((t) => PALAVRAS_TIPO_DIFERENTE.indexOf(t) !== -1) &&
+    !palavrasBusca.some((p) => PALAVRAS_TIPO_DIFERENTE.indexOf(p) !== -1);
+  if (tipoDiferente) return true;
+  const buscaTemAcessorio = palavrasBusca.some((p) => PALAVRAS_ACESSORIO.indexOf(p) !== -1);
+  if (!buscaTemAcessorio && PALAVRAS_ACESSORIO.indexOf(tokens[0]) !== -1) return true;
+
+  const marcador = tokens.findIndex((t) => MARCADORES_COMPATIVEL.indexOf(t) !== -1);
+  if (marcador === -1) return false;
+  const posicaoDoTermo = tokens.findIndex((t) => palavrasBusca.indexOf(t) !== -1);
+  return posicaoDoTermo > marcador;
+}
+
 /* Dia mais recente da base: a foto que a busca e a tela mostram. */
 async function diaAtual() {
   const r = await db.get('SELECT MAX(dia) AS dia FROM ofertas_dia');
@@ -116,8 +139,18 @@ async function pesquisar(termo) {
     dia, ...palavras.map((p) => '%' + p + '%')
   );
 
-  const todas = linhas.map(paraOferta);
-  const filtrado = analise.filtrarRelevantes(todas, termo);
+  const encontradas = linhas.map(paraOferta);
+  // produto principal primeiro: so mostra acessorios quando nao ha outra coisa
+  const principais = encontradas.filter((o) => !ehAcessorio(o.titulo, palavras));
+  let todas = principais.length ? principais : encontradas;
+  // a expressao digitada inteira (ex.: "placa de video") tem prioridade: os titulos
+  // que a citam por inteiro ficam; os que so tem as palavras soltas entram se forem poucos
+  if (palavras.length >= 2) {
+    const inteira = todas.filter((o) => textoDeBusca(o.titulo).indexOf(t) !== -1);
+    if (inteira.length >= 5) todas = inteira;
+  }
+  // todas as palavras digitadas precisam estar no nome do produto
+  const filtrado = analise.filtrarRelevantes(todas, termo, 1);
 
   // uma "fonte" por loja, como as consultas antigas devolviam
   const porLoja = new Map();
@@ -132,6 +165,9 @@ async function pesquisar(termo) {
     relevantes: filtrado.ofertas.length,
     total_bruto: todas.length,
     poucas_correspondencias: Boolean(filtrado.poucasCorrespondencias),
+    sugestao: filtrado.ofertas.length < 3 ? await corrigir(termo) : null,
+    acessorios_ocultos: encontradas.length - principais.length,
+    so_acessorios: principais.length === 0 && encontradas.length > 0,
     duracao_ms: Date.now() - inicio,
     dia,
   };
@@ -213,4 +249,80 @@ async function analiseDoProduto(produto, titulo) {
   };
 }
 
-module.exports = { resumo, ofertas, pesquisar, analiseDoProduto, textoDeBusca, SITUACOES };
+/* ---------- sugestoes enquanto digita e correcao de termo errado ----------
+   O vocabulario sai dos nomes do dia mais recente e fica em memoria: e pequeno
+   e so muda quando entra uma nova foto. */
+let vocabCache = { dia: null, palavras: null, nomes: null };
+
+async function vocabulario() {
+  const dia = await diaAtual();
+  if (vocabCache.dia === dia && vocabCache.palavras) return vocabCache;
+  const linhas = await db.all('SELECT DISTINCT nome_produto AS nome FROM ofertas_dia WHERE dia = ?', dia);
+  const palavras = new Map();
+  const nomes = [];
+  linhas.forEach((r) => {
+    const texto = textoDeBusca(r.nome);
+    nomes.push({ nome: r.nome, texto });
+    texto.split(' ').forEach((p) => {
+      if (p.length >= 3) palavras.set(p, (palavras.get(p) || 0) + 1);
+    });
+  });
+  vocabCache = { dia, palavras, nomes };
+  return vocabCache;
+}
+
+function distancia(a, b) {
+  const m = a.length, n = b.length;
+  let anterior = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const atual = [i];
+    for (let j = 1; j <= n; j++) {
+      const custo = a[i - 1] === b[j - 1] ? 0 : 1;
+      atual[j] = Math.min(atual[j - 1] + 1, anterior[j] + 1, anterior[j - 1] + custo);
+    }
+    anterior = atual;
+  }
+  return anterior[n];
+}
+
+/* Produtos que contem o que foi digitado: a lista que aparece enquanto a pessoa digita. */
+async function sugerir(termo) {
+  const t = textoDeBusca(termo);
+  const palavras = t.split(' ').filter((p) => p.length >= 2);
+  if (!palavras.length) return [];
+  const dia = await diaAtual();
+  if (!dia) return [];
+  const condicoes = palavras.map(() => 'texto_busca LIKE ?').join(' AND ');
+  const linhas = await db.all(
+    'SELECT nome_produto AS nome, MIN(preco) AS menor FROM ofertas_dia WHERE dia = ? AND ' + condicoes +
+    ' GROUP BY nome_produto ORDER BY menor ASC LIMIT 8',
+    dia, ...palavras.map((p) => '%' + p + '%')
+  );
+  return linhas.map((r) => ({ nome: r.nome, menor: arredonda(Number(r.menor)) }));
+}
+
+/* Corrige cada palavra que nao existe na base pela mais parecida (distancia de
+   edicao pequena), preferindo a que mais aparece nos produtos. */
+async function corrigir(termo) {
+  const palavras = textoDeBusca(termo).split(' ').filter(Boolean);
+  if (!palavras.length) return null;
+  const v = await vocabulario();
+  let mudou = false;
+  const novas = palavras.map((p) => {
+    if (p.length < 3 || v.palavras.has(p)) return p;
+    const limite = p.length <= 4 ? 1 : 2;
+    let melhor = null;
+    v.palavras.forEach((freq, cand) => {
+      if (Math.abs(cand.length - p.length) > limite) return;
+      const d = distancia(p, cand);
+      if (d > limite) return;
+      if (!melhor || d < melhor.d || (d === melhor.d && freq > melhor.freq)) melhor = { c: cand, d, freq };
+    });
+    if (!melhor) return p;
+    mudou = true;
+    return melhor.c;
+  });
+  return mudou ? novas.join(' ') : null;
+}
+
+module.exports = { resumo, ofertas, pesquisar, analiseDoProduto, sugerir, corrigir, textoDeBusca, SITUACOES };

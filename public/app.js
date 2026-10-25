@@ -198,6 +198,48 @@ const App = (function () {
     if (termo.length >= 2) buscar(termo);
   });
 
+  /* ---------- sugestoes enquanto digita ---------- */
+  let temporizadorSugestao = null;
+  const caixaSugestoes = () => $('#sugestoes-busca');
+  const esconderSugestoes = () => caixaSugestoes().classList.add('oculto');
+
+  function mostrarSugestoes(lista) {
+    const ul = caixaSugestoes();
+    ul.innerHTML = '';
+    if (!lista.length) { esconderSugestoes(); return; }
+    lista.forEach((s) => {
+      const li = el('li');
+      const b = el('button', '', '');
+      b.type = 'button';
+      b.appendChild(el('span', '', s.nome));
+      b.appendChild(el('span', '', dinheiro(s.menor)));
+      b.addEventListener('mousedown', (e) => { e.preventDefault(); escolherSugestao(s.nome); });
+      li.appendChild(b);
+      ul.appendChild(li);
+    });
+    ul.classList.remove('oculto');
+  }
+
+  function escolherSugestao(nome) {
+    $('#campo-busca').value = nome;
+    esconderSugestoes();
+    buscar(nome);
+  }
+
+  $('#campo-busca').addEventListener('input', (e) => {
+    clearTimeout(temporizadorSugestao);
+    const termo = e.target.value.trim();
+    if (termo.length < 2) { esconderSugestoes(); return; }
+    temporizadorSugestao = setTimeout(async () => {
+      try {
+        const lista = await pedir('/api/ia/sugerir?q=' + encodeURIComponent(termo));
+        if ($('#campo-busca').value.trim() === termo) mostrarSugestoes(lista);
+      } catch (err) { esconderSugestoes(); }
+    }, 250);
+  });
+  $('#campo-busca').addEventListener('blur', () => setTimeout(esconderSugestoes, 150));
+  $('#campo-busca').addEventListener('keydown', (e) => { if (e.key === 'Escape') esconderSugestoes(); });
+
   $('#busca-topo').addEventListener('submit', (e) => {
     e.preventDefault();
     const termo = $('#campo-topo').value.trim();
@@ -360,7 +402,16 @@ const App = (function () {
     ordem = 'preco';
     pagina = 1;
 
-    $('#res-erros').innerHTML = '';
+    const erros = $('#res-erros');
+    erros.innerHTML = '';
+    if (r.sugestao && r.sugestao !== busca.termo) {
+      const aviso = el('p', 'voce-quis', t('busca.voceQuis') + ' ');
+      const b = el('button', '', r.sugestao + '?');
+      b.type = 'button';
+      b.addEventListener('click', () => { $('#campo-busca').value = r.sugestao; buscar(r.sugestao); });
+      aviso.appendChild(b);
+      erros.appendChild(aviso);
+    }
 
     montarIntro(busca);
     montarFiltros();

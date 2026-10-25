@@ -15,6 +15,7 @@ const I18N = (function () {
       'busca.botao': 'Buscar',
       'busca.topoPlaceholder': 'buscar outro produto...',
       'busca.recentes': 'Buscas recentes:',
+      'busca.voceQuis': 'Você quis dizer:',
 
       'res.eyebrow': 'Resultado da busca',
       'analise.eyebrow': 'Análise do produto',
@@ -171,6 +172,7 @@ const I18N = (function () {
       'busca.botao': 'Search',
       'busca.topoPlaceholder': 'search another product...',
       'busca.recentes': 'Recent searches:',
+      'busca.voceQuis': 'Did you mean:',
 
       'res.eyebrow': 'Search result',
       'analise.eyebrow': 'Product analysis',
@@ -327,6 +329,7 @@ const I18N = (function () {
       'busca.botao': 'Buscar',
       'busca.topoPlaceholder': 'buscar otro producto...',
       'busca.recentes': 'Búsquedas recientes:',
+      'busca.voceQuis': '¿Quisiste decir:',
 
       'res.eyebrow': 'Resultado de la búsqueda',
       'analise.eyebrow': 'Análisis del producto',
