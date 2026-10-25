@@ -1280,12 +1280,8 @@ const App = (function () {
     svg.setAttribute('class', 'grafico');
 
     [0, 0.5, 1].forEach((f) => {
+      // so o valor do eixo: sem linhas de grade, a evolucao do preco fica como a unica linha
       const valor = min + faixa * f;
-      const linha = document.createElementNS(ns, 'line');
-      linha.setAttribute('x1', margem.esq); linha.setAttribute('x2', largura - margem.dir);
-      linha.setAttribute('y1', y(valor)); linha.setAttribute('y2', y(valor));
-      linha.setAttribute('stroke', '#232a36');
-      svg.appendChild(linha);
       const rotulo = document.createElementNS(ns, 'text');
       rotulo.setAttribute('x', 6); rotulo.setAttribute('y', y(valor) + 4);
       rotulo.setAttribute('fill', '#97a1b2'); rotulo.setAttribute('font-size', '11');
