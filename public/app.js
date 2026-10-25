@@ -1410,7 +1410,9 @@ const App = (function () {
       }));
 
       // valores maximo e minimo no canto do eixo, com contorno da cor do painel para ler sobre a linha
-      [[max, margem.topo + 12], [min, fundoY - 6]].forEach(([valor, ya]) => {
+      // sem variacao no periodo, o maximo e o minimo sao o mesmo valor: um rotulo basta
+      const rotulos = faixa ? [[max, margem.topo + 12], [min, fundoY - 6]] : [[max, margem.topo + 12]];
+      rotulos.forEach(([valor, ya]) => {
         const rotulo = criar('text', { x: margem.esq, y: ya, fill: '#97a1b2', 'font-size': '11' });
         rotulo.style.stroke = 'var(--fundo-2)';
         rotulo.style.strokeWidth = '4px';

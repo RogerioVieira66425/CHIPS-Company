@@ -300,6 +300,7 @@ code { background: #ffffff; padding: 1px 5px; border-radius: 4px; }
 .lista-ofertas small { color: var(--texto-fraco); font-size: 12px; line-height: 1.35; }
 
 /* gráfico de histórico */
+.grade-igual { align-items: stretch; }
 .grafico { display: block; width: 100%; height: auto; }
 .filtros-dia { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 12px; }
 .filtros-dia .chip[aria-pressed="true"] { background: var(--acao); border-color: var(--acao); color: #fff; }
