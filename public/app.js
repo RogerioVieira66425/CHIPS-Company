@@ -1227,17 +1227,38 @@ const App = (function () {
     return ul;
   }
 
+  /* Buscas recentes que este navegador escondeu com o x. So local: o historico da base nao muda. */
+  const CHAVE_OCULTAS = 'buscas-ocultas';
+  function lerOcultas() {
+    try { return JSON.parse(localStorage.getItem(CHAVE_OCULTAS)) || []; } catch (e) { return []; }
+  }
+  function ocultar(termo) {
+    const atuais = lerOcultas();
+    if (atuais.indexOf(termo) !== -1) return;
+    try { localStorage.setItem(CHAVE_OCULTAS, JSON.stringify(atuais.concat(termo))); } catch (e) { /* sem armazenamento: some so nesta tela */ }
+  }
+
   async function carregarSugestoes() {
     try {
       const populares = await pedir('/api/buscas/populares');
       const caixa = $('#sugestoes');
       caixa.innerHTML = '';
       if (!populares.length) return;
+      const ocultas = lerOcultas();
+      const visiveis = populares.filter((p) => ocultas.indexOf(p.termo) === -1);
+      if (!visiveis.length) return;
       caixa.appendChild(el('span', 'sugestoes-titulo', t('busca.recentes')));
-      populares.forEach((p) => {
+      visiveis.forEach((p) => {
+        const grupo = el('span', 'chip-busca');
         const b = el('button', 'chip', p.termo);
+        b.type = 'button';
         b.addEventListener('click', () => buscar(p.termo));
-        caixa.appendChild(b);
+        const x = el('button', 'chip-excluir', '×');
+        x.type = 'button';
+        x.setAttribute('aria-label', 'Remover ' + p.termo);
+        x.addEventListener('click', (e) => { e.stopPropagation(); ocultar(p.termo); grupo.remove(); });
+        grupo.append(b, x);
+        caixa.appendChild(grupo);
       });
     } catch (e) { /* sugestoes sao opcionais */ }
   }
