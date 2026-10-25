@@ -1066,6 +1066,8 @@ body {
 .tabela-lojas td.c-vermelho { background: #fbe9ec; color: var(--vermelho); font-weight: 700; }
 .tabela-lojas td.c-verde, .tabela-lojas td.c-azul, .tabela-lojas td.c-vermelho { background: #ffffff; }
 .tabela-lojas tr.melhor-linha td:not(.dir) { background: #ffffff; }
+.tabela-ofertas th:last-child, .tabela-ofertas td:last-child { background: transparent; border: 0; }
+.tabela-ofertas td.dir { background: transparent; }
 
 /* sugestoes enquanto digita */
 .sugestoes-busca {
