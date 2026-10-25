@@ -931,7 +931,10 @@ const App = (function () {
     const variacao = $('#an-variacao');
     variacao.textContent = d.referencia > 0 ? pct(d.variacao_pct) : '—';
     variacao.className = d.variacao_pct < 0 ? 'positivo' : (d.variacao_pct > 0 ? 'negativo' : '');
-    $('#an-variacao-sub').textContent = t('analise.variacaoSub');
+    $('#an-variacao-sub').innerHTML = t('analise.variacaoSub', {
+      menos: '<span class="positivo">-</span>',
+      mais: '<span class="negativo">+</span>',
+    });
 
     $('#an-situacao').textContent = t(SITUACAO[d.situacao] || 'situacao.novo');
     $('#an-situacao').className = classeSituacao(d.situacao);
