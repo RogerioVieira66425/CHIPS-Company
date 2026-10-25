@@ -926,20 +926,31 @@ const App = (function () {
     $('#an-situacao').textContent = t(SITUACAO[d.situacao] || 'situacao.novo');
     $('#an-situacao-sub').textContent = t((SITUACAO[d.situacao] || 'situacao.novo') + '.dica');
 
-    // faixa de precos: onde a oferta cai entre o menor e o maior preco do produto
-    // com uma oferta so (ou precos iguais) nao ha faixa para mostrar: a barra some
+    // faixa de precos: onde a oferta cai entre o menor e o maior preco do produto.
+    // Com uma oferta so, a faixa mostra a oferta contra a referencia (marcador cinza).
+    // Sem nenhum dos dois, nao ha o que comparar e a faixa some.
     const amplitude = est.maior - est.menor;
-    const semFaixa = est.ofertas <= 1 || amplitude <= 0;
+    const faixaProduto = est.ofertas >= 2 && amplitude > 0;
+    const referencia = d.referencia > 0 ? d.referencia : 0;
+    const comparaReferencia = !faixaProduto && referencia > 0;
+    const semFaixa = !faixaProduto && !comparaReferencia;
+    const posicaoNaFaixa = (v, lo, hi) => 8 + (hi === lo ? 42 : ((v - lo) / (hi - lo)) * 84);
     $('#an-faixa').classList.toggle('oculto', semFaixa);
-    $('#an-min').textContent = semFaixa ? '' : t('analise.menorDe') + ' ' + dinheiro(est.menor);
-    $('#an-max').textContent = semFaixa ? '' : dinheiro(est.maior) + ' ' + t('analise.maiorDe');
-    if (!semFaixa) {
-      const pos = ((d.oferta.preco - est.menor) / amplitude) * 100;
-      $('#an-marcador').style.left = pos.toFixed(1) + '%';
+    $('#an-marcador-ref').classList.toggle('oculto', !comparaReferencia);
+    if (faixaProduto) {
+      $('#an-min').textContent = t('analise.menorDe') + ' ' + dinheiro(est.menor);
+      $('#an-max').textContent = dinheiro(est.maior) + ' ' + t('analise.maiorDe');
+      $('#an-marcador').style.left = posicaoNaFaixa(d.oferta.preco, est.menor, est.maior).toFixed(1) + '%';
+    } else if (comparaReferencia) {
+      const lo = Math.min(d.oferta.preco, referencia), hi = Math.max(d.oferta.preco, referencia);
+      $('#an-min').textContent = t('analise.precoAtual') + ' ' + dinheiro(d.oferta.preco);
+      $('#an-max').textContent = t('analise.referencia') + ' ' + dinheiro(referencia);
+      $('#an-marcador').style.left = posicaoNaFaixa(d.oferta.preco, lo, hi).toFixed(1) + '%';
+      $('#an-marcador-ref').style.left = posicaoNaFaixa(referencia, lo, hi).toFixed(1) + '%';
     }
-    $('#an-pos').textContent = semFaixa
-      ? t('analise.unicaOferta')
-      : t('analise.maisBaratoQue', { pct: pctFmt(est.posicao_pct) });
+    $('#an-pos').textContent = faixaProduto
+      ? t('analise.maisBaratoQue', { pct: pctFmt(est.posicao_pct) })
+      : t('analise.unicaOferta');
 
     const stats = [
       [t('analise.mediana'), dinheiro(est.mediana)],
@@ -1374,7 +1385,7 @@ const App = (function () {
 
       // a medida e a da tela: a linha vai de uma borda a outra do painel, sem esticar o desenho
       const largura = Math.max(ultimaLargura || 560, 280), altura = 240;
-      const margem = { topo: 14, dir: 14, baixo: 30, esq: 14 };
+      const margem = { topo: 34, dir: 14, baixo: 30, esq: 14 };
       const valores = pontos.map((h) => h.minimo);
       const min = Math.min(...valores), max = Math.max(...valores);
       const faixa = max - min;
@@ -1393,10 +1404,10 @@ const App = (function () {
       // area e linha: gradiente de cima para baixo, com sombra suave na linha
       const defs = criar('defs');
       defs.innerHTML = '<linearGradient id="area-grafico" x1="0" y1="0" x2="0" y2="1">' +
-        '<stop offset="0" stop-color="#4c8dff" stop-opacity="0.28"/>' +
-        '<stop offset="1" stop-color="#4c8dff" stop-opacity="0"/></linearGradient>' +
+        '<stop offset="0" stop-color="#c8102e" stop-opacity="0.22"/>' +
+        '<stop offset="1" stop-color="#c8102e" stop-opacity="0"/></linearGradient>' +
         '<filter id="sombra-linha" x="-10%" y="-20%" width="120%" height="150%">' +
-        '<feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#4c8dff" flood-opacity="0.45"/></filter>';
+        '<feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#c8102e" flood-opacity="0.35"/></filter>';
       svg.appendChild(defs);
 
       const coordenadas = pontos.map((h, i) => x(i) + ',' + y(h.minimo));
@@ -1405,30 +1416,33 @@ const App = (function () {
         fill: 'url(#area-grafico)',
       }));
       svg.appendChild(criar('polyline', {
-        points: coordenadas.join(' '), fill: 'none', stroke: '#4c8dff', 'stroke-width': '3',
+        points: coordenadas.join(' '), fill: 'none', stroke: '#c8102e', 'stroke-width': '3',
         'stroke-linejoin': 'round', 'stroke-linecap': 'round', filter: 'url(#sombra-linha)',
       }));
 
-      // valores maximo e minimo no canto do eixo, com contorno da cor do painel para ler sobre a linha
-      // sem variacao no periodo, o maximo e o minimo sao o mesmo valor: um rotulo basta
-      const rotulos = faixa ? [[max, margem.topo + 12], [min, fundoY - 6]] : [[max, margem.topo + 12]];
-      rotulos.forEach(([valor, ya]) => {
-        const rotulo = criar('text', { x: margem.esq, y: ya, fill: '#97a1b2', 'font-size': '11' });
-        rotulo.style.stroke = 'var(--fundo-2)';
-        rotulo.style.strokeWidth = '4px';
-        rotulo.style.paintOrder = 'stroke';
-        rotulo.textContent = dinheiro(valor);
-        svg.appendChild(rotulo);
-      });
-
       pontos.forEach((h, i) => {
         const c = criar('circle', {
-          cx: x(i), cy: y(h.minimo), r: '3.5', fill: h.minimo === min ? '#22c55e' : '#4c8dff',
+          cx: x(i), cy: y(h.minimo), r: '3.5', fill: h.minimo === min ? '#22c55e' : '#c8102e',
         });
         const titulo = criar('title');
         titulo.textContent = h.dia.split('-').reverse().join('/') + ': ' + dinheiro(h.minimo);
         c.appendChild(titulo);
         svg.appendChild(c);
+      });
+
+      // valor de cada coleta logo acima do ponto; com muitos pontos, so o minimo e o maximo
+      const todos = pontos.length <= 8;
+      pontos.forEach((h, i) => {
+        if (!todos && h.minimo !== min && h.minimo !== max) return;
+        const rotulo = criar('text', {
+          x: x(i), y: y(h.minimo) - 10, fill: '#12151b', 'font-size': '11', 'font-weight': '600',
+          'text-anchor': i === 0 ? 'start' : i === pontos.length - 1 ? 'end' : 'middle',
+        });
+        rotulo.style.stroke = 'var(--fundo-2)';
+        rotulo.style.strokeWidth = '4px';
+        rotulo.style.paintOrder = 'stroke';
+        rotulo.textContent = dinheiro(h.minimo);
+        svg.appendChild(rotulo);
       });
 
       // datas no eixo: todas quando cabem; senao, espacamento regular com o primeiro e o ultimo dia

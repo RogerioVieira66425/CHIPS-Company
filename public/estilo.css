@@ -1027,6 +1027,7 @@ body {
   transform: translate(-50%, -50%);
   box-shadow: 0 2px 8px rgba(16, 20, 28, .25);
 }
+.an-trilho > .ref { background: #97a1b2; border-color: #ffffff; }
 .an-legenda {
   display: flex; justify-content: space-between; align-items: center;
   gap: 12px; flex-wrap: wrap; margin-top: 12px;
