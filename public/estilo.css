@@ -1055,6 +1055,7 @@ body {
 .tabela th.h-azul { background: var(--info); color: #fff; }
 .tabela th.h-vermelho { background: var(--vermelho); color: #fff; }
 .tabela th.h-cinza { background: var(--texto-fraco); color: #fff; }
+.tabela-lojas, .tabela-lojas th, .tabela-lojas td { border: 1px solid #0a0a0b; }
 
 /* sugestoes enquanto digita */
 .sugestoes-busca {
