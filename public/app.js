@@ -1441,7 +1441,7 @@ const App = (function () {
       defs.innerHTML = '<linearGradient id="area-grafico" x1="0" y1="0" x2="0" y2="1">' +
         '<stop offset="0" stop-color="#c8102e" stop-opacity="0.22"/>' +
         '<stop offset="1" stop-color="#c8102e" stop-opacity="0"/></linearGradient>' +
-        '<filter id="sombra-linha" x="-10%" y="-20%" width="120%" height="150%">' +
+        '<filter id="sombra-linha" filterUnits="userSpaceOnUse" x="0" y="0" width="100%" height="100%">' +
         '<feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#c8102e" flood-opacity="0.35"/></filter>';
       svg.appendChild(defs);
 
