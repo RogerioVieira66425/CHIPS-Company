@@ -193,6 +193,7 @@ code { background: #ffffff; padding: 1px 5px; border-radius: 4px; }
 .barra-trilho { background: #ffffff; border-radius: 6px; height: 12px; position: relative; overflow: hidden; }
 .barra { height: 100%; border-radius: 6px; background: var(--destaque); transition: width .25s; }
 .barra.negativo { background: var(--vermelho); }
+.barra.concorrente { background: var(--vermelho); }
 .barra.positivo { background: var(--verde); }
 .barra-valor { font-variant-numeric: tabular-nums; font-size: 12px; }
 

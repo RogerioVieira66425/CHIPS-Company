@@ -1225,7 +1225,7 @@ const App = (function () {
       const li = el('li');
       li.appendChild(el('span', 'barra-rotulo', o.loja));
       const trilho = el('div', 'barra-trilho');
-      const barra = el('div', 'barra ' + (i === 0 ? 'positivo' : ''));
+      const barra = el('div', 'barra ' + (i === 0 ? 'positivo' : 'concorrente'));
       barra.style.width = (o.preco_total / maximo) * 100 + '%';
       trilho.appendChild(barra);
       li.appendChild(trilho);
