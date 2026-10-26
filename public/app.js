@@ -433,7 +433,8 @@ const App = (function () {
     titulo.textContent = t('res.titulo', { n: ofertasDaBusca.length }) + ' ';
     titulo.appendChild(el('em', '', '“' + (busca.termo || '') + '”'));
 
-    const lojas = new Set(ofertasDaBusca.map((o) => o.loja)).size;
+    // so conta as lojas que entram na comparacao: acessorios nao entram no ranking
+    const lojas = new Set(ofertasDaBusca.filter((o) => !o.acessorio).map((o) => o.loja)).size;
     // "servidor" e "agente" tambem sao palavras da interface, nao dados
     const origem = busca.origem ? t('origem.' + busca.origem) : '';
     // a data do cabecalho e a dos dados (dia da base), nao a hora em que a busca foi calculada
