@@ -109,6 +109,64 @@ def salvar_diagnostico(termo, html):
         f.write(html)
 
 
+MAX_RODADAS_AMAZON = 6
+ESPERA_ENTRE_RODADAS = 300  # 5 min; a espera cresce a cada rodada (5, 10, 15... min)
+
+
+def coletar_termo_amazon(driver, termo, categoria):
+    """Coleta todas as paginas de um termo. Devolve None se a primeira pagina veio sem produtos."""
+    ofertas = []
+    pagina = 1
+    max_paginas = 70
+    while pagina <= max_paginas:
+        url_busca = f"https://www.amazon.com.br/s?k={quote_plus(termo)}&page={pagina}"
+        print(f"     Acessando página {pagina}...")
+        driver.get(url_busca)
+        time.sleep(random.uniform(3.0, 5.0))
+        html = driver.page_source
+        blocos = BeautifulSoup(html, "html.parser").select('div[data-component-type="s-search-result"]')
+
+        if not blocos:
+            if pagina == 1:
+                salvar_diagnostico(termo, html)
+                return None
+            print(f"     -> Fim dos resultados na página {pagina}.")
+            break
+
+        produtos_nesta_pagina = 0
+        for bloco in blocos:
+            asin = bloco.get("data-asin")
+            cabecalho = bloco.select_one("h2")
+            if not asin or cabecalho is None:
+                continue
+
+            titulo = cabecalho.get("aria-label") or cabecalho.get_text(" ", strip=True)
+            titulo = re.sub(r"^An[uú]ncio patrocinado\s*[–-]\s*", "", titulo)
+
+            elemento_preco = bloco.select_one("span.a-price:not(.a-text-price) span.a-offscreen")
+            if elemento_preco is None:
+                continue
+
+            preco_limpo = elemento_preco.get_text().replace('R$', '').replace('.', '').replace(',', '.').strip()
+            try:
+                ofertas.append({
+                    'id_produto_externo': asin,
+                    'nome_produto': titulo,
+                    'categoria_produto': categoria,
+                    'preco': float(preco_limpo),
+                    'nome_loja': 'Amazon',
+                    'url_oferta': f"https://www.amazon.com.br/dp/{asin}",
+                    'data_coleta': DATA_COLETA
+                })
+                produtos_nesta_pagina += 1
+            except ValueError:
+                continue
+
+        print(f"     -> {produtos_nesta_pagina} produtos extraídos na página {pagina}.")
+        pagina += 1
+    return ofertas
+
+
 def extrair_amazon(alvos):
     print("\n[Amazon] Iniciando extração via Selenium com paginação...")
     ofertas_totais = []
@@ -125,68 +183,31 @@ def extrair_amazon(alvos):
     driver = None
     try:
         driver = webdriver.Chrome(options=chrome_options)
+        pendentes = list(alvos.items())
 
-        for termo, categoria in alvos.items():
-            print(f"  -> Buscando: '{termo}'...")
-            pagina = 1
-            max_paginas = 70
+        for rodada in range(1, MAX_RODADAS_AMAZON + 1):
+            if not pendentes:
+                break
+            print(f"  -> Rodada {rodada}: {len(pendentes)} termo(s)")
+            falharam = []
+            for termo, categoria in pendentes:
+                print(f"  -> Buscando: '{termo}'...")
+                resultado = coletar_termo_amazon(driver, termo, categoria)
+                if resultado is None:
+                    print("     -> Página 1 sem produtos: o termo volta na próxima rodada.")
+                    falharam.append((termo, categoria))
+                else:
+                    ofertas_totais.extend(resultado)
+            pendentes = falharam
 
-            while pagina <= max_paginas:
-                url_busca = f"https://www.amazon.com.br/s?k={quote_plus(termo)}&page={pagina}"
-                print(f"     Acessando página {pagina}...")
+            if pendentes and rodada < MAX_RODADAS_AMAZON:
+                espera = ESPERA_ENTRE_RODADAS * rodada
+                print(f"  -> {len(pendentes)} termo(s) sem resposta. Aguardando {espera // 60} min...")
+                time.sleep(espera)
 
-                blocos = []
-                for tentativa in range(1, 4):
-                    driver.get(url_busca)
-                    time.sleep(random.uniform(3.0, 5.0))
-                    html = driver.page_source
-                    blocos = BeautifulSoup(html, "html.parser").select('div[data-component-type="s-search-result"]')
-                    # so a primeira pagina e repetida: pagina vazia depois dela e o fim do catalogo
-                    if blocos or pagina > 1:
-                        break
-                    salvar_diagnostico(termo, html)
-                    print(f"     -> Página 1 sem produtos (tentativa {tentativa} de 3). Aguardando...")
-                    time.sleep(random.uniform(20.0, 40.0))
-
-                if not blocos:
-                    print(f"     -> Fim dos resultados na página {pagina}.")
-                    break
-
-                produtos_nesta_pagina = 0
-                for bloco in blocos:
-                    asin = bloco.get("data-asin")
-                    cabecalho = bloco.select_one("h2")
-
-                    if not asin or cabecalho is None:
-                        continue
-
-                    titulo = cabecalho.get("aria-label") or cabecalho.get_text(" ", strip=True)
-                    titulo = re.sub(r"^An[uú]ncio patrocinado\s*[–-]\s*", "", titulo)
-
-                    elemento_preco = bloco.select_one("span.a-price:not(.a-text-price) span.a-offscreen")
-                    if elemento_preco is None:
-                        continue
-
-                    preco_limpo = elemento_preco.get_text().replace('R$', '').replace('.', '').replace(',', '.').strip()
-                    try:
-                        ofertas_totais.append({
-                            'id_produto_externo': asin,
-                            'nome_produto': titulo,
-                            'categoria_produto': categoria,
-                            'preco': float(preco_limpo),
-                            'nome_loja': 'Amazon',
-                            'url_oferta': f"https://www.amazon.com.br/dp/{asin}",
-                            'data_coleta': DATA_COLETA
-                        })
-                        produtos_nesta_pagina += 1
-                    except ValueError:
-                        continue
-
-                print(f"     -> {produtos_nesta_pagina} produtos extraídos na página {pagina}.")
-                pagina += 1
-
+        if pendentes:
+            print("  -> Sem resposta da Amazon para: " + ', '.join(t for t, _ in pendentes))
     except Exception as e:
-        # sem a Amazon o dia continua valido: a KaBuM sozinha ja entra na base
         print(f"  -> Falha na Amazon: {e}")
     finally:
         if driver is not None:
