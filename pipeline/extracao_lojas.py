@@ -12,6 +12,10 @@ from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 
+# Todas as ofertas de uma execucao recebem a hora em que ela comecou: assim o dia nao se parte
+# quando a coleta atravessa a meia-noite UTC.
+DATA_COLETA = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
 # A saida fica em pipeline/saida/ e e lida pelo passo de importacao do workflow.
 diretorio_atual = os.path.dirname(os.path.abspath(__file__))
 pasta_saida = os.path.join(diretorio_atual, 'saida')
@@ -83,7 +87,7 @@ def extrair_kabum(alvos):
                                 'preco': preco,
                                 'nome_loja': 'KaBuM!',
                                 'url_oferta': f"https://www.kabum.com.br/produto/{item['id']}/{slug}",
-                                'data_coleta': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                                'data_coleta': DATA_COLETA
                             })
 
                     time.sleep(random.uniform(1.0, 2.5))
@@ -171,7 +175,7 @@ def extrair_amazon(alvos):
                             'preco': float(preco_limpo),
                             'nome_loja': 'Amazon',
                             'url_oferta': f"https://www.amazon.com.br/dp/{asin}",
-                            'data_coleta': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                            'data_coleta': DATA_COLETA
                         })
                         produtos_nesta_pagina += 1
                     except ValueError:
