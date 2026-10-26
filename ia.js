@@ -10,7 +10,7 @@ const db = require('./db.js');
 const analise = require('./analise.js');
 
 // troque ao mudar as regras de busca: invalida os resultados guardados
-const VERSAO_BUSCA = 9;
+const VERSAO_BUSCA = 11;
 
 const SITUACOES = ['Boa Compra', 'Preço Médio', 'Sem Histórico (Novo)', 'Evitar', 'Anomalia (Isolada por IA)', 'Bom Momento'];
 
@@ -126,6 +126,23 @@ async function ofertas(filtro) {
   return { dia, pagina, limite, ofertas: linhas };
 }
 
+/* Mediana das coletas de cada produto (todos os dias), para o preco riscado e o desconto. */
+async function medianasDoHistorico(nomes) {
+  const mapa = new Map();
+  for (let i = 0; i < nomes.length; i += 500) {
+    const lote = nomes.slice(i, i + 500);
+    const linhas = await db.all(
+      'SELECT nome_produto, preco FROM ofertas_dia WHERE nome_produto IN (' + lote.map(() => '?').join(',') + ')', ...lote);
+    const grupos = new Map();
+    linhas.forEach((r) => {
+      if (!grupos.has(r.nome_produto)) grupos.set(r.nome_produto, []);
+      grupos.get(r.nome_produto).push(Number(r.preco));
+    });
+    grupos.forEach((v, k) => mapa.set(k, mediana(v)));
+  }
+  return mapa;
+}
+
 /* Pesquisa o termo no dia mais recente e devolve fontes agrupadas por loja, comparacao e relevancia. */
 async function pesquisar(termo) {
   const inicio = Date.now();
@@ -140,7 +157,8 @@ async function pesquisar(termo) {
   const condicoes = palavras.map(() => 'texto_busca LIKE ?').join(' AND ');
   const linhas = await db.all(
     'SELECT id_produto, nome_produto, categoria, preco, loja, url, dia, preco_medio_historico, variacao_pct, situacao ' +
-    'FROM ofertas_dia WHERE dia = ? AND ' + condicoes + ' ORDER BY preco ASC LIMIT 3000',
+    'FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY loja ORDER BY preco ASC) AS rn FROM ofertas_dia WHERE dia = ? AND ' + condicoes + ') t ' +
+    'WHERE rn <= 3000 ORDER BY preco ASC',
     dia, ...palavras.map((p) => '%' + p + '%')
   );
 
@@ -155,6 +173,11 @@ async function pesquisar(termo) {
   });
   // acessorios continuam na lista, mas marcados: a tela os coloca no fim
   const marcadas = encontradas.map((o) => Object.assign(o, { acessorio: ehAcessorio(o.titulo, palavras) }));
+  const medianas = await medianasDoHistorico([...new Set(marcadas.map((o) => o.produto).filter(Boolean))]);
+  marcadas.forEach((o) => {
+    const m = medianas.get(o.produto);
+    if (m) o.preco_de = m > o.preco && m <= o.preco * 3 ? arredonda(m) : 0;
+  });
   const principais = marcadas.filter((o) => !o.acessorio);
   const acessorios = marcadas.filter((o) => o.acessorio);
 
