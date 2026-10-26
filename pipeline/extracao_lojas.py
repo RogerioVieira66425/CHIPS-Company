@@ -5,6 +5,7 @@ import sys
 import time
 from datetime import datetime
 from urllib.parse import quote_plus
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import requests
@@ -12,9 +13,9 @@ from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 
-# Todas as ofertas de uma execucao recebem a hora em que ela comecou: assim o dia nao se parte
-# quando a coleta atravessa a meia-noite UTC.
-DATA_COLETA = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+# Todas as ofertas de uma execucao recebem a hora de Brasilia em que ela comecou: o dia segue o
+# calendario do Brasil, e nao o UTC do servidor.
+DATA_COLETA = datetime.now(ZoneInfo('America/Sao_Paulo')).strftime('%Y-%m-%d %H:%M:%S')
 
 # A saida fica em pipeline/saida/ e e lida pelo passo de importacao do workflow.
 diretorio_atual = os.path.dirname(os.path.abspath(__file__))
