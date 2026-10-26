@@ -261,7 +261,7 @@ async function analiseDoProduto(produto, titulo) {
   const coletas = await db.all(
     'SELECT dia, loja, preco, preco_medio_historico FROM ofertas_dia WHERE nome_produto = ? ORDER BY dia', nome);
   const precos = coletas.map((r) => Number(r.preco));
-  const abaixoDela = precos.filter((p) => p < escolhida.preco).length;
+  const acimaDela = precos.filter((p) => p > escolhida.preco).length;
 
   const porLoja = new Map();
   coletas.forEach((r) => {
@@ -305,7 +305,7 @@ async function analiseDoProduto(produto, titulo) {
       mediana: arredonda(mediana(precos)),
       media: arredonda(precos.reduce((a, b) => a + b, 0) / precos.length),
       maior: arredonda(Math.max(...precos)),
-      posicao_pct: arredonda((abaixoDela / precos.length) * 100),
+      posicao_pct: arredonda((acimaDela / precos.length) * 100),
     },
     lojas,
     ofertas,
