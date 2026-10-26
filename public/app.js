@@ -305,7 +305,7 @@ const App = (function () {
      O resultado e montado em tres camadas: o resumo (melhor oferta e ranking
      das lojas), a barra de filtros e a lista de ofertas em grade ou lista. */
 
-  let ordem = 'preco';     // criterio de ordenacao escolhido na barra
+  let ordem = 'desconto';     // criterio de ordenacao escolhido na barra
   let vista = 'lista';     // a busca abre em lista; a grade fica a um clique
 
   const ORDENS = [
@@ -408,7 +408,7 @@ const App = (function () {
     }));
     buscaAtual = busca;
     filtros = { marca: '', categoria: '', loja: '', preco: '' };
-    ordem = 'preco';
+    ordem = 'desconto';
     pagina = 1;
 
     const erros = $('#res-erros');
@@ -1139,7 +1139,7 @@ const App = (function () {
 
     $('#btn-limpar').addEventListener('click', () => {
       filtros = { marca: '', categoria: '', loja: '', preco: '' };
-      ordem = 'preco';
+      ordem = 'desconto';
       pagina = 1;
       montarFiltros();
       aplicarFiltros();
