@@ -384,6 +384,9 @@ const App = (function () {
     return de > o.preco ? Math.round(((de - o.preco) / de) * 100) : 0;
   };
 
+  // a coluna de desconto so existe quando alguma oferta informa preco anterior
+  let temDescontoNaBusca = false;
+
   function renderResultado(busca) {
     const r = busca.resultado || {};
     // mostra apenas as ofertas que combinam com o que foi pesquisado
@@ -395,6 +398,7 @@ const App = (function () {
     };
     const ofertas = (r.fontes || []).reduce((acc, f) => acc.concat(f.ofertas || []), []).filter((o) => combina(o.titulo));
     ofertas.sort((a, b) => (a.acessorio ? 1 : 0) - (b.acessorio ? 1 : 0) || a.preco_total - b.preco_total);
+    temDescontoNaBusca = ofertas.some((o) => descontoDe(o));
 
     $('#resultado').classList.remove('oculto');
 
@@ -731,10 +735,15 @@ const App = (function () {
     };
 
     const campeao = lista.filter((o) => descontoDe(o)).sort((a, b) => descontoDe(b) - descontoDe(a))[0];
-    caixa.appendChild(campeao
-      ? cartao(t('res.maiorDesconto'), '-' + descontoDe(campeao) + '%',
-        campeao.loja + ' · ' + curto(campeao.titulo, 40), true)
-      : cartao(t('res.maiorDesconto'), '—', t('res.semDesconto'), false));
+    if (campeao) {
+      caixa.appendChild(cartao(t('res.maiorDesconto'), '-' + descontoDe(campeao) + '%',
+        campeao.loja + ' · ' + curto(campeao.titulo, 40), true));
+    } else if (lista.length) {
+      const ordenados = lista.map((o) => o.preco_total).sort((a, b) => a - b);
+      const meio = Math.floor(ordenados.length / 2);
+      const mediana = ordenados.length % 2 ? ordenados[meio] : (ordenados[meio - 1] + ordenados[meio]) / 2;
+      caixa.appendChild(cartao(t('res.precoMediano'), dinheiroRedondo(mediana), t('res.precoMedianoSub'), false));
+    }
 
     if (lista.length) {
       const precos = lista.map((o) => o.preco_total);
@@ -1092,9 +1101,11 @@ const App = (function () {
     precos.className = 'p';
     linha.appendChild(precos);
 
-    const marca = marcaDesconto(o, venceu, true);
-    marca.classList.add('d');
-    linha.appendChild(marca);
+    if (temDescontoNaBusca) {
+      const marca = marcaDesconto(o, venceu, true);
+      marca.classList.add('d');
+      linha.appendChild(marca);
+    }
 
     const acao = el('span', 'a');
     acao.appendChild(botaoAnalise(o));
