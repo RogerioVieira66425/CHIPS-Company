@@ -436,7 +436,9 @@ const App = (function () {
     const lojas = new Set(ofertasDaBusca.map((o) => o.loja)).size;
     // "servidor" e "agente" tambem sao palavras da interface, nao dados
     const origem = busca.origem ? t('origem.' + busca.origem) : '';
-    $('#res-meta').textContent = t('res.meta', { lojas, data: dataHora(busca.atualizado_em) }) +
+    // a data do cabecalho e a dos dados (dia da base), nao a hora em que a busca foi calculada
+    const diaDados = (busca.resultado && busca.resultado.dia) ? busca.resultado.dia.split('-').reverse().join('/') : dataHora(busca.atualizado_em);
+    $('#res-meta').textContent = t('res.meta', { lojas, data: diaDados }) +
       (busca.origem ? t('veredito.origem', { origem: origem || busca.origem }) : '');
   }
 
