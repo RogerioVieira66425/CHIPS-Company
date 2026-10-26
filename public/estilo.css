@@ -813,6 +813,7 @@ body {
 .rank-diff { text-align: right; color: var(--muted); font-size: 12px; }
 .rank-row.win .rank-pos { background: var(--pos); color: #fff; }
 .rank-row.win .fill { background: var(--pos); }
+.rank-row:not(.win) .fill { background: var(--vermelho); }
 .rank-row.win .rank-price { color: var(--pos); }
 .rank-row.win .rank-diff { color: var(--pos); font-weight: 700; }
 
