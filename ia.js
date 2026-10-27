@@ -286,9 +286,13 @@ async function analiseDoProduto(produto, titulo) {
   }));
 
   // a avaliacao vale para a oferta escolhida e para cada oferta da lista, com o mesmo criterio
+  const CLASSIFICACOES_DO_MODELO = ['Boa Compra', 'Preço Médio', 'Sem Histórico (Novo)', 'Evitar', 'Anomalia (Isolada por IA)'];
   const refHist = mediana(precos);
   ofertas.forEach((o) => {
-    o.situacao = avaliarPeloHistorico(o.preco, precos, historico.length, o.situacao);
+    // a classificacao do modelo (gravada pelo pipeline) vale; sem ela, usa a regra da mediana
+    o.situacao = CLASSIFICACOES_DO_MODELO.indexOf(o.situacao) !== -1
+      ? o.situacao
+      : avaliarPeloHistorico(o.preco, precos, historico.length, o.situacao);
     o.referencia = arredonda(refHist);
     o.variacao = arredonda(((o.preco - refHist) / refHist) * 100);
   });

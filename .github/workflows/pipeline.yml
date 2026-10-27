@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '0 3 * * *'   # 03:00 UTC = 00:00 em Brasilia
   workflow_dispatch:
+    inputs:
+      somente_analise:
+        description: 'Rodar so a analise, sem coletar de novo'
+        type: boolean
+        default: false
 
 jobs:
   pipeline:
@@ -35,9 +40,11 @@ jobs:
       - run: pip install requests pandas numpy scikit-learn selenium beautifulsoup4 matplotlib seaborn psycopg2-binary
 
       - name: 1. Coletar ofertas (KaBuM e Amazon)
+        if: ${{ inputs.somente_analise != true }}
         run: python pipeline/extracao_lojas.py
 
       - name: 2. Gravar o dia na base do site
+        if: ${{ inputs.somente_analise != true }}
         run: node scripts/importar-csv.js --adicionar pipeline/saida/ofertas_consolidadas.csv
 
       - name: 3. Analise com IA

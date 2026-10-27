@@ -133,6 +133,25 @@ caminho_final = os.path.join(pasta_saida, 'dados_enriquecidos_ia.csv')
 df_final.to_csv(caminho_final, sep=';', index=False, encoding='utf-8-sig', decimal=',')
 print(f"[SUCESSO] Tabela salva em: {caminho_final}")
 
+def gravar_classificacao(df_classificado, dia):
+    """Grava a classificacao do modelo em cada oferta do dia, para o site exibir o mesmo criterio."""
+    url = os.environ.get('DATABASE_URL')
+    if not url:
+        sys.exit('[ERRO] DATABASE_URL nao definida: a classificacao nao foi gravada.')
+    linhas = list(zip(df_classificado['situacao_compra'].astype(str),
+                      df_classificado['url_oferta'].astype(str),
+                      df_classificado['id_loja'].astype(str)))
+    with psycopg2.connect(url) as conexao, conexao.cursor() as cur:
+        cur.execute('CREATE TEMP TABLE ml_classificacao (situacao text, url text, loja text) ON COMMIT DROP')
+        cur.executemany('INSERT INTO ml_classificacao (situacao, url, loja) VALUES (%s, %s, %s)', linhas)
+        cur.execute('UPDATE ofertas_dia o SET situacao = c.situacao FROM ml_classificacao c '
+                    'WHERE o.dia = %s AND o.url = c.url AND o.loja = c.loja', (dia,))
+        atualizadas = cur.rowcount
+    print(f"[SUCESSO] Classificacao gravada em {atualizadas} ofertas de {dia}.")
+
+
+gravar_classificacao(df_final, ultima_data.strftime('%Y-%m-%d'))
+
 print("Gerando gráfico...")
 plt.figure(figsize=(10, 5))
 cores = {'Boa Compra': '#2ca02c', 'Preço Médio': '#1f77b4', 'Evitar': '#ff7f0e',
