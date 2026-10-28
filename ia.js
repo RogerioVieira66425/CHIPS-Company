@@ -286,7 +286,7 @@ async function analiseDoProduto(produto, titulo) {
   }));
 
   // a avaliacao vale para a oferta escolhida e para cada oferta da lista, com o mesmo criterio
-  const CLASSIFICACOES_DO_MODELO = ['Boa Compra', 'Preço Médio', 'Sem Histórico (Novo)', 'Evitar', 'Anomalia (Isolada por IA)'];
+  const CLASSIFICACOES_DO_MODELO = ['Boa Compra', 'Queda Moderada', 'Preço Médio', 'Alta Moderada', 'Evitar', 'Sem Histórico (Novo)', 'Anomalia (Isolada por IA)'];
   // referencia: so as coletas anteriores ao dia avaliado, sem incluir a propria observacao
   const diaAvaliado = escolhida.dia;
   const coletasAnt = coletas.filter((r) => r.dia < diaAvaliado);

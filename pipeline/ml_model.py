@@ -112,6 +112,8 @@ if not produtos_novos_flag:
     df.loc[~produtos_novos, 'situacao_compra'] = 'Preço Médio'
     df.loc[(~produtos_novos) & (df['variacao_vs_base'] <= -MARGEM), 'situacao_compra'] = 'Boa Compra'
     df.loc[(~produtos_novos) & (df['variacao_vs_base'] >= MARGEM), 'situacao_compra'] = 'Evitar'
+    df.loc[(~produtos_novos) & (df['variacao_vs_base'] <= -5) & (df['variacao_vs_base'] > -MARGEM), 'situacao_compra'] = 'Queda Moderada'
+    df.loc[(~produtos_novos) & (df['variacao_vs_base'] >= 5) & (df['variacao_vs_base'] < MARGEM), 'situacao_compra'] = 'Alta Moderada'
 
 if 'nome_produto_x' in df.columns:
     df.rename(columns={'nome_produto_x': 'nome_oferta_original'}, inplace=True)

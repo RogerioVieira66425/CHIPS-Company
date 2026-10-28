@@ -110,6 +110,8 @@ input:focus, select:focus { outline: 2px solid var(--acao); outline-offset: -1px
 .situacao-media { color: #c99a00; }
 .situacao-evitar { color: var(--vermelho); }
 .situacao-evitar { color: var(--vermelho); }
+.situacao-boa-leve { color: #5fa86a; }
+.situacao-evitar-leve { color: #e07a7a; }
 .situacao-anomalia { color: #b7791f; }
 .situacao-novo { color: var(--texto-fraco); }
 .negativo { color: var(--vermelho); }

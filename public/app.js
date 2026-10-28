@@ -914,6 +914,8 @@ const App = (function () {
     'Preço Médio': 'situacao-media',
     'Sem Histórico (Novo)': 'situacao-novo',
     'Evitar': 'situacao-evitar',
+    'Queda Moderada': 'situacao-boa-leve',
+    'Alta Moderada': 'situacao-evitar-leve',
     'Anomalia (Isolada por IA)': 'situacao-anomalia',
   };
   const classeSituacao = (s) => CLASSE_SITUACAO[s] || 'situacao-media';
@@ -923,6 +925,8 @@ const App = (function () {
     'situacao.baixa': 'situacao-boa',
     'situacao.alta': 'situacao-evitar',
     'situacao.media': 'situacao-media',
+    'situacao.quedaMod': 'situacao-boa-leve',
+    'situacao.altaMod': 'situacao-evitar-leve',
     'situacao.novo': 'situacao-novo',
   }[chave] || 'situacao-media');
   const chaveSituacao = (s, variacao) => {
@@ -934,6 +938,8 @@ const App = (function () {
     'Preço Médio': 'situacao.media',
     'Sem Histórico (Novo)': 'situacao.novo',
     'Evitar': 'situacao.evitar',
+    'Queda Moderada': 'situacao.quedaMod',
+    'Alta Moderada': 'situacao.altaMod',
     'Anomalia (Isolada por IA)': 'situacao.anomalia',
     'Bom Momento': 'situacao.boa',
   };
