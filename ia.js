@@ -292,7 +292,10 @@ async function analiseDoProduto(produto, titulo) {
   const coletasAnt = coletas.filter((r) => r.dia < diaAvaliado);
   const precosAnt = coletasAnt.map((r) => Number(r.preco));
   const diasAnt = new Set(coletasAnt.map((r) => r.dia)).size;
-  const refHist = precosAnt.length ? mediana(precosAnt) : 0;
+  // referencia = media das coletas dos 7 dias anteriores: a mesma usada na classificacao do pipeline
+  const inicioJanela = new Date(Date.parse(diaAvaliado + 'T00:00:00Z') - 7 * 86400000).toISOString().slice(0, 10);
+  const precosJanela = coletasAnt.filter((r) => r.dia >= inicioJanela).map((r) => Number(r.preco));
+  const refHist = precosJanela.length ? precosJanela.reduce((a, b) => a + b, 0) / precosJanela.length : 0;
   ofertas.forEach((o) => {
     // a classificacao do modelo (gravada pelo pipeline) vale; sem ela, usa a regra da mediana
     o.situacao = CLASSIFICACOES_DO_MODELO.indexOf(o.situacao) !== -1
