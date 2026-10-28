@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 import psycopg2
 import seaborn as sns
-from sklearn.ensemble import IsolationForest
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -105,23 +104,14 @@ df.loc[produtos_novos, 'preco_referencia_base'] = df.loc[produtos_novos, 'preco'
 df['variacao_vs_base'] = ((df['preco'] - df['preco_referencia_base']) / df['preco_referencia_base']) * 100
 
 print("Treinando Isolation Forest...")
-df['outlier_ml'] = False
-
-if not produtos_novos_flag:
-    df_treino = df[~produtos_novos].copy()
-    if len(df_treino) > 10:
-        modelo_if = IsolationForest(contamination=0.02, random_state=42)
-        previsoes = modelo_if.fit_predict(df_treino[['variacao_vs_base']].values)
-        # so vira anomalia a variacao acima de 5%: quedas ou altas menores nao justificam alerta
-        df.loc[~produtos_novos, 'outlier_ml'] = (previsoes == -1) & (df_treino['variacao_vs_base'].abs().values > 5)
-
+# regra de variacao frente aos 7 dias anteriores (substitui o Isolation Forest, que nao
+# superou a variacao absoluta na validacao): queda >= 10% = Boa Compra, alta >= 10% = Evitar
 MARGEM = 10.0
 df['situacao_compra'] = 'Sem Histórico (Novo)'
 if not produtos_novos_flag:
     df.loc[~produtos_novos, 'situacao_compra'] = 'Preço Médio'
     df.loc[(~produtos_novos) & (df['variacao_vs_base'] <= -MARGEM), 'situacao_compra'] = 'Boa Compra'
     df.loc[(~produtos_novos) & (df['variacao_vs_base'] >= MARGEM), 'situacao_compra'] = 'Evitar'
-    df.loc[df['outlier_ml'], 'situacao_compra'] = 'Anomalia (Isolada por IA)'
 
 if 'nome_produto_x' in df.columns:
     df.rename(columns={'nome_produto_x': 'nome_oferta_original'}, inplace=True)
