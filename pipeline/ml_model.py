@@ -151,8 +151,9 @@ gravar_classificacao(df_final, ultima_data.strftime('%Y-%m-%d'))
 print("Gerando gráfico...")
 plt.figure(figsize=(10, 5))
 cores = {'Boa Compra': '#2ca02c', 'Preço Médio': '#1f77b4', 'Evitar': '#ff7f0e',
-         'Anomalia (Isolada por IA)': '#d62728', 'Sem Histórico (Novo)': '#7f7f7f'}
-ordem = ['Boa Compra', 'Preço Médio', 'Evitar', 'Anomalia (Isolada por IA)', 'Sem Histórico (Novo)']
+         'Anomalia (Isolada por IA)': '#d62728', 'Sem Histórico (Novo)': '#7f7f7f',
+        'Queda Moderada': '#9bd3a5', 'Alta Moderada': '#f2a6a6'}
+ordem = ['Boa Compra', 'Queda Moderada', 'Preço Médio', 'Alta Moderada', 'Evitar', 'Anomalia (Isolada por IA)', 'Sem Histórico (Novo)']
 ax = sns.countplot(data=df, x='situacao_compra', hue='situacao_compra', palette=cores, order=ordem,
                    legend=False)
 plt.title('Diagnóstico de preços por classificação', fontsize=14, fontweight='bold')
