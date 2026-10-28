@@ -917,6 +917,11 @@ const App = (function () {
     'Anomalia (Isolada por IA)': 'situacao-anomalia',
   };
   const classeSituacao = (s) => CLASSE_SITUACAO[s] || 'situacao-media';
+  // anomalia com preco em queda vira "momento bom"; com preco em alta, "preco fora do normal"
+  const chaveSituacao = (s, variacao) => {
+    if (s === 'Anomalia (Isolada por IA)') return Number(variacao) < 0 ? 'situacao.baixa' : 'situacao.alta';
+    return SITUACAO[s] || 'situacao.novo';
+  };
   const SITUACAO = {
     'Boa Compra': 'situacao.boa',
     'Preço Médio': 'situacao.media',
@@ -948,9 +953,10 @@ const App = (function () {
       mais: '<span class="negativo">+</span>',
     });
 
-    $('#an-situacao').textContent = t(SITUACAO[d.situacao] || 'situacao.novo');
+    const chaveSit = chaveSituacao(d.situacao, d.variacao_pct);
+    $('#an-situacao').textContent = t(chaveSit);
     $('#an-situacao').className = classeSituacao(d.situacao);
-    $('#an-situacao-sub').textContent = t((SITUACAO[d.situacao] || 'situacao.novo') + '.dica');
+    $('#an-situacao-sub').textContent = t(chaveSit + '.dica');
 
     // faixa de precos: onde a oferta cai entre o menor e o maior preco do produto.
     // Com uma oferta so, a faixa mostra a oferta contra a referencia (marcador cinza).
@@ -1031,7 +1037,7 @@ const App = (function () {
       tr.appendChild(celula(dinheiro(o.preco), 'cen'));
       const v = o.referencia > 0 ? o.variacao : null;
       tr.appendChild(celula(v === null ? '—' : pct(v), 'cen ' + (v < 0 ? 'positivo' : (v > 0 ? 'negativo' : ''))));
-      tr.appendChild(celula(t(SITUACAO[o.situacao] || 'situacao.media'), 'cen ' + classeSituacao(o.situacao)));
+      tr.appendChild(celula(t(chaveSituacao(o.situacao, o.variacao)), 'cen ' + classeSituacao(o.situacao)));
       const acao = el('td', 'dir');
       if (o.url) acao.appendChild(link(t('tabela.comprar'), o.url, 'mini-botao botao-acao'));
       tr.appendChild(acao);
