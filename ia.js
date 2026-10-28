@@ -222,7 +222,7 @@ async function pesquisar(termo) {
    mediana ja vistos. So a anomalia marcada pela IA no CSV prevalece sobre a regra. */
 function avaliarPeloHistorico(preco, precos, dias, situacaoAtual) {
   if (situacaoAtual === 'Anomalia (Isolada por IA)') return situacaoAtual;
-  if (dias < 2) return 'Sem Histórico (Novo)';
+  if (dias < 1) return 'Sem Histórico (Novo)';
   const menor = Math.min(...precos);
   const med = mediana(precos);
   // preco que nunca mudou: nao ha o que comparar, e fica como preco medio
@@ -287,22 +287,27 @@ async function analiseDoProduto(produto, titulo) {
 
   // a avaliacao vale para a oferta escolhida e para cada oferta da lista, com o mesmo criterio
   const CLASSIFICACOES_DO_MODELO = ['Boa Compra', 'Preço Médio', 'Sem Histórico (Novo)', 'Evitar', 'Anomalia (Isolada por IA)'];
-  const refHist = mediana(precos);
+  // referencia: so as coletas anteriores ao dia avaliado, sem incluir a propria observacao
+  const diaAvaliado = escolhida.dia;
+  const coletasAnt = coletas.filter((r) => r.dia < diaAvaliado);
+  const precosAnt = coletasAnt.map((r) => Number(r.preco));
+  const diasAnt = new Set(coletasAnt.map((r) => r.dia)).size;
+  const refHist = precosAnt.length ? mediana(precosAnt) : 0;
   ofertas.forEach((o) => {
     // a classificacao do modelo (gravada pelo pipeline) vale; sem ela, usa a regra da mediana
     o.situacao = CLASSIFICACOES_DO_MODELO.indexOf(o.situacao) !== -1
       ? o.situacao
-      : avaliarPeloHistorico(o.preco, precos, historico.length, o.situacao);
+      : avaliarPeloHistorico(o.preco, precosAnt, diasAnt, o.situacao);
     o.referencia = arredonda(refHist);
-    o.variacao = arredonda(((o.preco - refHist) / refHist) * 100);
+    o.variacao = refHist > 0 ? arredonda(((o.preco - refHist) / refHist) * 100) : 0;
   });
   return {
     produto: nome,
     dia,
     oferta: escolhida,
     situacao: escolhida.situacao,
-    referencia: arredonda(mediana(precos)),
-    variacao_pct: arredonda(((escolhida.preco - mediana(precos)) / mediana(precos)) * 100),
+    referencia: arredonda(refHist),
+    variacao_pct: refHist > 0 ? arredonda(((escolhida.preco - refHist) / refHist) * 100) : 0,
     estatisticas: {
       ofertas: precos.length,
       menor: arredonda(Math.min(...precos)),

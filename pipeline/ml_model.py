@@ -60,7 +60,10 @@ df_completo = df_completo.sort_values(by='data_coleta')
 
 ultima_data = df_completo['data_coleta'].max()
 df_hoje = df_completo[df_completo['data_coleta'].dt.date == ultima_data.date()].copy()
-memoria_precos = df_completo[df_completo['data_coleta'].dt.date < ultima_data.date()].copy()
+# janela de 7 dias anteriores ao dia avaliado: nenhuma coleta posterior entra na referencia
+inicio_janela = (ultima_data - pd.Timedelta(days=7)).date()
+memoria_precos = df_completo[(df_completo['data_coleta'].dt.date < ultima_data.date()) &
+                             (df_completo['data_coleta'].dt.date >= inicio_janela)].copy()
 
 if memoria_precos.empty:
     print("\n[AVISO] Só existe um dia de coleta: não há histórico para comparar.")
@@ -109,7 +112,8 @@ if not produtos_novos_flag:
     if len(df_treino) > 10:
         modelo_if = IsolationForest(contamination=0.02, random_state=42)
         previsoes = modelo_if.fit_predict(df_treino[['variacao_vs_base']].values)
-        df.loc[~produtos_novos, 'outlier_ml'] = (previsoes == -1)
+        # so vira anomalia a variacao acima de 5%: quedas ou altas menores nao justificam alerta
+        df.loc[~produtos_novos, 'outlier_ml'] = (previsoes == -1) & (df_treino['variacao_vs_base'].abs().values > 5)
 
 MARGEM = 10.0
 df['situacao_compra'] = 'Sem Histórico (Novo)'
