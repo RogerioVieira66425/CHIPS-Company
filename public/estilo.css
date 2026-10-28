@@ -107,7 +107,8 @@ input:focus, select:focus { outline: 2px solid var(--acao); outline-offset: -1px
 .variacao { display: block; margin-top: 4px; font-size: 13px; font-weight: 600; }
 .positivo { color: var(--verde); }
 .situacao-boa { color: var(--verde); }
-.situacao-media { color: var(--info); }
+.situacao-media { color: #c99a00; }
+.situacao-evitar { color: var(--vermelho); }
 .situacao-evitar { color: var(--vermelho); }
 .situacao-anomalia { color: #b7791f; }
 .situacao-novo { color: var(--texto-fraco); }
