@@ -34,6 +34,7 @@ CONDICOES = [-5, -10, -20, +30]
 LIMIARES_TFIDF = [0.35, 0.45, 0.55, 0.65]
 LIMITE_PADRAO_TFIDF = 0.45   # valor usado em ml_model.py
 N_AMOSTRA = 100
+LOTE_TFIDF = 100   # nomes de hoje comparados por vez na similaridade (controla o uso de memoria)
 DIAS_TESTE = 5
 PASTA_SAIDA = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'saida', 'revisao')
 
@@ -107,14 +108,18 @@ def mapa_tfidf(base, dia, limiar):
         return {}, {}
     vetor = TfidfVectorizer(analyzer='word', ngram_range=(1, 2), lowercase=True)
     matriz = vetor.fit_transform([extrair_modelo_principal(n) for n in nomes_prev])
-    sim = cosine_similarity(vetor.transform([extrair_modelo_principal(n) for n in nomes_hoje]), matriz)
-    melhor = sim.argmax(axis=1)
-    valor = sim.max(axis=1)
+    limpos_hoje = [extrair_modelo_principal(n) for n in nomes_hoje]
     mapa, similaridade = {}, {}
-    for nome, i, s in zip(nomes_hoje, melhor, valor):
-        if s >= limiar:
-            mapa[nome] = nomes_prev[i]
-            similaridade[nome] = s
+    # em lotes: a matriz completa de similaridades nao cabe na memoria
+    for inicio in range(0, len(nomes_hoje), LOTE_TFIDF):
+        fim = inicio + LOTE_TFIDF
+        sim = cosine_similarity(vetor.transform(limpos_hoje[inicio:fim]), matriz)
+        melhor = sim.argmax(axis=1)
+        valor = sim.max(axis=1)
+        for nome, i, s in zip(nomes_hoje[inicio:fim], melhor, valor):
+            if s >= limiar:
+                mapa[nome] = nomes_prev[i]
+                similaridade[nome] = s
     return mapa, similaridade
 
 
@@ -234,9 +239,13 @@ def criterio_boa_compra(base):
     """Acerto: o preco marcado e o menor do produto nos dias seguintes, e o menor de todo o periodo."""
     dias = sorted(base['dia'].unique())
     minimo_todo = base.groupby('nome_produto')['preco'].min()
+    # produto com preco constante nao e avaliado (igual ao site): empate com o minimo nao conta como acerto
+    faixa_preco = base.groupby('nome_produto')['preco'].agg(['min', 'max'])
+    variaveis = faixa_preco[faixa_preco['max'] > faixa_preco['min']].index
     partes = []
     for i, dia in enumerate(dias[:-1]):
         hoje = classificar_dia(base, dia, por_loja=True)
+        hoje = hoje[hoje['nome_produto'].isin(variaveis)]
         minimo_seguinte = base[base['dia'] > dia].groupby('nome_produto')['preco'].min()
         hoje = hoje.assign(min_seguintes=hoje['nome_produto'].map(minimo_seguinte),
                            min_todo=hoje['nome_produto'].map(minimo_todo))

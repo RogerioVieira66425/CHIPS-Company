@@ -1,5 +1,4 @@
 import os
-import re
 import sys
 
 import matplotlib
@@ -10,34 +9,12 @@ import numpy as np
 import pandas as pd
 import psycopg2
 import seaborn as sns
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-
 diretorio_atual = os.path.dirname(os.path.abspath(__file__))
 pasta_saida = os.path.join(diretorio_atual, 'saida')
 pasta_graficos = os.path.join(pasta_saida, 'graficos_artigo')
 os.makedirs(pasta_graficos, exist_ok=True)
 
-LIMITE_TFIDF = 0.45   # similaridade minima para tratar dois nomes como o mesmo produto
 MARGEM = 10.0         # variacao de 10% ou mais: Boa compra / Evitar
-
-
-def extrair_modelo_principal(nome):
-    nome = str(nome).strip()
-    categorias = [
-        r'teclado\s+para\s+notebook', r'teclado\s+mecan[íi]co', r'teclado\s+gamer', r'teclado',
-        r'placa\s+de\s+v[íi]deo', r'placa\s+m[ãa]e', r'mem[óo]ria\s+ram', r'mem[óo]ria',
-        r'fonte\s+de\s+alimenta[çc][ãa]o', r'fonte', r'gabinete\s+gamer', r'gabinete',
-        r'mouse\s+gamer', r'mouse', r'headset\s+gamer', r'headset', r'monitor\s+gamer', r'monitor',
-        r'ssd\s+nvme', r'ssd', r'hd\s+externo', r'disco\s+r[íi]gido',
-        r'cooler\s+para\s+processador', r'water\s+cooler', r'processador', r'microfone'
-    ]
-    regex = r'^(?:' + '|'.join(categorias) + r')\s*(?:[-|]\s*)?'
-    nome_limpo = re.sub(regex, '', nome, flags=re.IGNORECASE)
-    nome_limpo = re.sub(r'\s+', ' ', nome_limpo).strip().title()
-    if not nome_limpo or nome_limpo == '-':
-        return nome.title()
-    return nome_limpo
 
 
 def carregar_ofertas():
@@ -74,27 +51,8 @@ if memoria_precos.empty:
 else:
     produtos_novos_flag = False
 
-print("Padronizando nomes com TF-IDF...")
-memoria_precos['nome_limpo'] = memoria_precos['nome_produto'].apply(extrair_modelo_principal)
-df_hoje['nome_limpo'] = df_hoje['nome_produto'].apply(extrair_modelo_principal)
-
-nomes_base_originais = memoria_precos['nome_produto'].tolist()
-nomes_base_limpos = memoria_precos['nome_limpo'].tolist()
-
-vetorizador = TfidfVectorizer(analyzer='word', ngram_range=(1, 2), lowercase=True)
-matriz_base = vetorizador.fit_transform(nomes_base_limpos)
-
-
-def buscar_produto_tfidf(linha, limite=LIMITE_TFIDF):
-    vetor_pesquisa = vetorizador.transform([linha['nome_limpo']])
-    similaridades = cosine_similarity(vetor_pesquisa, matriz_base)[0]
-    indice_maior = np.argmax(similaridades)
-    if similaridades[indice_maior] >= limite:
-        return nomes_base_originais[indice_maior]
-    return linha['nome_produto']
-
-
-df_hoje['nome_produto_padronizado'] = df_hoje.apply(buscar_produto_tfidf, axis=1)
+# produto e identificado pelo nome exato da oferta, como no site (ia.js): sem agrupamento por similaridade
+df_hoje['nome_produto_padronizado'] = df_hoje['nome_produto']
 
 print("Calculando média e volatilidade por produto E loja (7 dias anteriores)...")
 # referencia por produto e loja: sem coleta anterior na mesma loja, a oferta fica sem historico
