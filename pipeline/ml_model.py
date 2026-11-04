@@ -97,8 +97,16 @@ if not produtos_novos_flag:
 # Treino: ofertas dos dias anteriores ao dia avaliado, com atributos calculados so com coletas anteriores a cada dia.
 # Teste: ofertas do dia avaliado. A classificacao gravada NAO muda: o modelo gera uma probabilidade de Boa Compra
 # e uma metrica de desempenho fora da amostra, comparada com o proprio rotulo da regra.
-# Atributos SEM a variacao: a variacao define o rotulo, e inclui-la tornaria o teste trivial.
-FEATURES = ['volatilidade_relativa', 'n_coletas_anteriores', 'log_preco_referencia']
+# Atributos de contexto, SEM a variacao bruta (que define o rotulo).
+# Preco atual, desconto absoluto em R$, volatilidade relativa, media de referencia e nivel do produto.
+FEATURES = ['preco', 'desconto_absoluto', 'volatilidade_relativa',
+            'preco_referencia_base', 'log_preco_referencia', 'n_coletas_anteriores']
+
+# Weak supervision: Boa Compra ampliada para treino do modelo.
+# Alvo = queda >= LIMIAR_PCT_TREINO (menos restrito que a regra de 10%) OU desconto absoluto >= LIMIAR_R$ em itens caros.
+LIMIAR_PCT_TREINO = 8.0
+LIMIAR_RS_TREINO = 250.0
+LIMIAR_PRECO_CARO = 500.0
 
 
 def montar_atributos(base, dia):
@@ -106,17 +114,23 @@ def montar_atributos(base, dia):
     do_dia = base[base['data_coleta'].dt.date == dia]
     inicio = dia - timedelta(days=7)
     janela = base[(base['data_coleta'].dt.date < dia) & (base['data_coleta'].dt.date >= inicio)]
-    colunas = ['nome_produto', 'id_loja', 'url_oferta'] + FEATURES + ['rotulo_regra']
+    colunas = ['nome_produto', 'id_loja', 'url_oferta'] + FEATURES + ['rotulo_regra', 'rotulo_treino']
     if do_dia.empty or janela.empty:
         return pd.DataFrame(columns=colunas)
     ref = janela.groupby(['nome_produto', 'id_loja'])['preco'].agg(['mean', 'std', 'count']).reset_index()
     ref['std'] = ref['std'].fillna(0)
     m = do_dia.merge(ref, on=['nome_produto', 'id_loja'], how='inner')
-    variacao = (m['preco'] - m['mean']) / m['mean'] * 100
-    m['volatilidade_relativa'] = m['std'] / m['mean'] * 100
-    m['n_coletas_anteriores'] = m['count']
+    m['preco_referencia_base'] = m['mean']
+    m['desconto_absoluto'] = (m['mean'] - m['preco']).round(2)
+    m['volatilidade_relativa'] = (m['std'] / m['mean'] * 100).round(2)
     m['log_preco_referencia'] = np.log(m['mean'])
+    m['n_coletas_anteriores'] = m['count']
+    variacao = (m['preco'] - m['mean']) / m['mean'] * 100
     m['rotulo_regra'] = (variacao <= -MARGEM).astype(int)
+    # Weak supervision: queda percentual relevante OU desconto absoluto expressivo em item caro
+    pct_ok = (variacao <= -LIMIAR_PCT_TREINO)
+    rs_ok = (m['desconto_absoluto'] >= LIMIAR_RS_TREINO) & (m['mean'] >= LIMIAR_PRECO_CARO)
+    m['rotulo_treino'] = (pct_ok | rs_ok).astype(int)
     return m[colunas]
 
 
@@ -128,12 +142,14 @@ teste = montar_atributos(df_completo, ultima_data.date())
 
 df['prob_ia_boa_compra'] = np.nan
 df['previsao_ia_boa_compra'] = np.nan
-if produtos_novos_flag or treino.empty or treino['rotulo_regra'].nunique() < 2 or teste.empty:
+if produtos_novos_flag or treino.empty or treino['rotulo_treino'].nunique() < 2 or teste.empty:
     print("[AVISO] Sem dias anteriores suficientes para treinar o Random Forest: a IA nao foi aplicada hoje.")
 else:
-    print(f"Treinando o Random Forest com {len(treino)} ofertas de {len(dias_anteriores)} dias anteriores...")
+    print(f"Treinando o Random Forest com {len(treino)} ofertas de {len(dias_anteriores)} dias anteriores "
+          f"(rotulo weak supervision: queda >= {LIMIAR_PCT_TREINO:.0f}% ou desconto >= R$ {LIMIAR_RS_TREINO:.0f} "
+          f"em itens >= R$ {LIMIAR_PRECO_CARO:.0f})...")
     rf = RandomForestClassifier(n_estimators=100, random_state=42, class_weight='balanced', min_samples_leaf=20)
-    rf.fit(treino[FEATURES].fillna(0), treino['rotulo_regra'])
+    rf.fit(treino[FEATURES].fillna(0), treino['rotulo_treino'])
 
     prob = rf.predict_proba(teste[FEATURES].fillna(0))[:, 1]
     prev = rf.predict(teste[FEATURES].fillna(0))
@@ -147,20 +163,28 @@ else:
         saida_ia, on=['nome_produto_padronizado', 'id_loja', 'url_oferta'], how='left')
     assert len(df) == n_antes, 'merge da IA duplicou ofertas'
 
-    # desempenho fora da amostra no dia avaliado, contra o rotulo da regra de 10%
-    y_teste = teste['rotulo_regra'].values
+    # desempenho fora da amostra no dia avaliado, em dois alvos:
+    # (a) rotulo da regra de 10% (classificacao do site);
+    # (b) rotulo de weak supervision (alvo do treino).
+    y_regra = teste['rotulo_regra'].values
+    y_treino_teste = teste['rotulo_treino'].values
     metricas = {
         'data_avaliada': str(ultima_data.date()),
         'dias_treino': len(dias_anteriores),
         'ofertas_treino': len(treino),
         'ofertas_teste': len(teste),
-        'taxa_boa_compra_regra': round(float(y_teste.mean()), 4),
-        'acuracia': round(accuracy_score(y_teste, prev), 4),
-        'precisao': round(precision_score(y_teste, prev, zero_division=0), 4),
-        'recall': round(recall_score(y_teste, prev, zero_division=0), 4),
-        'auc': round(roc_auc_score(y_teste, prob), 4) if len(np.unique(y_teste)) > 1 else np.nan,
+        'taxa_boa_compra_regra': round(float(y_regra.mean()), 4),
+        'taxa_boa_compra_weak': round(float(y_treino_teste.mean()), 4),
+        'acuracia_vs_regra': round(accuracy_score(y_regra, prev), 4),
+        'precisao_vs_regra': round(precision_score(y_regra, prev, zero_division=0), 4),
+        'recall_vs_regra': round(recall_score(y_regra, prev, zero_division=0), 4),
+        'auc_vs_regra': round(roc_auc_score(y_regra, prob), 4) if len(np.unique(y_regra)) > 1 else np.nan,
+        'acuracia_vs_weak': round(accuracy_score(y_treino_teste, prev), 4),
+        'precisao_vs_weak': round(precision_score(y_treino_teste, prev, zero_division=0), 4),
+        'recall_vs_weak': round(recall_score(y_treino_teste, prev, zero_division=0), 4),
+        'auc_vs_weak': round(roc_auc_score(y_treino_teste, prob), 4) if len(np.unique(y_treino_teste)) > 1 else np.nan,
     }
-    print("Metricas fora da amostra (Random Forest x regra de 10%):")
+    print("Metricas fora da amostra (Random Forest):")
     for chave, valor in metricas.items():
         print(f"  {chave}: {valor}")
     pd.DataFrame([metricas]).to_csv(os.path.join(pasta_saida, 'metricas_random_forest.csv'), sep=';', index=False,
