@@ -1,5 +1,6 @@
 import os
 import sys
+from datetime import timedelta
 
 import matplotlib
 matplotlib.use('Agg')  # sem janela: roda no servidor do GitHub
@@ -9,6 +10,8 @@ import numpy as np
 import pandas as pd
 import psycopg2
 import seaborn as sns
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, precision_score, recall_score, roc_auc_score
 diretorio_atual = os.path.dirname(os.path.abspath(__file__))
 pasta_saida = os.path.join(diretorio_atual, 'saida')
 pasta_graficos = os.path.join(pasta_saida, 'graficos_artigo')
@@ -81,7 +84,7 @@ df['z_score'] = df['z_score'].round(2)
 df['variacao_vs_base'] = df['variacao_vs_base'].round(2)
 df['preco'] = df['preco'].round(2)
 
-# rotulos iguais aos da aplicacao (public/app.js e public/idiomas.js)
+# rotulos iguais aos da aplicacao (public/app.js e public/idiomas.js): Boa Compra = queda de 10% ou mais
 df['situacao_compra'] = 'Sem Histórico (Novo)'
 if not produtos_novos_flag:
     df.loc[~produtos_novos, 'situacao_compra'] = 'Preço Médio'
@@ -90,9 +93,82 @@ if not produtos_novos_flag:
     df.loc[(~produtos_novos) & (df['variacao_vs_base'] <= -5) & (df['variacao_vs_base'] > -MARGEM), 'situacao_compra'] = 'Queda Moderada'
     df.loc[(~produtos_novos) & (df['variacao_vs_base'] >= 5) & (df['variacao_vs_base'] < MARGEM), 'situacao_compra'] = 'Alta Moderada'
 
+# --- RANDOM FOREST FORA DA AMOSTRA ---
+# Treino: ofertas dos dias anteriores ao dia avaliado, com atributos calculados so com coletas anteriores a cada dia.
+# Teste: ofertas do dia avaliado. A classificacao gravada NAO muda: o modelo gera uma probabilidade de Boa Compra
+# e uma metrica de desempenho fora da amostra, comparada com o proprio rotulo da regra.
+# Atributos SEM a variacao: a variacao define o rotulo, e inclui-la tornaria o teste trivial.
+FEATURES = ['volatilidade_relativa', 'n_coletas_anteriores', 'log_preco_referencia']
+
+
+def montar_atributos(base, dia):
+    """Atributos das ofertas do dia `dia`, com a referencia calculada apenas com os 7 dias anteriores a ele."""
+    do_dia = base[base['data_coleta'].dt.date == dia]
+    inicio = dia - timedelta(days=7)
+    janela = base[(base['data_coleta'].dt.date < dia) & (base['data_coleta'].dt.date >= inicio)]
+    colunas = ['nome_produto', 'id_loja', 'url_oferta'] + FEATURES + ['rotulo_regra']
+    if do_dia.empty or janela.empty:
+        return pd.DataFrame(columns=colunas)
+    ref = janela.groupby(['nome_produto', 'id_loja'])['preco'].agg(['mean', 'std', 'count']).reset_index()
+    ref['std'] = ref['std'].fillna(0)
+    m = do_dia.merge(ref, on=['nome_produto', 'id_loja'], how='inner')
+    variacao = (m['preco'] - m['mean']) / m['mean'] * 100
+    m['volatilidade_relativa'] = m['std'] / m['mean'] * 100
+    m['n_coletas_anteriores'] = m['count']
+    m['log_preco_referencia'] = np.log(m['mean'])
+    m['rotulo_regra'] = (variacao <= -MARGEM).astype(int)
+    return m[colunas]
+
+
+dias_anteriores = sorted({d for d in df_completo['data_coleta'].dt.date.unique() if d < ultima_data.date()})
+partes_treino = [montar_atributos(df_completo, d) for d in dias_anteriores]
+partes_treino = [p for p in partes_treino if not p.empty]
+treino = pd.concat(partes_treino, ignore_index=True) if partes_treino else pd.DataFrame()
+teste = montar_atributos(df_completo, ultima_data.date())
+
+df['prob_ia_boa_compra'] = np.nan
+df['previsao_ia_boa_compra'] = np.nan
+if produtos_novos_flag or treino.empty or treino['rotulo_regra'].nunique() < 2 or teste.empty:
+    print("[AVISO] Sem dias anteriores suficientes para treinar o Random Forest: a IA nao foi aplicada hoje.")
+else:
+    print(f"Treinando o Random Forest com {len(treino)} ofertas de {len(dias_anteriores)} dias anteriores...")
+    rf = RandomForestClassifier(n_estimators=100, random_state=42, class_weight='balanced', min_samples_leaf=20)
+    rf.fit(treino[FEATURES].fillna(0), treino['rotulo_regra'])
+
+    prob = rf.predict_proba(teste[FEATURES].fillna(0))[:, 1]
+    prev = rf.predict(teste[FEATURES].fillna(0))
+    saida_ia = teste[['nome_produto', 'id_loja', 'url_oferta']].copy()
+    saida_ia['prob_ia_boa_compra'] = prob.round(4)
+    saida_ia['previsao_ia_boa_compra'] = prev
+    saida_ia = saida_ia.drop_duplicates(['nome_produto', 'id_loja', 'url_oferta'])
+    saida_ia = saida_ia.rename(columns={'nome_produto': 'nome_produto_padronizado'})
+    n_antes = len(df)
+    df = df.drop(columns=['prob_ia_boa_compra', 'previsao_ia_boa_compra']).merge(
+        saida_ia, on=['nome_produto_padronizado', 'id_loja', 'url_oferta'], how='left')
+    assert len(df) == n_antes, 'merge da IA duplicou ofertas'
+
+    # desempenho fora da amostra no dia avaliado, contra o rotulo da regra de 10%
+    y_teste = teste['rotulo_regra'].values
+    metricas = {
+        'data_avaliada': str(ultima_data.date()),
+        'dias_treino': len(dias_anteriores),
+        'ofertas_treino': len(treino),
+        'ofertas_teste': len(teste),
+        'taxa_boa_compra_regra': round(float(y_teste.mean()), 4),
+        'acuracia': round(accuracy_score(y_teste, prev), 4),
+        'precisao': round(precision_score(y_teste, prev, zero_division=0), 4),
+        'recall': round(recall_score(y_teste, prev, zero_division=0), 4),
+        'auc': round(roc_auc_score(y_teste, prob), 4) if len(np.unique(y_teste)) > 1 else np.nan,
+    }
+    print("Metricas fora da amostra (Random Forest x regra de 10%):")
+    for chave, valor in metricas.items():
+        print(f"  {chave}: {valor}")
+    pd.DataFrame([metricas]).to_csv(os.path.join(pasta_saida, 'metricas_random_forest.csv'), sep=';', index=False,
+                                    encoding='utf-8-sig', decimal=',')
+
 colunas_finais = ['nome_produto_padronizado', 'nome_oferta_original', 'id_loja', 'preco',
                   'preco_referencia_base', 'volatilidade_base', 'z_score', 'variacao_vs_base',
-                  'situacao_compra', 'url_oferta']
+                  'situacao_compra', 'prob_ia_boa_compra', 'previsao_ia_boa_compra', 'url_oferta']
 df_final = df[colunas_finais].sort_values(by=['nome_produto_padronizado', 'preco'])
 
 caminho_final = os.path.join(pasta_saida, 'dados_enriquecidos_ia.csv')
