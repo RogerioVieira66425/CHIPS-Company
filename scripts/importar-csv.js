@@ -79,8 +79,8 @@ function lerArquivo(caminho) {
       situacao: get('situacao_compra') || null,
     };
     // linha quebrada no arquivo: colunas a mais ou a menos, ou sem preco / sem data
-    // preco 9999,99 e valor de preenchimento da base, nao preco real
-    if (c.length !== cab.length || reg.preco === null || reg.preco === 9999.99 || !reg.id_produto || !reg.nome || !reg.loja || !reg.dia) {
+    // preco 9999,99 e valor de preenchimento da base; preco abaixo de R$ 1 e falha de coleta ou item de teste
+    if (c.length !== cab.length || reg.preco === null || reg.preco === 9999.99 || reg.preco < 1 || !reg.id_produto || !reg.nome || !reg.loja || !reg.dia) {
       descartadas += 1;
     } else {
       // mesmo produto, loja, dia, nome e preco no mesmo arquivo: entra uma vez so

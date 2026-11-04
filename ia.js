@@ -287,23 +287,30 @@ async function analiseDoProduto(produto, titulo) {
 
   // a avaliacao vale para a oferta escolhida e para cada oferta da lista, com o mesmo criterio
   const CLASSIFICACOES_DO_MODELO = ['Boa Compra', 'Queda Moderada', 'Preço Médio', 'Alta Moderada', 'Evitar', 'Sem Histórico (Novo)', 'Anomalia (Isolada por IA)'];
-  // referencia: so as coletas anteriores ao dia avaliado, sem incluir a propria observacao
+  // referencia por produto e loja: so as coletas da mesma loja nos 7 dias anteriores ao dia avaliado
+  // (o mesmo criterio do pipeline; a propria observacao nao entra)
   const diaAvaliado = escolhida.dia;
   const coletasAnt = coletas.filter((r) => r.dia < diaAvaliado);
-  const precosAnt = coletasAnt.map((r) => Number(r.preco));
-  const diasAnt = new Set(coletasAnt.map((r) => r.dia)).size;
-  // referencia = media das coletas dos 7 dias anteriores: a mesma usada na classificacao do pipeline
   const inicioJanela = new Date(Date.parse(diaAvaliado + 'T00:00:00Z') - 7 * 86400000).toISOString().slice(0, 10);
-  const precosJanela = coletasAnt.filter((r) => r.dia >= inicioJanela).map((r) => Number(r.preco));
-  const refHist = precosJanela.length ? precosJanela.reduce((a, b) => a + b, 0) / precosJanela.length : 0;
+  const historicoDaLoja = (loja) => {
+    const da = coletasAnt.filter((r) => r.dia >= inicioJanela && r.loja === loja);
+    return { precos: da.map((r) => Number(r.preco)), dias: new Set(da.map((r) => r.dia)).size };
+  };
+  const referenciaDaLoja = (loja) => {
+    const { precos: p } = historicoDaLoja(loja);
+    return p.length ? p.reduce((a, b) => a + b, 0) / p.length : 0;
+  };
   ofertas.forEach((o) => {
-    // a classificacao do modelo (gravada pelo pipeline) vale; sem ela, usa a regra da mediana
+    // a classificacao do modelo (gravada pelo pipeline) vale; sem ela, usa a regra com o historico da mesma loja
+    const { precos: precosLoja, dias: diasLoja } = historicoDaLoja(o.loja);
     o.situacao = CLASSIFICACOES_DO_MODELO.indexOf(o.situacao) !== -1
       ? o.situacao
-      : avaliarPeloHistorico(o.preco, precosAnt, diasAnt, o.situacao);
-    o.referencia = arredonda(refHist);
-    o.variacao = refHist > 0 ? arredonda(((o.preco - refHist) / refHist) * 100) : 0;
+      : avaliarPeloHistorico(o.preco, precosLoja, diasLoja, o.situacao);
+    const refLoja = referenciaDaLoja(o.loja);
+    o.referencia = arredonda(refLoja);
+    o.variacao = refLoja > 0 ? arredonda(((o.preco - refLoja) / refLoja) * 100) : 0;
   });
+  const refHist = referenciaDaLoja(escolhida.loja);
   return {
     produto: nome,
     dia,

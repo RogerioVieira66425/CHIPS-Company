@@ -144,7 +144,7 @@ const App = (function () {
     'Preço cheio é dano no bolso. Compare antes do clique.',
     'Não pague preço de boss final em item de fase 1.',
     'Seu setup merece o melhor loot pelo menor preço.',
-    'Antes de comprar, scaneie o mapa inteiro.',
+    'Antes de comprar, examine o mapa inteiro.',
     'Aqui o desconto não é drop raro: é garantido na comparação.',
     'Upgrade no setup, downgrade no preço.',
     'Missão: achar o menor preço. Recompensa: seu dinheiro de volta no bolso.',

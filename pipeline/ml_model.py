@@ -18,6 +18,9 @@ pasta_saida = os.path.join(diretorio_atual, 'saida')
 pasta_graficos = os.path.join(pasta_saida, 'graficos_artigo')
 os.makedirs(pasta_graficos, exist_ok=True)
 
+LIMITE_TFIDF = 0.45   # similaridade minima para tratar dois nomes como o mesmo produto
+MARGEM = 10.0         # variacao de 10% ou mais: Boa compra / Evitar
+
 
 def extrair_modelo_principal(nome):
     nome = str(nome).strip()
@@ -82,7 +85,7 @@ vetorizador = TfidfVectorizer(analyzer='word', ngram_range=(1, 2), lowercase=Tru
 matriz_base = vetorizador.fit_transform(nomes_base_limpos)
 
 
-def buscar_produto_tfidf(linha, limite=0.45):
+def buscar_produto_tfidf(linha, limite=LIMITE_TFIDF):
     vetor_pesquisa = vetorizador.transform([linha['nome_limpo']])
     similaridades = cosine_similarity(vetor_pesquisa, matriz_base)[0]
     indice_maior = np.argmax(similaridades)
@@ -93,20 +96,34 @@ def buscar_produto_tfidf(linha, limite=0.45):
 
 df_hoje['nome_produto_padronizado'] = df_hoje.apply(buscar_produto_tfidf, axis=1)
 
-medias_historicas = memoria_precos.groupby('nome_produto')['preco'].mean().reset_index()
-medias_historicas.rename(columns={'preco': 'preco_referencia_base'}, inplace=True)
+print("Calculando média e volatilidade por produto E loja (7 dias anteriores)...")
+# referencia por produto e loja: sem coleta anterior na mesma loja, a oferta fica sem historico
+stats_historico = memoria_precos.groupby(['nome_produto', 'id_loja'])['preco'].agg(['mean', 'std']).reset_index()
+stats_historico.rename(columns={'nome_produto': 'nome_produto_padronizado',
+                                'mean': 'preco_referencia_base',
+                                'std': 'volatilidade_base'}, inplace=True)
+stats_historico['volatilidade_base'] = stats_historico['volatilidade_base'].fillna(0)
 
-df = df_hoje.merge(medias_historicas, left_on='nome_produto_padronizado', right_on='nome_produto',
-                   how='left', suffixes=('_x', ''))
+df = df_hoje.merge(stats_historico, on=['nome_produto_padronizado', 'id_loja'], how='left')
+df = df.rename(columns={'nome_produto': 'nome_oferta_original'})
 
 produtos_novos = df['preco_referencia_base'].isna()
 df.loc[produtos_novos, 'preco_referencia_base'] = df.loc[produtos_novos, 'preco']
-df['variacao_vs_base'] = ((df['preco'] - df['preco_referencia_base']) / df['preco_referencia_base']) * 100
+df.loc[produtos_novos, 'volatilidade_base'] = 0
 
-print("Treinando Isolation Forest...")
-# regra de variacao frente aos 7 dias anteriores (substitui o Isolation Forest, que nao
-# superou a variacao absoluta na validacao): queda >= 10% = Boa Compra, alta >= 10% = Evitar
-MARGEM = 10.0
+df['variacao_vs_base'] = (df['preco'] - df['preco_referencia_base']) / df['preco_referencia_base'] * 100
+# escore z so informativo (CSV); a classificacao usa apenas a regra de variacao
+df['z_score'] = np.where(df['volatilidade_base'] > 0,
+                         (df['preco'] - df['preco_referencia_base']) / df['volatilidade_base'],
+                         0)
+
+df['preco_referencia_base'] = df['preco_referencia_base'].round(2)
+df['volatilidade_base'] = df['volatilidade_base'].round(2)
+df['z_score'] = df['z_score'].round(2)
+df['variacao_vs_base'] = df['variacao_vs_base'].round(2)
+df['preco'] = df['preco'].round(2)
+
+# rotulos iguais aos da aplicacao (public/app.js e public/idiomas.js)
 df['situacao_compra'] = 'Sem Histórico (Novo)'
 if not produtos_novos_flag:
     df.loc[~produtos_novos, 'situacao_compra'] = 'Preço Médio'
@@ -115,19 +132,15 @@ if not produtos_novos_flag:
     df.loc[(~produtos_novos) & (df['variacao_vs_base'] <= -5) & (df['variacao_vs_base'] > -MARGEM), 'situacao_compra'] = 'Queda Moderada'
     df.loc[(~produtos_novos) & (df['variacao_vs_base'] >= 5) & (df['variacao_vs_base'] < MARGEM), 'situacao_compra'] = 'Alta Moderada'
 
-if 'nome_produto_x' in df.columns:
-    df.rename(columns={'nome_produto_x': 'nome_oferta_original'}, inplace=True)
-else:
-    df.rename(columns={'nome_produto': 'nome_oferta_original'}, inplace=True)
-
-colunas_finais = [c for c in ['nome_produto_padronizado', 'nome_oferta_original', 'id_loja', 'preco',
-                              'preco_referencia_base', 'variacao_vs_base', 'situacao_compra', 'url_oferta']
-                  if c in df.columns]
+colunas_finais = ['nome_produto_padronizado', 'nome_oferta_original', 'id_loja', 'preco',
+                  'preco_referencia_base', 'volatilidade_base', 'z_score', 'variacao_vs_base',
+                  'situacao_compra', 'url_oferta']
 df_final = df[colunas_finais].sort_values(by=['nome_produto_padronizado', 'preco'])
 
 caminho_final = os.path.join(pasta_saida, 'dados_enriquecidos_ia.csv')
 df_final.to_csv(caminho_final, sep=';', index=False, encoding='utf-8-sig', decimal=',')
 print(f"[SUCESSO] Tabela salva em: {caminho_final}")
+
 
 def gravar_classificacao(df_classificado, dia):
     """Grava a classificacao do modelo em cada oferta do dia, para o site exibir o mesmo criterio."""
@@ -150,10 +163,11 @@ gravar_classificacao(df_final, ultima_data.strftime('%Y-%m-%d'))
 
 print("Gerando gráfico...")
 plt.figure(figsize=(10, 5))
-cores = {'Boa Compra': '#2ca02c', 'Preço Médio': '#1f77b4', 'Evitar': '#ff7f0e',
-         'Anomalia (Isolada por IA)': '#d62728', 'Sem Histórico (Novo)': '#7f7f7f',
-        'Queda Moderada': '#9bd3a5', 'Alta Moderada': '#f2a6a6'}
-ordem = ['Boa Compra', 'Queda Moderada', 'Preço Médio', 'Alta Moderada', 'Evitar', 'Anomalia (Isolada por IA)', 'Sem Histórico (Novo)']
+# mesmas cores de public/estilo.css (classes situacao-*), para o grafico e o site coincidirem
+cores = {'Boa Compra': '#12805c', 'Preço Médio': '#c99a00', 'Evitar': '#c8102e',
+         'Anomalia (Isolada por IA)': '#b7791f', 'Sem Histórico (Novo)': '#5e6774',
+         'Queda Moderada': '#5fa86a', 'Alta Moderada': '#e07a7a'}
+ordem = ['Boa Compra', 'Queda Moderada', 'Preço Médio', 'Alta Moderada', 'Evitar', 'Sem Histórico (Novo)']
 ax = sns.countplot(data=df, x='situacao_compra', hue='situacao_compra', palette=cores, order=ordem,
                    legend=False)
 plt.title('Diagnóstico de preços por classificação', fontsize=14, fontweight='bold')
