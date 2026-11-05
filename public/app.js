@@ -1117,13 +1117,22 @@ const App = (function () {
     loja.classList.add('s');
     linha.appendChild(loja);
 
+    const colTitulo = el('span', 't');
     if (o.url) {
-      const a = link(o.titulo || t('tabela.verAnuncio'), o.url, 't');
+      const a = link(o.titulo || t('tabela.verAnuncio'), o.url, '');
       a.title = o.titulo || '';
-      linha.appendChild(a);
+      colTitulo.appendChild(a);
     } else {
-      linha.appendChild(el('span', 't', o.titulo || ''));
+      colTitulo.appendChild(document.createTextNode(o.titulo || ''));
     }
+    if (typeof o.prob_ia === 'number' && o.prob_ia >= 0.5) {
+      const selo = el('span', 'selo-ia selo-ia-linha');
+      selo.title = t('ia.tooltip', { pct: Math.round(o.prob_ia * 100) })
+        || ('Random Forest: ' + Math.round(o.prob_ia * 100) + '%');
+      selo.textContent = t('ia.selo') || 'Sugerida pela IA';
+      colTitulo.appendChild(selo);
+    }
+    linha.appendChild(colTitulo);
 
     const precos = blocoPreco(o);
     precos.className = 'p';
