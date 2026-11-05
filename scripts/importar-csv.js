@@ -49,10 +49,30 @@ const numero = (v) => {
   return Number.isFinite(n) ? n : null;
 };
 
+/* Separa o arquivo em linhas respeitando aspas: uma quebra de linha dentro de "..."
+   faz parte do mesmo registro (ex.: nome do produto com '\n' interno). */
+function separarLinhas(texto) {
+  const linhas = [];
+  let atual = '';
+  let aspas = false;
+  for (let i = 0; i < texto.length; i++) {
+    const c = texto[i];
+    if (c === '"') { atual += c; aspas = !aspas; continue; }
+    if ((c === '\n' || c === '\r') && !aspas) {
+      if (c === '\r' && texto[i + 1] === '\n') i++;
+      if (atual.length) { linhas.push(atual); atual = ''; }
+      continue;
+    }
+    atual += c;
+  }
+  if (atual.length) linhas.push(atual);
+  return linhas;
+}
+
 /* Le um arquivo e devolve as linhas ja no formato da tabela. */
 function lerArquivo(caminho) {
   const texto = fs.readFileSync(caminho, 'utf8').replace(/^\uFEFF/, '');
-  const linhas = texto.split(/\r?\n/).filter(Boolean);
+  const linhas = separarLinhas(texto);
   const sep = linhas[0].indexOf(';') !== -1 ? ';' : ',';
   const cab = linhaCsv(linhas[0], sep);
   const idx = (nome) => cab.indexOf(nome);
