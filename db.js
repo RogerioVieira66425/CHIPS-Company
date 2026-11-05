@@ -107,6 +107,7 @@ CREATE TABLE IF NOT EXISTS ofertas_dia (
   preco_medio_historico REAL,
   variacao_pct       REAL,
   situacao           TEXT,
+  prob_ia_boa_compra REAL,
   texto_busca        TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_ofertas_dia_dia ON ofertas_dia(dia);
@@ -198,6 +199,7 @@ CREATE TABLE IF NOT EXISTS ofertas_dia (
   preco_medio_historico DOUBLE PRECISION,
   variacao_pct       DOUBLE PRECISION,
   situacao           TEXT,
+  prob_ia_boa_compra NUMERIC(5,4),
   texto_busca        TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_ofertas_dia_dia ON ofertas_dia(dia);

@@ -906,6 +906,8 @@ body {
 .dot { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; font-size: 11px; font-weight: 800; color: #fff; background: var(--ink); }
 .disc { font-size: 12px; font-weight: 800; padding: 4px 9px; border-radius: 999px; background: var(--pos-soft); color: var(--pos); }
 .win-tag { font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 999px; background: var(--pos); color: #fff; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+/* selo exibido quando a probabilidade da IA (Random Forest) e >= 50% de ser Boa Compra */
+.selo-ia { font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 999px; background: linear-gradient(135deg, #7c3aed 0%, #2563eb 100%); color: #fff; letter-spacing: 0.3px; text-transform: uppercase; white-space: nowrap; }
 .card h3 {
   margin: 0; font-size: 14.5px; font-weight: 600; line-height: 1.45;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; min-height: 63px;

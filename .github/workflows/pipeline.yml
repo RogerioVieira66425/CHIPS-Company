@@ -50,6 +50,10 @@ jobs:
       - name: 3. Analise com IA
         run: python pipeline/ml_model.py
 
+      - name: 4. Validacao retroativa da IA
+        if: ${{ inputs.somente_analise == true }}
+        run: python pipeline/validar_ia_retroativo.py
+
       - name: Guardar os resultados
         if: always()
         uses: actions/upload-artifact@v4

@@ -87,6 +87,7 @@ function paraOferta(r) {
     situacao: r.situacao || '',
     referencia: medio,
     variacao: Number(r.variacao_pct) || 0,
+    prob_ia: r.prob_ia_boa_compra != null ? Number(r.prob_ia_boa_compra) : null,
     dia: r.dia,
   };
 }
@@ -119,7 +120,7 @@ async function ofertas(filtro) {
   const pagina = Math.max(Number(f.pagina) || 1, 1);
   const linhas = await db.all(
     'SELECT id_produto, nome_produto AS produto, nome_produto AS titulo, loja, preco, preco_medio_historico, ' +
-    '  variacao_pct AS variacao_vs_base, situacao, url FROM ofertas_dia WHERE ' + condicoes.join(' AND ') +
+    '  variacao_pct AS variacao_vs_base, situacao, prob_ia_boa_compra, url FROM ofertas_dia WHERE ' + condicoes.join(' AND ') +
     ' ORDER BY preco ASC LIMIT ? OFFSET ?',
     ...valores, limite, (pagina - 1) * limite
   );
@@ -156,7 +157,7 @@ async function pesquisar(termo) {
   // cada palavra precisa aparecer no texto da oferta; a relevancia fina vem depois
   const condicoes = palavras.map(() => 'texto_busca LIKE ?').join(' AND ');
   const linhas = await db.all(
-    'SELECT id_produto, nome_produto, categoria, preco, loja, url, dia, preco_medio_historico, variacao_pct, situacao ' +
+    'SELECT id_produto, nome_produto, categoria, preco, loja, url, dia, preco_medio_historico, variacao_pct, situacao, prob_ia_boa_compra ' +
     'FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY loja ORDER BY preco ASC) AS rn FROM ofertas_dia WHERE dia = ? AND ' + condicoes + ') t ' +
     'WHERE rn <= 3000 ORDER BY preco ASC',
     dia, ...palavras.map((p) => '%' + p + '%')

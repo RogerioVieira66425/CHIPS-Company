@@ -201,20 +201,23 @@ print(f"[SUCESSO] Tabela salva em: {caminho_final}")
 
 
 def gravar_classificacao(df_classificado, dia):
-    """Grava a classificacao do modelo em cada oferta do dia, para o site exibir o mesmo criterio."""
+    """Grava a classificacao do modelo e a probabilidade da IA em cada oferta do dia."""
     url = os.environ.get('DATABASE_URL')
     if not url:
         sys.exit('[ERRO] DATABASE_URL nao definida: a classificacao nao foi gravada.')
+    prob = df_classificado['prob_ia_boa_compra'].where(df_classificado['prob_ia_boa_compra'].notna(), None)
     linhas = list(zip(df_classificado['situacao_compra'].astype(str),
+                      prob.tolist(),
                       df_classificado['url_oferta'].astype(str),
                       df_classificado['id_loja'].astype(str)))
     with psycopg2.connect(url) as conexao, conexao.cursor() as cur:
-        cur.execute('CREATE TEMP TABLE ml_classificacao (situacao text, url text, loja text) ON COMMIT DROP')
-        cur.executemany('INSERT INTO ml_classificacao (situacao, url, loja) VALUES (%s, %s, %s)', linhas)
-        cur.execute('UPDATE ofertas_dia o SET situacao = c.situacao FROM ml_classificacao c '
-                    'WHERE o.dia = %s AND o.url = c.url AND o.loja = c.loja', (dia,))
+        cur.execute('CREATE TEMP TABLE ml_classificacao (situacao text, prob_ia numeric, url text, loja text) '
+                    'ON COMMIT DROP')
+        cur.executemany('INSERT INTO ml_classificacao (situacao, prob_ia, url, loja) VALUES (%s, %s, %s, %s)', linhas)
+        cur.execute('UPDATE ofertas_dia o SET situacao = c.situacao, prob_ia_boa_compra = c.prob_ia '
+                    'FROM ml_classificacao c WHERE o.dia = %s AND o.url = c.url AND o.loja = c.loja', (dia,))
         atualizadas = cur.rowcount
-    print(f"[SUCESSO] Classificacao gravada em {atualizadas} ofertas de {dia}.")
+    print(f"[SUCESSO] Classificacao e probabilidade gravadas em {atualizadas} ofertas de {dia}.")
 
 
 gravar_classificacao(df_final, ultima_data.strftime('%Y-%m-%d'))

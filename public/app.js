@@ -1078,6 +1078,12 @@ const App = (function () {
     const topo = el('div', 'card-top');
     topo.appendChild(seloLoja(o.loja));
     topo.appendChild(marcaDesconto(o, venceu));
+    if (typeof o.prob_ia === 'number' && o.prob_ia >= 0.5) {
+      const selo = el('span', 'selo-ia');
+      selo.title = t('ia.tooltip', { pct: Math.round(o.prob_ia * 100) }) || ('Random Forest: probabilidade ' + Math.round(o.prob_ia * 100) + '%');
+      selo.textContent = t('ia.selo') || 'Sugerida pela IA';
+      topo.appendChild(selo);
+    }
     cartao.appendChild(topo);
 
     const titulo = el('h3');
