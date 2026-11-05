@@ -1,289 +1,202 @@
-# Comparador de Preços de Equipamentos Gamer
+<div align="center">
 
-Sistema web que monitora o preço de equipamentos gamer em várias lojas, guarda o histórico
-e responde a duas perguntas: **em qual loja compensa comprar** e **se este é um bom momento**.
+# CHIPS Company
 
-Projeto de TCC. Sem bibliotecas externas: só Node.js (o SQLite já vem embutido no Node 22.5+).
+### Pipeline analítico para comparação e avaliação de preços de hardware no e-commerce brasileiro
 
-## Rodar no seu computador
+[![Status](https://img.shields.io/badge/status-em%20produção-brightgreen)](https://meus-investimentos-x7dn.onrender.com)
+[![Automação](https://img.shields.io/badge/automação-GitHub%20Actions-blue?logo=github)](https://github.com/RogerioVieira66425/CHIPS-Company/actions)
+[![Banco](https://img.shields.io/badge/PostgreSQL-Supabase-336791?logo=postgresql&logoColor=white)](https://supabase.com)
+[![Hospedagem](https://img.shields.io/badge/Deploy-Render-46E3B7?logo=render&logoColor=white)](https://render.com)
+[![Licença](https://img.shields.io/badge/uso-acadêmico-lightgrey)]()
 
-1. Dê dois cliques em **INICIAR.bat** (ou rode `node server.js`).
-2. Abra http://localhost:3000 — **o site é público**: qualquer visitante vê os produtos,
-   a comparação entre lojas e o link de compra, sem precisar de conta.
-3. O site **não tem login nem senha**. O catálogo de produtos acompanhados é cuidado
-   pela linha de comando, com o token do coletor (veja *Produtos acompanhados*).
+**TCC em Engenharia de Computação — Faculdade de Tecnologia Pitágoras**
+Autor: **Rogério Vieira**
+Artigo associado: **RECIMA21 (2026)**
 
-## Como funciona
+**[Ver o site →](https://meus-investimentos-x7dn.onrender.com)**
+
+</div>
+
+---
+
+## O problema
+
+O comércio eletrônico brasileiro movimentou R$ 295,6 bilhões em 2025 (FecomercioSP). O consumidor passou a contar com dezenas de lojas virtuais para comprar componentes de hardware (placas de vídeo, processadores, memória, SSDs), mas os preços ficam espalhados por plataformas que não se comunicam — então saber se uma oferta é mesmo vantajosa exige abrir cada site, hora a hora.
+
+O **CHIPS Company** resolve isso em quatro camadas: **coleta automatizada**, **armazenamento histórico**, **avaliação analítica** e **apresentação em aplicação web**.
+
+---
+
+## Arquitetura
 
 ```
- [ Coletores ]          [ Banco ]                  [ Análise ]              [ Interface ]
- Mercado Livre  --+                             compararLojas()  --+
- (API oficial)     +--> coletas --> ofertas -->                     +--> "Compre na X por R$ Y"
- Oferta manual   --+               (histórico)  avaliarMomento() --+      + gráfico + ranking
+ ┌────────────────┐    ┌──────────────────┐    ┌─────────────────────┐    ┌─────────────────┐
+ │   Coletores    │───▶│   Importador     │───▶│      Análise        │───▶│  Aplicação Web  │
+ │  KaBuM! API    │    │  (Node.js)       │    │  ml_model.py        │    │ Node + HTML/CSS │
+ │  Amazon        │    │  deduplica       │    │  • Regra ±10%/±5%   │    │  pt · en · es   │
+ │  (Selenium)    │    │  filtra < R$ 1   │    │  • Random Forest    │    │  Render         │
+ └────────────────┘    └─────────┬────────┘    └──────────┬──────────┘    └─────────────────┘
+                                 │                        │                       ▲
+                                 ▼                        ▼                       │
+                        ┌──────────────────────────────────────────┐              │
+                        │       Supabase · PostgreSQL              │──────────────┘
+                        │       tabela: ofertas_dia                │
+                        │       (situacao, prob_ia_boa_compra)     │
+                        └──────────────────────────────────────────┘
 ```
 
-1. **Coleta** — cada fonte de preço é um módulo em `coletores/` com a mesma interface
-   (`configurado()` e `buscar(termo)`). Hoje há o Mercado Livre pela API oficial;
-   novas lojas entram sem mexer no resto do sistema.
-2. **Armazenamento** — cada execução vira uma linha em `coletas` e cada anúncio encontrado
-   vira uma linha em `ofertas`. Nada é sobrescrito: é isso que forma o histórico de preços.
-3. **Análise** (`analise.js`, isolada e testável — é o núcleo acadêmico do trabalho):
-   - `compararLojas()` pega a melhor oferta de cada loja, soma o frete e ordena por **custo ajustado**:
-     o preço final mais uma penalidade de risco (15% para produto usado, até 12% conforme a
-     reputação do vendedor). Assim o sistema não recomenda uma loja 2% mais barata com vendedor ruim
-     — e avisa na tela quando o mais barato não é o recomendado.
-   - `avaliarMomento()` compara o preço de hoje com a **mediana** do histórico do próprio produto
-     e classifica em: melhor preço já registrado / bom momento / na média / vale esperar.
-4. **Interface** — lista de produtos monitorados, tela de comparação com veredito, ranking
-   por loja e gráfico do menor preço por dia.
+Tudo roda em **nuvens gratuitas**: GitHub Actions dispara o pipeline diariamente às 03:00 UTC, grava no Supabase (plano gratuito) e o Render serve a aplicação web.
 
-## Lojas consultadas
+---
 
-| Loja | Como é consultada | Situação |
+## Como a avaliação funciona
+
+Cada oferta é comparada à **média dos preços dos sete dias anteriores do mesmo produto, na mesma loja**. A variação V = (P − M) / M × 100 define a faixa:
+
+| Faixa | Condição | Cor no site |
 |---|---|---|
-| **KaBuM!** | API pública do catálogo | Funcionando |
-| **Pichau** | Navegador local | Funcionando |
-| **Terabyte** | Navegador local | Funcionando |
-| **Patoloco** | Navegador local | Funcionando |
-| **Setup Ninja** | Navegador local | Funcionando |
-| **Amazon BR** | Navegador local | Funcionando |
-| Magazine Luiza | Navegador local | Bloqueia acesso automatizado; desligada (`MAGALU_ATIVO=1` para testar) |
-| Mercado Livre | API oficial | Bloqueada: apps não liberados recebem 403, e a busca no site exige login |
-| Qualquer loja | Lançamento manual na interface | Sempre disponível |
+| **Boa compra** | V ≤ −10% | Verde escuro |
+| Queda moderada | −10% < V ≤ −5% | Verde claro |
+| Preço normal | −5% < V < +5% | Amarelo |
+| Alta moderada | +5% ≤ V < +10% | Laranja |
+| **Evitar** | V ≥ +10% | Vermelho |
+| Sem histórico | produto novo na loja | Cinza |
 
-Uma busca consulta as seis lojas ativas em cerca de 40 segundos. Exemplo real
-("mouse logitech g502"): 51 ofertas coletadas, 23 relevantes, e o produto encontrado em três
-lojas — KaBuM! R$ 257,39, Amazon R$ 267,34 e Pichau R$ 339,99.
+Em paralelo, um **Random Forest** (treinado com os dias anteriores) estima a probabilidade de a oferta ser uma boa compra. Quando prob ≥ 0,5, o site mostra o selo **"Sugerida pela IA"** — sem alterar as cinco faixas da regra.
 
-### Sobre o Mercado Livre
+---
 
-Duas portas fechadas: a API oficial responde **403** para aplicações não liberadas (mesmo com
-credenciais válidas e token emitido), e a busca pelo site redireciona para
-`account-verification` — exige conta logada, inclusive num navegador real. Usar a sessão pessoal
-de alguém para raspagem violaria os termos de uso, então a loja fica disponível apenas pelo
-lançamento manual de ofertas.
+## Resultados (validação em 16 dias, 20/10/2026 a 04/11/2026)
 
-### Navegador local, sem dependências
+### Regra de variação × métodos alternativos (AUC no teste de injeção)
 
-Pichau e Terabyte recusam requisições HTTP simples (403), mesmo com cabeçalhos de navegador.
-A solução em `coletores/navegador.js` usa o **Chrome que já existe na máquina**, controlado pelo
-**Chrome DevTools Protocol** através do WebSocket nativo do Node — nenhuma biblioteca instalada.
-
-Dois detalhes descobertos nos testes:
-
-- **Modo headless é detectado**: a Pichau devolve "Site em Manutenção" para `--headless`. A janela
-  é aberta normalmente, mas posicionada fora da tela (`--window-position=-32000,-32000`).
-- Cada consulta abre uma aba nova e a fecha ao terminar; o navegador fica aberto entre as buscas.
-
-### Relevância: não comparar produtos diferentes
-
-As lojas completam a busca com produtos parecidos. Procurando "teclado redragon kumara", a
-Terabyte devolveu um "Rise Mode G1" de R$ 39,99 — e, sem tratamento, o sistema recomendaria
-esse teclado, que não é o que a pessoa quer.
-
-`analise.filtrarRelevantes()` resolve isso: normaliza o texto (minúsculas, sem acento), separa os
-termos da busca com 3+ letras e exige que **70% deles apareçam no título do anúncio**. Se nenhum
-anúncio passar, devolve os cinco mais parecidos em vez de uma lista vazia. No teste real: 36
-ofertas coletadas, 24 relevantes, e o falso positivo de R$ 39,99 eliminado.
-
-### Credenciais do Mercado Livre
-1. Acesse https://developers.mercadolivre.com.br → *Suas aplicações* → **Criar aplicação**.
-2. Anote o **Client ID** e o **Client Secret**.
-3. Local: `ML_CLIENT_ID=... ML_CLIENT_SECRET=... node server.js`
-4. Render: *Environment → Add Environment Variable* → `ML_CLIENT_ID` e `ML_CLIENT_SECRET`.
-
-Sem as credenciais o sistema continua funcionando: a coleta avisa "fonte não configurada"
-e você registra as ofertas manualmente — útil como plano B na apresentação.
-
-## Agente coletor local (contorna o bloqueio geografico)
-
-As lojas respondem normalmente a partir de uma rede brasileira, mas bloqueiam servidores de
-nuvem no exterior (o Render fica em Oregon, EUA): a KaBuM! devolve 403 quando a consulta parte
-de la. A solucao e separar quem coleta de quem analisa:
-
-```
- Seu computador (IP brasileiro)            Render (servidor publico)
- ----------------------------              -------------------------
- node agente.js  --consulta as lojas-->    /api/ingestao  --> banco --> analise --> site
-```
-
-1. Gere um token:  `npm run token`
-2. No Render: *Environment* -> `COLETOR_TOKEN` = o token gerado -> *Save changes*
-3. No seu computador, rode a coleta:
-
-```
-set SERVIDOR=https://meus-investimentos-x7dn.onrender.com
-set COLETOR_TOKEN=o-mesmo-token
-npm run coletar
-```
-
-O agente busca os produtos cadastrados no servidor, consulta as lojas daqui e envia as ofertas.
-Agende esse comando no **Agendador de Tarefas do Windows** (uma vez por dia) e o historico de
-precos do TCC se forma sozinho.
-
-Para conferir quais fontes o servidor alcanca sozinho, abra `/api/diagnostico` no navegador.
-
-## Como consultar as lojas sem ser bloqueado
-
-Testes feitos a partir de uma rede residencial brasileira (17/09/2026):
-
-| Caminho | Resultado | Quando usar |
+| Método | AUC | Falsos alarmes |
 |---|---|---|
-| **API pública** (KaBuM!) | 200, JSON limpo | Sempre que a loja tiver uma. É o caminho mais estável e leve |
-| **API oficial com credencial** (Mercado Livre) | 403 para apps não liberados | Quando houver liberação do endpoint |
-| **HTML via `fetch`** (Pichau, Terabyte, Amazon) | 403 / 503 mesmo com cabeçalhos de navegador | Não funciona: as proteções exigem um navegador real |
-| **Navegador real** (Playwright/Puppeteer) | Carrega normalmente (verificado na Pichau) | Para as lojas acima, rodando no agente local |
-| **Lançamento manual** | Sempre funciona | Plano B garantido para a apresentação |
+| **Regra de variação** (10%) | **0,953** | 5,5% |
+| K-Means (5 grupos) | 0,884 | 11,9% |
+| Isolation Forest ampliado | 0,850 | 11,3% |
+| Escore z por produto e loja | 0,514 | 16,6% |
 
-Boas práticas já implementadas no agente e nos coletores, que evitam bloqueio e são o
-comportamento correto com quem fornece os dados:
+### Random Forest fora da amostra (14 dias)
 
-- **Cabeçalhos de navegador** (User-Agent, Accept-Language, Origin, Referer) em toda consulta.
-- **Pausa entre requisições** (`PAUSA_MS`, padrão 1,5 s) — nada de rajada.
-- **Uma consulta por termo**, mesmo quando o resultado vai para vários destinos.
-- **Baixa frequência**: uma coleta por dia já forma o histórico e não incomoda a loja.
-- **Sem paralelismo**: as consultas são sequenciais.
-- **Erro tratado, não insistido**: 403/503 viram mensagem explicativa, sem tentar de novo em loop.
+| Métrica | Média | Mínimo | Máximo |
+|---|---|---|---|
+| AUC vs regra do site | **0,999** | 0,998 | 1,000 |
+| Recall vs regra | 99,7% | 97,1% | 100,0% |
+| **Persistência no dia seguinte** | **72,3%** | 49,2% | 88,0% |
 
-O que *não* fazer: girar proxies, falsificar IP ou contornar CAPTCHA. Além de violar os termos
-de uso das lojas, tornaria o trabalho indefensável na banca. Quando uma loja bloqueia
-deliberadamente, as saídas legítimas são a API oficial, o navegador real em volume baixo ou
-o registro manual.
+> **Persistência:** entre as ofertas marcadas como Boa Compra pela IA, 3 em cada 4 mantêm o preço abaixo de 95% da mediana histórica no dia seguinte.
 
-## Telas
+### Variação de preço dentro do mesmo dia (KaBuM!, 04/11/2026)
 
-- **Produtos** — lista do que você monitora, com melhor loja, menor preço, preço-alvo e última coleta.
-  Tem também uma **busca rápida**, que consulta as lojas sem salvar nada (bom para testar o termo).
-- **Detalhe do produto** — veredito (onde comprar + se o momento é bom), ranking por loja,
-  gráfico do histórico, todas as ofertas da última coleta e o formulário de oferta manual.
-- **Métricas** (`/metricas`) — desempenho de cada loja, tempo por busca e ofertas
-  descartadas pelo filtro de relevância: os números do capítulo de resultados.
+Duas extrações no mesmo dia (12h20 e 18h03 UTC): **7,5%** das 19.279 ofertas em comum mudaram de preço em ~6 horas. Placas-mãe (29,8%), armazenamento (20,9%) e memórias RAM (17,1%) são as categorias mais voláteis.
 
-## Produtos acompanhados
+---
 
-O histórico de preço (e o veredito "é bom momento para comprar") existe para os produtos
-acompanhados. Como o site é aberto, quem mexe nesse catálogo é quem tem o `COLETOR_TOKEN`,
-pelo agente:
+## Stack técnica
 
-```
-node agente.js --lista
-node agente.js --acompanhar "Teclado Redragon Kumara K552" "redragon kumara k552"
-node agente.js --esquecer "redragon kumara k552"
-node agente.js --exportar     # salva as métricas em JSON, antes de um deploy apagar o banco
-```
+<table>
+<tr>
+<td align="center" width="140"><b>Coleta</b><br><sub>Python · requests · Selenium · BeautifulSoup</sub></td>
+<td align="center" width="140"><b>Importação</b><br><sub>Node.js · pg</sub></td>
+<td align="center" width="140"><b>Banco</b><br><sub>PostgreSQL · Supabase</sub></td>
+<td align="center" width="140"><b>ML</b><br><sub>scikit-learn · pandas · numpy</sub></td>
+<td align="center" width="140"><b>Web</b><br><sub>Express · HTML/CSS/JS · Render</sub></td>
+<td align="center" width="140"><b>CI/CD</b><br><sub>GitHub Actions (cron 03:00 UTC)</sub></td>
+</tr>
+</table>
 
-## Publicar na web (Render)
+---
 
-Já está publicado em **https://meus-investimentos-x7dn.onrender.com** (o nome do serviço vem do
-projeto anterior; para trocar, crie um serviço novo com outro nome apontando para este repositório).
-
-O `render.yaml` está no plano **free**, então:
-- **os dados são apagados a cada deploy ou reinício** — inclusive o histórico de preços;
-- o serviço **dorme após 15 minutos** sem acesso e demora ~50s para acordar.
-
-Para o TCC o histórico é o coração do trabalho: antes de começar a coletar dados de verdade,
-troque para `plan: starter` e descomente o bloco `disk` + `DB_PATH` no `render.yaml`.
-
-## Rotinas automáticas
-
-| Arquivo | O que faz |
-|---|---|
-| `INICIAR.bat` | Sobe o sistema local em http://localhost:3000 |
-| `ATENDER-BUSCAS.bat` | Agente em modo serviço: responde as buscas dos visitantes do site público |
-| `COLETA-DIARIA.bat` | Coleta os preços dos produtos acompanhados e grava no histórico |
-
-A coleta diária está agendada no Windows para rodar todo dia às 09:00
-(tarefa `ComparadorPrecos-ColetaDiaria`). É ela que constrói a série temporal de preços.
-
-Para conferir, alterar o horário ou remover:
+## Estrutura do repositório
 
 ```
-schtasks /Query /TN "ComparadorPrecos-ColetaDiaria"
-schtasks /Change /TN "ComparadorPrecos-ColetaDiaria" /ST 20:00
-schtasks /Delete /TN "ComparadorPrecos-ColetaDiaria" /F
+📁 pipeline/
+   ├── extracao_lojas.py          # Coleta KaBuM! e Amazon
+   ├── ml_model.py                # Regra de variação + Random Forest (grava no banco)
+   ├── revisao_orientador.py      # Testes de injeção, retroativo, TF-IDF e silhueta
+   └── validar_ia_retroativo.py   # Valida a IA fora da amostra em TODOS os dias
+📁 scripts/
+   └── importar-csv.js            # Importa o CSV para o Supabase (dedup, filtros)
+📁 public/
+   ├── app.js                     # Interface
+   ├── estilo.css                 # Tema (incluindo o selo "Sugerida pela IA")
+   └── idiomas.js                 # Português · English · Español
+📄 server.js, ia.js, db.js        # Servidor Express + consulta ao banco
+📄 .github/workflows/pipeline.yml # Cron diário
+📄 artigo/                        # Artigo RECIMA21 (.docx e fontes)
 ```
 
-## Desempenho e métricas
+---
 
-As lojas são consultadas **em paralelo**: uma busca completa leva cerca de 18 segundos
-(eram 45 quando era uma loja por vez). A tela **Métricas** mostra, a partir das buscas reais:
-número de buscas, tempo médio e mediano, taxa de sucesso e tempo de resposta de cada loja,
-quantas ofertas foram descartadas pelo filtro de relevância e os termos mais procurados —
-material direto para o capítulo de resultados.
+## Como rodar localmente
 
-### Frete por CEP (em aberto)
+**Pré-requisitos:** Node.js 22+, Python 3.10+, variável de ambiente `DATABASE_URL` com a string de conexão do Supabase.
 
-A infraestrutura existe (`coletores/frete.js`): o agente abre a página da oferta, digita o CEP
-com eventos de teclado reais do Chrome e lê o bloco de entrega. Funciona quando a página é
-operada manualmente, mas as lojas não disparam o cálculo de frete para o navegador automatizado —
-testado na KaBuM!, Pichau e Terabyte, com digitação caractere a caractere, clique real de mouse e
-janela visível. Por isso o frete continua entrando como zero (ou pelo lançamento manual), e o
-sistema deixa claro na tela quando o valor é apenas o preço do produto.
+```bash
+# 1. Instalar dependências
+npm install
+pip install pandas numpy scikit-learn requests selenium beautifulsoup4 matplotlib seaborn psycopg2-binary
 
-## Banco de dados
+# 2. Rodar o servidor local (porta 3000)
+npm start
 
-**A busca lê só do banco de ofertas.** As lojas não são mais consultadas em tempo real,
-nem pelo agente nem pela API: as ofertas entram pelo importador (CSV) e o site responde a
-partir delas. No Render, `DATABASE_URL` é obrigatória: sem ela, a base fica vazia e nenhuma
-busca encontra nada.
-
-O sistema grava em **Postgres no Supabase** quando a variável `DATABASE_URL` está definida
-(string do botão *Connect* → *Session pooler*). Sem ela, usa um arquivo SQLite local
-(`precos.db`), para testar na sua máquina.
-
-- As tabelas são criadas sozinhas na primeira inicialização, nos dois casos.
-- No Render, a variável fica em *Environment*. No plano gratuito o SQLite some a cada deploy;
-  o Supabase não.
-- Os dados enriquecidos pela IA (`ofertas_ia`) são carregados a partir do CSV:
-
-```
-npm run importar-ia -- "C:\Users\roger\Downloads\dados_enriquecidos_ia.csv"
+# 3. (opcional) Rodar o pipeline manualmente
+python pipeline/extracao_lojas.py
+node scripts/importar-csv.js --adicionar pipeline/saida/ofertas_consolidadas.csv
+python pipeline/ml_model.py
 ```
 
-(com `DATABASE_URL` definida na sessão do PowerShell: `$env:DATABASE_URL="..."`)
+Ou dispare o workflow do GitHub Actions no modo somente análise:
 
-Leitura: `/api/ia/resumo` e `/api/ia/ofertas?situacao=Boa%20Compra&loja=KaBuM!&q=teclado`.
+```bash
+gh workflow run pipeline.yml -f somente_analise=true
+```
 
-## Segurança
+---
 
-O site é público e não guarda conta nem senha de ninguém: não há login, sessão nem dado
-pessoal no banco. O que protege o sistema é o escopo das rotas.
+## Reprodutibilidade
 
-- **Leitura é aberta**: buscar, comparar e ver histórico não exige nada.
-- **Escrita exige o token do coletor** (`COLETOR_TOKEN`, header `X-Coletor-Token`), comparado
-  em tempo constante: cadastrar produto, coletar preços e ingerir resultados só acontecem
-  a partir do agente.
-- **Busca com limite por endereço**: 30 a cada 10 minutos (`MAX_BUSCAS`). Cada busca vira
-  consulta às seis lojas a partir da rede do agente; sem limite, um robô usaria o site para
-  martelar as lojas em nome de quem hospeda o agente. Resultado repetido sai do cache e não
-  consome o limite.
-- **Fila que se recupera**: busca entregue ao agente que não volta em 3 minutos retorna à
-  fila; pedido parado há mais de 15 minutos é encerrado.
-- **Endereço de anúncio só vale `http(s)`**, tanto ao gravar quanto ao exibir: um
-  `javascript:` vindo de uma página de loja não vira link clicável.
-- **Consultas às lojas têm prazo** (15s nas APIs, 45s no navegador), para uma conexão
-  pendurada não travar a rodada inteira do agente.
+- **Semente aleatória:** 42 em todos os experimentos (Random Forest, K-Means, injeção).
+- **Base histórica:** reconstruída em cada execução; a janela de referência usa apenas os 7 dias **anteriores** ao dia avaliado, para evitar vazamento temporal (look-ahead bias).
+- **Artefatos:** cada execução salva em `pipeline/saida/` e também como artifact do workflow:
+  - `dados_enriquecidos_ia.csv` — todas as ofertas do dia com variação e probabilidade da IA
+  - `metricas_random_forest.csv` — métricas fora da amostra do dia
+  - `validacao_ia_retroativo.csv` — métricas de todos os dias anteriores da base
+  - `graficos_artigo/figura1_classificacao_final.png` — gráfico de distribuição
 
-## Estrutura
+---
 
-| Arquivo | Função |
-|---|---|
-| `server.js` | Servidor HTTP, rotas da API, fila de buscas e orquestração da coleta |
-| `db.js` | Banco SQLite e tabelas (`produtos`, `coletas`, `ofertas`, `buscas`) |
-| `analise.js` | Regra de decisão: comparação entre lojas e avaliação do momento de compra |
-| `agente.js` | Agente coletor local: consulta as lojas e envia ao servidor |
-| `coletores/navegador.js` | Controla o Chrome local via DevTools Protocol (sem dependências) |
-| `coletores/kabum.js` | Coletor da API pública do catálogo da KaBuM! |
-| `coletores/pichau.js` | Coletor da Pichau (navegador local) |
-| `coletores/patoloco.js` | Coletor da Patoloco (navegador local) |
-| `coletores/setupninja.js` | Coletor da Setup Ninja (navegador local) |
-| `coletores/amazon.js` | Coletor da Amazon BR (navegador local) |
-| `coletores/terabyte.js` | Coletor da Terabyte (navegador local) |
-| `coletores/magalu.js` | Coletor do Magazine Luiza (desligado: a loja bloqueia) |
-| `coletores/mercadolivre.js` | Coletor da API oficial do Mercado Livre (aguardando liberação) |
-| `public/index.html` | Telas de busca, comparação, produto acompanhado e métricas |
-| `public/app.js` | Lógica da interface, gráfico de histórico e chamadas à API |
-| `public/estilo.css` | Visual |
-| `render.yaml` | Configuração de deploy |
+## Conformidade com termos de uso
 
-Os preços são coletados das lojas e mudam a qualquer momento: confirme no site da loja antes de comprar.
+- **KaBuM!**: o robots.txt proíbe `/busca/*?` e `*?query=*`; a coleta usa o endpoint do catálogo com parâmetro de consulta. Ressalva mantida no artigo.
+- **Amazon**: as Condições de Uso proíbem coleta automatizada de dados. A loja é mantida nesta versão do trabalho **apenas por propósito acadêmico, sem fim comercial**. Para uso em produção comercial, a coleta da Amazon deve ser suspensa ou substituída pela Product Advertising API oficial.
+
+---
+
+## Artigo e trabalhos futuros
+
+O artigo associado foi submetido à revista **RECIMA21** e está em `artigo/ARTIGO_atualizado_04-11.docx`.
+
+Trabalhos futuros apontados:
+
+- Janela ancorada de longo prazo (ex.: menor preço dos últimos 90 dias) para mitigar o viés de ancoragem promocional em períodos como Black Friday.
+- Catálogo mestre de produtos (SKU) para substituir a correspondência de nomes.
+- Reativar coleta de Pichau e Terabyte.
+- Monitoramento intradiário com múltiplas coletas por dia.
+
+---
+
+<div align="center">
+
+### Licença e uso
+
+Projeto acadêmico. Reutilização livre com citação da fonte.
+
+**Autor:** Rogério Vieira · **Orientação:** [preencher]
+**Contato:** [rogerio66425@gmail.com](mailto:rogerio66425@gmail.com)
+
+[⬆ voltar ao topo](#chips-company)
+
+</div>
