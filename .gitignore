@@ -7,3 +7,6 @@ investimentos.db*
 .DS_Store
 
 pipeline/saida/
+pipeline/__pycache__/
+__pycache__/
+*.pyc
