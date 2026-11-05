@@ -79,7 +79,8 @@ def extrair_kabum(alvos):
                         if preco == 0:
                             preco = float(attr.get('price', 0))
 
-                        if attr.get('available') and preco > 0:
+                        # descarta precos abaixo de R$ 1,00 (ex.: preco zero ou de preenchimento)
+                        if attr.get('available') and preco >= 1:
                             slug = str(attr.get('product_link', '')).lstrip('/')
                             ofertas_totais.append({
                                 'id_produto_externo': str(item['id']),
@@ -149,11 +150,15 @@ def coletar_termo_amazon(driver, termo, categoria):
 
             preco_limpo = elemento_preco.get_text().replace('R$', '').replace('.', '').replace(',', '.').strip()
             try:
+                preco_amazon = float(preco_limpo)
+                # descarta precos abaixo de R$ 1,00 (ex.: preco zero ou de preenchimento)
+                if preco_amazon < 1:
+                    continue
                 ofertas.append({
                     'id_produto_externo': asin,
                     'nome_produto': titulo,
                     'categoria_produto': categoria,
-                    'preco': float(preco_limpo),
+                    'preco': preco_amazon,
                     'nome_loja': 'Amazon',
                     'url_oferta': f"https://www.amazon.com.br/dp/{asin}",
                     'data_coleta': DATA_COLETA
