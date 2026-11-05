@@ -87,10 +87,10 @@ Em paralelo, um **Random Forest** (treinado com os dias anteriores) estima a pro
 <tr><th width="55%">Método</th><th width="22%">AUC</th><th width="23%">Falsos alarmes</th></tr>
 </thead>
 <tbody>
-<tr><td><b>Regra de variação (10%)</b></td><td align="center"><b>0,953</b></td><td align="center">5,5%</td></tr>
-<tr><td>K-Means (5 grupos)</td><td align="center">0,884</td><td align="center">11,9%</td></tr>
-<tr><td>Isolation Forest ampliado</td><td align="center">0,850</td><td align="center">11,3%</td></tr>
-<tr><td>Escore z por produto e loja</td><td align="center">0,514</td><td align="center">16,6%</td></tr>
+<tr><td align="center"><b>Regra de variação (10%)</b></td><td align="center"><b>0,953</b></td><td align="center">5,5%</td></tr>
+<tr><td align="center">K-Means (5 grupos)</td><td align="center">0,884</td><td align="center">11,9%</td></tr>
+<tr><td align="center">Isolation Forest ampliado</td><td align="center">0,850</td><td align="center">11,3%</td></tr>
+<tr><td align="center">Escore z por produto e loja</td><td align="center">0,514</td><td align="center">16,6%</td></tr>
 </tbody>
 </table>
 
@@ -105,9 +105,9 @@ Em paralelo, um **Random Forest** (treinado com os dias anteriores) estima a pro
 <tr><th width="40%">Métrica</th><th width="20%">Média</th><th width="20%">Mínimo</th><th width="20%">Máximo</th></tr>
 </thead>
 <tbody>
-<tr><td>AUC vs regra do site</td><td align="center"><b>0,999</b></td><td align="center">0,998</td><td align="center">1,000</td></tr>
-<tr><td>Recall vs regra</td><td align="center">99,7%</td><td align="center">97,1%</td><td align="center">100,0%</td></tr>
-<tr><td><b>Persistência no dia seguinte</b></td><td align="center"><b>72,3%</b></td><td align="center">49,2%</td><td align="center">88,0%</td></tr>
+<tr><td align="center">AUC vs regra do site</td><td align="center"><b>0,999</b></td><td align="center">0,998</td><td align="center">1,000</td></tr>
+<tr><td align="center">Recall vs regra</td><td align="center">99,7%</td><td align="center">97,1%</td><td align="center">100,0%</td></tr>
+<tr><td align="center"><b>Persistência no dia seguinte</b></td><td align="center"><b>72,3%</b></td><td align="center">49,2%</td><td align="center">88,0%</td></tr>
 </tbody>
 </table>
 
