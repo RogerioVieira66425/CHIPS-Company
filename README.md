@@ -54,14 +54,23 @@ Tudo roda em **nuvens gratuitas**: GitHub Actions dispara o pipeline diariamente
 
 Cada oferta é comparada à **média dos preços dos sete dias anteriores do mesmo produto, na mesma loja**. A variação V = (P − M) / M × 100 define a faixa:
 
-| Faixa | Condição | Cor no site |
-|---|---|---|
-| **Boa compra** | V ≤ −10% | Verde escuro |
-| Queda moderada | −10% < V ≤ −5% | Verde claro |
-| Preço normal | −5% < V < +5% | Amarelo |
-| Alta moderada | +5% ≤ V < +10% | Laranja |
-| **Evitar** | V ≥ +10% | Vermelho |
-| Sem histórico | produto novo na loja | Cinza |
+<div align="center">
+
+<table width="100%">
+<thead>
+<tr><th width="30%">Faixa</th><th width="40%">Condição</th><th width="30%">Cor no site</th></tr>
+</thead>
+<tbody>
+<tr><td align="center"><b>Boa compra</b></td><td align="center">V ≤ −10%</td><td align="center">🟢 Verde escuro</td></tr>
+<tr><td align="center">Queda moderada</td><td align="center">−10% &lt; V ≤ −5%</td><td align="center">🟩 Verde claro</td></tr>
+<tr><td align="center">Preço normal</td><td align="center">−5% &lt; V &lt; +5%</td><td align="center">🟡 Amarelo</td></tr>
+<tr><td align="center">Alta moderada</td><td align="center">+5% ≤ V &lt; +10%</td><td align="center">🟠 Laranja</td></tr>
+<tr><td align="center"><b>Evitar</b></td><td align="center">V ≥ +10%</td><td align="center">🔴 Vermelho</td></tr>
+<tr><td align="center">Sem histórico</td><td align="center">produto novo na loja</td><td align="center">⚪ Cinza</td></tr>
+</tbody>
+</table>
+
+</div>
 
 Em paralelo, um **Random Forest** (treinado com os dias anteriores) estima a probabilidade de a oferta ser uma boa compra. Quando prob ≥ 0,5, o site mostra o selo **"Sugerida pela IA"** — sem alterar as cinco faixas da regra.
 
@@ -71,20 +80,38 @@ Em paralelo, um **Random Forest** (treinado com os dias anteriores) estima a pro
 
 ### Regra de variação × métodos alternativos (AUC no teste de injeção)
 
-| Método | AUC | Falsos alarmes |
-|---|---|---|
-| **Regra de variação** (10%) | **0,953** | 5,5% |
-| K-Means (5 grupos) | 0,884 | 11,9% |
-| Isolation Forest ampliado | 0,850 | 11,3% |
-| Escore z por produto e loja | 0,514 | 16,6% |
+<div align="center">
+
+<table width="100%">
+<thead>
+<tr><th width="55%">Método</th><th width="22%">AUC</th><th width="23%">Falsos alarmes</th></tr>
+</thead>
+<tbody>
+<tr><td><b>Regra de variação (10%)</b></td><td align="center"><b>0,953</b></td><td align="center">5,5%</td></tr>
+<tr><td>K-Means (5 grupos)</td><td align="center">0,884</td><td align="center">11,9%</td></tr>
+<tr><td>Isolation Forest ampliado</td><td align="center">0,850</td><td align="center">11,3%</td></tr>
+<tr><td>Escore z por produto e loja</td><td align="center">0,514</td><td align="center">16,6%</td></tr>
+</tbody>
+</table>
+
+</div>
 
 ### Random Forest fora da amostra (14 dias)
 
-| Métrica | Média | Mínimo | Máximo |
-|---|---|---|---|
-| AUC vs regra do site | **0,999** | 0,998 | 1,000 |
-| Recall vs regra | 99,7% | 97,1% | 100,0% |
-| **Persistência no dia seguinte** | **72,3%** | 49,2% | 88,0% |
+<div align="center">
+
+<table width="100%">
+<thead>
+<tr><th width="40%">Métrica</th><th width="20%">Média</th><th width="20%">Mínimo</th><th width="20%">Máximo</th></tr>
+</thead>
+<tbody>
+<tr><td>AUC vs regra do site</td><td align="center"><b>0,999</b></td><td align="center">0,998</td><td align="center">1,000</td></tr>
+<tr><td>Recall vs regra</td><td align="center">99,7%</td><td align="center">97,1%</td><td align="center">100,0%</td></tr>
+<tr><td><b>Persistência no dia seguinte</b></td><td align="center"><b>72,3%</b></td><td align="center">49,2%</td><td align="center">88,0%</td></tr>
+</tbody>
+</table>
+
+</div>
 
 > **Persistência:** entre as ofertas marcadas como Boa Compra pela IA, 3 em cada 4 mantêm o preço abaixo de 95% da mediana histórica no dia seguinte.
 
