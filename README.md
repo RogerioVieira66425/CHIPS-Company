@@ -194,9 +194,6 @@ Trabalhos futuros apontados:
 
 Projeto acadêmico. Reutilização livre com citação da fonte.
 
-**Autor:** Rogério Vieira · **Orientação:** [preencher]
-**Contato:** [rogerio66425@gmail.com](mailto:rogerio66425@gmail.com)
-
 [⬆ voltar ao topo](#chips-company)
 
 </div>
