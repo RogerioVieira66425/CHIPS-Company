@@ -945,10 +945,15 @@ body {
 .row:hover { background: var(--soft); }
 .row.win { background: var(--pos-soft); }
 .row .t {
-  font-weight: 600; text-decoration: none; color: inherit;
+  font-weight: 600; color: inherit;
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+}
+.row .t > a {
+  flex: 1 1 auto; min-width: 0; color: inherit; text-decoration: none;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
-.row .t:hover { text-decoration: underline; }
+.row .t > a:hover { text-decoration: underline; }
+.row .selo-ia-linha { flex-shrink: 0; }
 .row .p { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 .row .p > div { display: flex; flex-direction: column; align-items: center; }
 /* sem preco antigo, nao reserva a linha de cima: o preco fica no centro da linha */
