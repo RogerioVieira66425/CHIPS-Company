@@ -10,7 +10,16 @@ const db = require('./db.js');
 const analise = require('./analise.js');
 
 // troque ao mudar as regras de busca: invalida os resultados guardados
-const VERSAO_BUSCA = 11;
+const VERSAO_BUSCA = 12;
+
+/* Lojas exibidas no site (LOJAS_EXIBIDAS, separadas por virgula; "todas" mostra todas).
+   A coleta continua gravando as outras lojas; so a exibicao e filtrada. */
+const LOJAS_EXIBIDAS = String(process.env.LOJAS_EXIBIDAS || 'KaBuM!').split(',').map((s) => s.trim()).filter(Boolean);
+if (LOJAS_EXIBIDAS.some((l) => l.indexOf('?') !== -1)) throw new Error('LOJAS_EXIBIDAS nao pode conter "?"');
+const OFERTAS = LOJAS_EXIBIDAS.length === 0 || LOJAS_EXIBIDAS.some((l) => l.toLowerCase() === 'todas')
+  ? 'ofertas_dia'
+  : '(SELECT * FROM ofertas_dia WHERE loja IN (' +
+    LOJAS_EXIBIDAS.map((l) => "'" + l.replace(/'/g, "''") + "'").join(',') + ')) AS od';
 
 const SITUACOES = ['Boa Compra', 'Preço Médio', 'Sem Histórico (Novo)', 'Evitar', 'Anomalia (Isolada por IA)', 'Bom Momento'];
 
@@ -49,7 +58,7 @@ function ehAcessorio(titulo, palavrasBusca) {
 
 /* Dia mais recente da base: a foto que a busca e a tela mostram. */
 async function diaAtual() {
-  const r = await db.get('SELECT MAX(dia) AS dia FROM ofertas_dia');
+  const r = await db.get('SELECT MAX(dia) AS dia FROM ' + OFERTAS);
   return r && r.dia ? r.dia : null;
 }
 
@@ -97,10 +106,10 @@ async function resumo() {
   const dia = await diaAtual();
   if (!dia) return { totais: { ofertas: 0, produtos: 0, dias: 0 }, por_situacao: [], por_loja: [] };
   const porSituacao = await db.all(
-    "SELECT COALESCE(situacao, 'Sem classificação') AS situacao, COUNT(*) AS ofertas FROM ofertas_dia WHERE dia = ? GROUP BY 1 ORDER BY ofertas DESC", dia);
-  const porLoja = await db.all('SELECT loja, COUNT(*) AS ofertas FROM ofertas_dia WHERE dia = ? GROUP BY loja ORDER BY ofertas DESC', dia);
-  const totais = await db.get('SELECT COUNT(*) AS ofertas, COUNT(DISTINCT id_produto) AS produtos FROM ofertas_dia WHERE dia = ?', dia);
-  const dias = await db.get('SELECT COUNT(DISTINCT dia) AS dias FROM ofertas_dia');
+    "SELECT COALESCE(situacao, 'Sem classificação') AS situacao, COUNT(*) AS ofertas FROM " + OFERTAS + ' WHERE dia = ? GROUP BY 1 ORDER BY ofertas DESC', dia);
+  const porLoja = await db.all('SELECT loja, COUNT(*) AS ofertas FROM ' + OFERTAS + ' WHERE dia = ? GROUP BY loja ORDER BY ofertas DESC', dia);
+  const totais = await db.get('SELECT COUNT(*) AS ofertas, COUNT(DISTINCT id_produto) AS produtos FROM ' + OFERTAS + ' WHERE dia = ?', dia);
+  const dias = await db.get('SELECT COUNT(DISTINCT dia) AS dias FROM ' + OFERTAS);
   return { dia, totais: { ...totais, dias: dias.dias }, por_situacao: porSituacao, por_loja: porLoja };
 }
 
@@ -120,7 +129,7 @@ async function ofertas(filtro) {
   const pagina = Math.max(Number(f.pagina) || 1, 1);
   const linhas = await db.all(
     'SELECT id_produto, nome_produto AS produto, nome_produto AS titulo, loja, preco, preco_medio_historico, ' +
-    '  variacao_pct AS variacao_vs_base, situacao, prob_ia_boa_compra, url FROM ofertas_dia WHERE ' + condicoes.join(' AND ') +
+    '  variacao_pct AS variacao_vs_base, situacao, prob_ia_boa_compra, url FROM ' + OFERTAS + ' WHERE ' + condicoes.join(' AND ') +
     ' ORDER BY preco ASC LIMIT ? OFFSET ?',
     ...valores, limite, (pagina - 1) * limite
   );
@@ -133,7 +142,7 @@ async function medianasDoHistorico(nomes) {
   for (let i = 0; i < nomes.length; i += 500) {
     const lote = nomes.slice(i, i + 500);
     const linhas = await db.all(
-      'SELECT nome_produto, preco FROM ofertas_dia WHERE nome_produto IN (' + lote.map(() => '?').join(',') + ')', ...lote);
+      'SELECT nome_produto, preco FROM ' + OFERTAS + ' WHERE nome_produto IN (' + lote.map(() => '?').join(',') + ')', ...lote);
     const grupos = new Map();
     linhas.forEach((r) => {
       if (!grupos.has(r.nome_produto)) grupos.set(r.nome_produto, []);
@@ -158,7 +167,7 @@ async function pesquisar(termo) {
   const condicoes = palavras.map(() => 'texto_busca LIKE ?').join(' AND ');
   const linhas = await db.all(
     'SELECT id_produto, nome_produto, categoria, preco, loja, url, dia, preco_medio_historico, variacao_pct, situacao, prob_ia_boa_compra ' +
-    'FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY loja ORDER BY preco ASC) AS rn FROM ofertas_dia WHERE dia = ? AND ' + condicoes + ') t ' +
+    'FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY loja ORDER BY preco ASC) AS rn FROM ' + OFERTAS + ' WHERE dia = ? AND ' + condicoes + ') t ' +
     'WHERE rn <= 3000 ORDER BY preco ASC',
     dia, ...palavras.map((p) => '%' + p + '%')
   );
@@ -242,15 +251,15 @@ async function analiseDoProduto(produto, titulo) {
   let nome = nomeBase;
   let atuais = await db.all(
     'SELECT id_produto, nome_produto, categoria, preco, loja, url, dia, preco_medio_historico, variacao_pct, situacao ' +
-    'FROM ofertas_dia WHERE dia = ? AND nome_produto = ? ORDER BY preco ASC LIMIT 400', dia, nome);
+    'FROM ' + OFERTAS + ' WHERE dia = ? AND nome_produto = ? ORDER BY preco ASC LIMIT 400', dia, nome);
   // o nome pode nao bater (resultado guardado antes): procura pelo titulo da oferta aberta
   if (!atuais.length && titulo && titulo !== nome) {
-    const achado = await db.get('SELECT nome_produto FROM ofertas_dia WHERE nome_produto = ? LIMIT 1', titulo);
+    const achado = await db.get('SELECT nome_produto FROM ' + OFERTAS + ' WHERE nome_produto = ? LIMIT 1', titulo);
     if (achado) {
       nome = achado.nome_produto;
       atuais = await db.all(
         'SELECT id_produto, nome_produto, categoria, preco, loja, url, dia, preco_medio_historico, variacao_pct, situacao ' +
-        'FROM ofertas_dia WHERE dia = ? AND nome_produto = ? ORDER BY preco ASC LIMIT 400', dia, nome);
+        'FROM ' + OFERTAS + ' WHERE dia = ? AND nome_produto = ? ORDER BY preco ASC LIMIT 400', dia, nome);
     }
   }
   if (!atuais.length) return null;
@@ -260,7 +269,7 @@ async function analiseDoProduto(produto, titulo) {
 
   // o produto inteiro: estatisticas, lojas, faixa e posicao saem de todas as coletas do historico
   const coletas = await db.all(
-    'SELECT dia, loja, preco, preco_medio_historico FROM ofertas_dia WHERE nome_produto = ? ORDER BY dia', nome);
+    'SELECT dia, loja, preco, preco_medio_historico FROM ' + OFERTAS + ' WHERE nome_produto = ? ORDER BY dia', nome);
   const precos = coletas.map((r) => Number(r.preco));
   const acimaDela = precos.filter((p) => p > escolhida.preco).length;
 
@@ -342,7 +351,7 @@ let vocabCache = { dia: null, palavras: null, nomes: null };
 async function vocabulario() {
   const dia = await diaAtual();
   if (vocabCache.dia === dia && vocabCache.palavras) return vocabCache;
-  const linhas = await db.all('SELECT DISTINCT nome_produto AS nome FROM ofertas_dia WHERE dia = ?', dia);
+  const linhas = await db.all('SELECT DISTINCT nome_produto AS nome FROM ' + OFERTAS + ' WHERE dia = ?', dia);
   const palavras = new Map();
   const nomes = [];
   linhas.forEach((r) => {
@@ -379,7 +388,7 @@ async function sugerir(termo) {
   if (!dia) return [];
   const condicoes = palavras.map(() => 'texto_busca LIKE ?').join(' AND ');
   const linhas = await db.all(
-    'SELECT nome_produto AS nome, MIN(preco) AS menor FROM ofertas_dia WHERE dia = ? AND ' + condicoes +
+    'SELECT nome_produto AS nome, MIN(preco) AS menor FROM ' + OFERTAS + ' WHERE dia = ? AND ' + condicoes +
     ' GROUP BY nome_produto ORDER BY menor ASC LIMIT 8',
     dia, ...palavras.map((p) => '%' + p + '%')
   );
@@ -410,4 +419,4 @@ async function corrigir(termo) {
   return mudou ? novas.join(' ') : null;
 }
 
-module.exports = { resumo, ofertas, pesquisar, analiseDoProduto, sugerir, corrigir, textoDeBusca, SITUACOES, VERSAO_BUSCA };
+module.exports = { resumo, ofertas, pesquisar, analiseDoProduto, sugerir, corrigir, textoDeBusca, SITUACOES, VERSAO_BUSCA, OFERTAS };
