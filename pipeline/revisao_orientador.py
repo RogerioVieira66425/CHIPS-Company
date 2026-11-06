@@ -346,6 +346,7 @@ def executar(base):
     d = criterio_boa_compra(base)
     resumo = d.groupby('situacao')[['acerto_dias_seguintes', 'acerto_periodo']].mean() * 100
     resumo['ofertas'] = d.groupby('situacao').size()
+    resumo['produtos_distintos'] = d.groupby('situacao')['nome_produto'].nunique()
     relatorio += ['## 5. Criterio de acerto (% das ofertas em que o preco marcado foi o menor)', '',
                   resumo.round(1).to_string(), '']
     for faixa, nome in [('Boa compra', 'amostra_boa_compra.csv'), ('Preço normal', 'amostra_preco_normal.csv')]:
