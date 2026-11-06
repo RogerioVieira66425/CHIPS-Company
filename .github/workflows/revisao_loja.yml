@@ -1,0 +1,34 @@
+name: Revisao das analises por loja (somente leitura)
+
+on:
+  workflow_dispatch:
+    inputs:
+      loja:
+        description: 'Loja analisada'
+        default: 'KaBuM!'
+      dia_max:
+        description: 'Ultimo dia da base (AAAA-MM-DD)'
+        default: '2026-11-04'
+
+jobs:
+  revisao:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      LOJA: ${{ inputs.loja }}
+      DIA_MAX: ${{ inputs.dia_max }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - run: pip install pandas numpy scikit-learn psycopg2-binary
+      - name: Tabelas 3 a 6 (revisao do orientador)
+        run: python pipeline/revisao_orientador.py
+      - name: Grupo de controle e escore z por MAD
+        run: python pipeline/analise_orientador.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: revisao-loja-${{ github.run_number }}
+          path: pipeline/saida/

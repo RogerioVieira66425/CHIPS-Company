@@ -54,12 +54,17 @@ def carregar():
     url = os.environ.get('DATABASE_URL')
     if not url:
         sys.exit('[ERRO] DATABASE_URL nao definida.')
+    # LOJA e DIA_MAX opcionais: restringem a base (ex.: LOJA=KaBuM! DIA_MAX=2026-11-04)
+    sql = "SELECT nome_produto, loja, preco, dia FROM ofertas_dia WHERE preco > 0 AND preco <> 9999.99"
+    params = []
+    if os.environ.get('LOJA'):
+        sql += ' AND loja = %s'
+        params.append(os.environ['LOJA'])
+    if os.environ.get('DIA_MAX'):
+        sql += ' AND dia <= %s'
+        params.append(os.environ['DIA_MAX'])
     with psycopg2.connect(url) as con:
-        df = pd.read_sql(
-            "SELECT nome_produto, loja, preco, dia FROM ofertas_dia "
-            "WHERE preco > 0 AND preco <> 9999.99",
-            con,
-        )
+        df = pd.read_sql(sql, con, params=params)
     df['dia'] = pd.to_datetime(df['dia']).dt.date
     df = df.sort_values('preco').drop_duplicates(['nome_produto', 'loja', 'dia']).reset_index(drop=True)
     return df

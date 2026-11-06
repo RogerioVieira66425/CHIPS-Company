@@ -69,8 +69,16 @@ def preparar_base(bruto):
 
 
 def carregar(url):
+    # LOJA e DIA_MAX opcionais: restringem a base (ex.: LOJA=KaBuM! DIA_MAX=2026-11-04)
+    sql, params = 'SELECT nome_produto, loja, preco, dia, url FROM ofertas_dia WHERE TRUE', []
+    if os.environ.get('LOJA'):
+        sql += ' AND loja = %s'
+        params.append(os.environ['LOJA'])
+    if os.environ.get('DIA_MAX'):
+        sql += ' AND dia <= %s'
+        params.append(os.environ['DIA_MAX'])
     with psycopg2.connect(url) as conexao:
-        bruto = pd.read_sql('SELECT nome_produto, loja, preco, dia, url FROM ofertas_dia', conexao)
+        bruto = pd.read_sql(sql, conexao, params=params)
     return preparar_base(bruto)
 
 
