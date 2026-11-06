@@ -54,6 +54,10 @@ jobs:
         if: ${{ inputs.somente_analise == true }}
         run: python pipeline/validar_ia_retroativo.py
 
+      - name: 5. Analise pedida pelo orientador (itens 2 e 3)
+        if: ${{ inputs.somente_analise == true }}
+        run: python pipeline/analise_orientador.py
+
       - name: Guardar os resultados
         if: always()
         uses: actions/upload-artifact@v4
