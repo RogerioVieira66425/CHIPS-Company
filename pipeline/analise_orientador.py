@@ -66,7 +66,9 @@ def carregar():
     with psycopg2.connect(url) as con:
         df = pd.read_sql(sql, con, params=params)
     df['dia'] = pd.to_datetime(df['dia']).dt.date
-    df = df.sort_values('preco').drop_duplicates(['nome_produto', 'loja', 'dia']).reset_index(drop=True)
+    # ordem total e estavel: o banco devolve as linhas em ordem variavel, e o sorteio da injecao depende dela
+    df = df.sort_values(['preco', 'nome_produto', 'loja', 'dia'], kind='mergesort').drop_duplicates(
+        ['nome_produto', 'loja', 'dia']).reset_index(drop=True)
     return df
 
 

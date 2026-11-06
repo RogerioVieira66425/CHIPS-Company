@@ -64,7 +64,9 @@ def preparar_base(bruto):
     base = bruto.copy()
     base['dia'] = pd.to_datetime(base['dia'])
     base = base[(base['preco'] > 0) & (base['preco'] != 9999.99)]
-    base = base.sort_values('preco').drop_duplicates(['nome_produto', 'loja', 'dia'])
+    # ordem total e estavel: o banco devolve as linhas em ordem variavel, e o sorteio da injecao depende dela
+    base = base.sort_values(['preco', 'nome_produto', 'loja', 'dia'], kind='mergesort').drop_duplicates(
+        ['nome_produto', 'loja', 'dia'])
     return base.reset_index(drop=True)
 
 
