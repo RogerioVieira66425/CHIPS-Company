@@ -5,6 +5,10 @@ Arquitetura (pensada para o plano gratis do Render):
     para transcrever, extrai o audio, reduz para ~24 kbps e corta em pedacos de 10 min.
   - Este SERVIDOR so faz login por senha e repassa cada pedaco para a API da Groq
     (Whisper large-v3), sem guardar nada em disco.
+  - Resumos: /api/resumir chama um modelo de texto da Groq. Textos longos sao resumidos
+    em partes ("notas", uma requisicao por parte, conduzidas pelo navegador) e depois
+    juntados num resumo final. Assim nenhuma requisicao estoura o limite gratuito
+    (8 mil tokens/minuto por modelo) nem o timeout do servidor.
 
 Variaveis de ambiente (no Render: painel > Environment; local: arquivo .env):
   GROQ_API_KEY  chave da API da Groq (https://console.groq.com/keys)
@@ -33,6 +37,73 @@ if _env.exists():
 GROQ_URL = os.environ.get("GROQ_URL", "https://api.groq.com/openai/v1/audio/transcriptions")
 MODELOS = {"whisper-large-v3", "whisper-large-v3-turbo"}
 IDIOMAS = {"auto", "pt", "en", "es"}
+
+# ---------------------------------------------------------------- resumo (LLM)
+CHAT_URL = os.environ.get("GROQ_CHAT_URL", "https://api.groq.com/openai/v1/chat/completions")
+MODELO_RESUMO = "openai/gpt-oss-120b"
+# cada modelo tem sua propria cota por minuto; alternar entre eles acelera textos longos
+MODELOS_NOTAS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"]
+MAX_CHARS_PEDIDO = 16000   # ~4-5 mil tokens: cabe com folga em 8 mil tokens/minuto
+
+SISTEMA_RESUMO = (
+    "Você resume transcrições de áudio para um usuário brasileiro. A transcrição foi gerada "
+    "automaticamente e pode ter erros de reconhecimento (palavras trocadas, nomes escritos errado): "
+    "corrija pelo contexto quando for óbvio, mas nunca invente fatos, nomes, números ou datas que não "
+    "estejam no texto, nem atribua cargos, papéis ou intenções que não foram ditos.Escreva sempre em português do Brasil, mesmo que o áudio esteja em outro idioma. "
+    "Responda só com o resumo, sem frases de introdução como 'Aqui está o resumo'. "
+    "Formato: títulos com '## ', tópicos com '- ', **negrito** só para o que for essencial. "
+    "Se o conteúdo for curto, o resumo também deve ser curto."
+)
+ESTILOS = {
+    "rapido": "Escreva um resumo rápido: uma frase de visão geral e, em seguida, de 3 a 6 tópicos com o essencial.",
+    "detalhado": (
+        "Escreva um resumo detalhado com estas seções, omitindo as que não se aplicarem:\n"
+        "## Visão geral (2 a 4 frases)\n## Pontos principais (tópicos)\n"
+        "## Decisões e próximos passos\n## Nomes, datas e números citados"
+    ),
+    "ata": (
+        "Escreva uma ata objetiva, omitindo as seções que não se aplicarem:\n"
+        "## Assunto (1 frase)\n## Participantes citados\n## O que foi discutido (tópicos)\n"
+        "## Decisões\n## Tarefas (formato: - tarefa — responsável — prazo, quando citados)"
+    ),
+}
+
+
+def limpar_raciocinio(txt):
+    import re
+    return re.sub(r"<think>.*?</think>", "", txt or "", flags=re.S).strip()
+
+
+def chamar_llm(modelo, sistema, usuario, max_tokens):
+    chave = os.environ.get("GROQ_API_KEY")
+    extra = ({"reasoning_effort": "low", "include_reasoning": False} if modelo.startswith("openai/gpt-oss")
+             else {"reasoning_effort": "none"})
+    corpo = {"model": modelo, "max_tokens": max_tokens, "temperature": 0.3, **extra,
+             "messages": [{"role": "system", "content": sistema}, {"role": "user", "content": usuario}]}
+    for tentativa in range(4):
+        try:
+            r = requests.post(CHAT_URL, headers={"Authorization": f"Bearer {chave}"}, json=corpo, timeout=120)
+        except requests.RequestException:
+            if tentativa == 3:
+                raise RuntimeError("Não consegui falar com o serviço de resumo. Tente de novo.")
+            time.sleep(3)
+            continue
+        if r.status_code == 429 and tentativa < 3:          # cota por minuto: espera e tenta de novo
+            time.sleep(min(float(r.headers.get("retry-after", 15)) + 1, 40))
+            continue
+        break
+    if r.status_code == 429:
+        raise RuntimeError("Limite gratuito de resumos atingido por agora. Tente de novo em alguns minutos.")
+    if r.status_code in (401, 403):
+        raise RuntimeError("A chave da Groq foi recusada. Confira a GROQ_API_KEY no Render.")
+    if r.status_code != 200:
+        raise RuntimeError(f"Falha ao gerar o resumo (Groq {r.status_code}).")
+    j = r.json()
+    escolha = j["choices"][0]
+    texto = limpar_raciocinio(escolha["message"].get("content"))
+    if not texto:
+        raise RuntimeError("O resumo veio vazio. Tente de novo.")
+    return texto, escolha.get("finish_reason") == "length"
 
 app = Flask(__name__, static_folder=None)
 app.secret_key = os.environ.get("SECRET_KEY") or os.urandom(32)
@@ -171,6 +242,48 @@ def transcrever():
         segmentos=[{"inicio": s["start"], "fim": s["end"], "texto": s["text"].strip()}
                    for s in segs if not alucinacao(s)],
     )
+
+
+@app.post("/api/resumir")
+def resumir():
+    """Uma etapa do resumo. fase: 'direto' (texto curto), 'notas' (uma parte de texto longo)
+    ou 'final' (junta as notas de todas as partes)."""
+    if not logado():
+        return jsonify(erro="Faça login."), 401
+    if not os.environ.get("GROQ_API_KEY"):
+        return jsonify(erro="GROQ_API_KEY não configurada no servidor."), 500
+    d = request.get_json(silent=True) or {}
+    fase, estilo = d.get("fase", "direto"), d.get("estilo", "rapido")
+    texto = str(d.get("texto", "")).strip()
+    if fase not in ("direto", "notas", "final") or estilo not in ESTILOS:
+        return jsonify(erro="Parâmetros inválidos."), 400
+    if not texto:
+        return jsonify(erro="Não há texto para resumir."), 400
+    if len(texto) > MAX_CHARS_PEDIDO + 2000:
+        return jsonify(erro="Texto grande demais para uma etapa (o navegador deve dividir)."), 413
+    try:
+        parte, total = int(d.get("parte", 1)), int(d.get("total", 1))
+    except (TypeError, ValueError):
+        parte, total = 1, 1
+
+    try:
+        if fase == "notas":
+            pedido = (f"Esta é a parte {parte} de {total} de uma transcrição longa. Extraia notas fiéis "
+                      "e completas desta parte: assuntos, fatos, nomes, números, datas, decisões e tarefas, "
+                      "em tópicos curtos, na ordem em que aparecem. Sem introdução.\n\n"
+                      f"Transcrição (parte {parte}/{total}):\n\"\"\"\n{texto}\n\"\"\"")
+            resumo, cortado = chamar_llm(MODELOS_NOTAS[(parte - 1) % len(MODELOS_NOTAS)],
+                                         SISTEMA_RESUMO, pedido, 1500)
+        elif fase == "final":
+            pedido = ("Abaixo estão notas, em ordem, de todas as partes de uma transcrição longa. "
+                      f"Com base apenas nelas: {ESTILOS[estilo]}\n\nNotas:\n\"\"\"\n{texto}\n\"\"\"")
+            resumo, cortado = chamar_llm(MODELO_RESUMO, SISTEMA_RESUMO, pedido, 3000)
+        else:
+            pedido = f"{ESTILOS[estilo]}\n\nTranscrição:\n\"\"\"\n{texto}\n\"\"\""
+            resumo, cortado = chamar_llm(MODELO_RESUMO, SISTEMA_RESUMO, pedido, 3000)
+    except RuntimeError as e:
+        return jsonify(erro=str(e)), 502
+    return jsonify(resumo=resumo, cortado=cortado)
 
 
 # Frases que o Whisper costuma "inventar" em trechos de silencio ou musica

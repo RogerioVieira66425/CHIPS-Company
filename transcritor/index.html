@@ -189,6 +189,25 @@ textarea:focus{outline:none;border-color:var(--verde);box-shadow:0 0 0 4px rgba(
 .previa{width:100%;border-radius:14px;background:#000;max-height:420px;display:block}
 audio.previa{background:transparent;height:48px}
 .contagem{font-size:12.5px;color:var(--fraco);margin-top:6px;text-align:right}
+.resumo{position:relative;border-radius:16px;padding:18px 18px 16px;margin-bottom:16px;background:var(--card-solid);
+  border:1.5px solid transparent;background-image:linear-gradient(var(--card-solid),var(--card-solid)),var(--grad);
+  background-origin:border-box;background-clip:padding-box,border-box;box-shadow:0 14px 34px -18px rgba(99,102,241,.55);animation:surge .35s ease}
+.resumo-cab{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.resumo-tag{display:inline-flex;align-items:center;gap:7px;font-weight:700;font-size:15px}
+.resumo-tag .ico{width:18px;height:18px;color:var(--roxo);fill:color-mix(in srgb,var(--roxo) 20%,transparent)}
+.resumo-tag small{font-weight:500;color:var(--fraco);font-size:12.5px}
+.resumo-acoes{display:flex;gap:6px;flex-wrap:wrap}
+.resumo-acoes .btn{padding:7px 11px;font-size:13px}
+.resumo-corpo{font-size:15px;line-height:1.65}
+.resumo-corpo h4{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--verde);margin:16px 0 6px}
+.resumo-corpo h4:first-child{margin-top:4px}
+.resumo-corpo p{margin:6px 0}
+.resumo-corpo ul{margin:4px 0;padding-left:20px}
+.resumo-corpo li{margin:4px 0}
+.resumo-corpo li::marker{color:var(--verde)}
+.resumo-carregando{display:flex;gap:10px;align-items:center;color:var(--sub);font-size:14px;padding:6px 0}
+.resumo-carregando .giro{border-color:color-mix(in srgb,var(--roxo) 30%,transparent);border-top-color:var(--roxo)}
+.sub-titulo{font-size:12.5px;font-weight:600;color:var(--sub);text-transform:uppercase;letter-spacing:.06em;margin:18px 0 8px}
 
 /* recentes */
 .recentes{margin-top:28px}
@@ -265,6 +284,7 @@ audio.previa{background:transparent;height:48px}
   <symbol id="i-trocar" viewBox="0 0 24 24"><path d="M17 1l4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"/></symbol>
   <symbol id="i-whats" viewBox="0 0 24 24"><path d="M3 21l1.7-5A8.5 8.5 0 1 1 8 19.3L3 21z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 .8a4 4 0 0 1-2-2l.8-1-1-2L9 9.5z"/></symbol>
   <symbol id="i-seta" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-brilho" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3zM19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/></symbol>
 </svg>
 
 <!-- ================= LOGIN ================= -->
@@ -352,6 +372,15 @@ audio.previa{background:transparent;height:48px}
           <button class="chip" data-v="es">Espanhol</button>
         </div>
       </div>
+      <div class="grupo" data-de="transcrever extrair">
+        <span class="rotulo">Resumo com IA</span>
+        <div class="chips" data-campo="resumo">
+          <button class="chip on" data-v="nao">Sem resumo</button>
+          <button class="chip" data-v="rapido">✨ Rápido <small>tópicos</small></button>
+          <button class="chip" data-v="detalhado">📋 Detalhado <small>seções</small></button>
+          <button class="chip" data-v="ata">📝 Ata <small>decisões e tarefas</small></button>
+        </div>
+      </div>
 
       <div class="grupo oculto" data-de="video">
         <span class="rotulo">Tamanho máximo</span>
@@ -410,10 +439,13 @@ audio.previa{background:transparent;height:48px}
           <button data-v="tempo">Com tempo</button>
         </div>
       </div>
-      <div id="resTexto">
-        <textarea id="texto" spellcheck="false" aria-label="Transcrição (pode editar)"></textarea>
-        <div class="contagem" id="contagem"></div>
-      </div>
+      <section class="resumo oculto" id="resResumo" aria-label="Resumo">
+        <div class="resumo-cab">
+          <span class="resumo-tag"><svg class="ico"><use href="#i-brilho"/></svg>Resumo <small id="resumoEstilo"></small></span>
+          <div class="resumo-acoes" id="resumoAcoes"></div>
+        </div>
+        <div class="resumo-corpo" id="resumoCorpo"></div>
+      </section>
       <div id="resMidia" class="oculto">
         <div class="stats">
           <div><div class="l">Antes</div><div class="v" id="antes"></div></div>
@@ -421,6 +453,11 @@ audio.previa{background:transparent;height:48px}
           <div><div class="l">Depois</div><div class="v" id="depois"></div><span class="economia" id="economia"></span></div>
         </div>
         <div id="previa"></div>
+      </div>
+      <div class="sub-titulo oculto" id="tituloTranscricao">Transcrição completa</div>
+      <div id="resTexto">
+        <textarea id="texto" spellcheck="false" aria-label="Transcrição (pode editar)"></textarea>
+        <div class="contagem" id="contagem"></div>
       </div>
       <div class="acoes" id="acoes"></div>
     </div>
@@ -451,7 +488,7 @@ const BOTAO = { transcrever: "Transcrever", video: "Compactar vídeo", audio: "C
 const ICONE = { transcrever: "i-texto", video: "i-video", audio: "i-mic", extrair: "i-musica" };
 
 let modo = "transcrever", arquivo = null, duracaoArq = 0, rodando = false, cancelado = false;
-let segsAtuais = [], vista = "texto", urls = [], relogio = null, travaTela = null;
+let segsAtuais = [], vista = "texto", urls = [], relogio = null, travaTela = null, itemAtual = null, abortador = null;
 
 // ============================================================ utilidades
 const mb = b => (b / 1048576).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
@@ -523,14 +560,15 @@ document.querySelectorAll(".modo").forEach(b => b.onclick = () => {
   if (rodando) return;
   modo = b.dataset.modo;
   document.querySelectorAll(".modo").forEach(x => { x.classList.toggle("on", x === b); x.setAttribute("aria-selected", x === b); });
-  document.querySelectorAll("[data-de]").forEach(el => el.classList.toggle("oculto", el.dataset.de !== modo));
-  $("iniciarTxt").textContent = BOTAO[modo];
+  document.querySelectorAll("[data-de]").forEach(el => el.classList.toggle("oculto", !el.dataset.de.split(" ").includes(modo)));
+  atualizarBotao();
   $("arqIc").innerHTML = ico(ICONE[modo]);
   limparResultado(); atualizarDica();
 });
 document.querySelectorAll(".chips").forEach(g => g.addEventListener("click", e => {
   const c = e.target.closest(".chip"); if (!c || rodando) return;
   g.querySelectorAll(".chip").forEach(x => x.classList.toggle("on", x === c));
+  if (g.dataset.campo === "resumo") atualizarBotao();
   if (g.dataset.campo === "alvo") {
     $("alvoCustom").classList.toggle("oculto", c.dataset.v !== "custom");
     if (c.dataset.v === "custom") $("alvoCustom").focus();
@@ -576,7 +614,15 @@ function atualizarDica() {
     t = val("formato") === "ogg" ? "OGG/Opus 32 kbps mono, o mesmo formato das mensagens de voz. 1 minuto ≈ 240 KB." : "MP3 64 kbps mono. 1 minuto ≈ 480 KB, abre em qualquer aparelho.";
     if (duracaoArq) t += ` Estimado: ~${tam(duracaoArq * (val("formato") === "ogg" ? 32 : 64) * 128)}.`;
   } else t = "Tira o som do vídeo e salva em MP3 de 128 kbps.";
+  const r = val("resumo");
+  if ((modo === "transcrever" || modo === "extrair") && r !== "nao")
+    t += ` ✨ No final, a IA cria um resumo ${({ rapido: "rápido em tópicos", detalhado: "detalhado por seções", ata: "em formato de ata, com decisões e tarefas" })[r]}` +
+         (modo === "extrair" ? " (o áudio também é transcrito para isso)." : ".");
   $("dicaTxt").textContent = t;
+}
+function atualizarBotao() {
+  const comResumo = (modo === "transcrever" || modo === "extrair") && val("resumo") !== "nao";
+  $("iniciarTxt").textContent = comResumo ? ({ transcrever: "Transcrever e resumir", extrair: "Extrair e resumir" })[modo] : BOTAO[modo];
 }
 
 // ============================================================ arquivo
@@ -622,6 +668,7 @@ async function escolher(f) {
 // ============================================================ estado visual
 function limparResultado() {
   $("resultado").classList.add("oculto"); $("erro").classList.add("oculto");
+  $("resResumo").classList.add("oculto"); $("tituloTranscricao").classList.add("oculto");
   urls.forEach(u => URL.revokeObjectURL(u)); urls = [];
 }
 function mostrarErro(msg, detalhe) {
@@ -724,17 +771,21 @@ async function rodarFF(ff, args, de = 0, ate = 100) {
 $("cancelar").onclick = async () => {
   if (!rodando) return;
   cancelado = true;
+  abortador?.abort();
+  if (!motorEmUso) { emAndamento(false); toast("Cancelado"); return; }   // só resumo: não precisa reiniciar o motor
   try { (await motorP)?.terminate(); } catch {}
   motorP = null; motorRecebido = 0;
   emAndamento(false);
   toast("Cancelado");
 };
 
+let motorEmUso = false;
 $("iniciar").onclick = async () => {
   if (!arquivo || rodando) return;
-  const m = modo;                       // congela o modo escolhido
+  const m = modo;                                     // congela as escolhas do início
+  const estilo = (m === "transcrever" || m === "extrair") ? val("resumo") : "nao";
   limparResultado();
-  cancelado = false;
+  cancelado = false; motorEmUso = true;
   emAndamento(true);
   const t0 = Date.now();
   let ff;
@@ -745,11 +796,24 @@ $("iniciar").onclick = async () => {
     const entrada = await montar(ff);
     const info = await sondar(ff, entrada);
     if (!info.temAudio && !info.temVideo) throw new Error("Não reconheci esse arquivo como áudio ou vídeo.");
-    if (m === "transcrever") await transcrever(ff, entrada, info, t0);
-    else await compactar(ff, m, entrada, info, t0);
+    const fatia = estilo !== "nao" ? 80 : 100;      // reserva o fim da barra para o resumo
+    if (m === "transcrever") {
+      const item = await transcrever(ff, entrada, info, 0, fatia);
+      mostrarTranscricao(item, decorrido(Date.now() - t0));
+      if (estilo !== "nao" && item.segs.length) await resumirItem(item, estilo, fatia, 100);
+    } else {
+      await compactar(ff, m, entrada, info, t0, estilo !== "nao" ? 25 : 100);
+      if (m === "extrair" && estilo !== "nao") {
+        const item = await transcrever(ff, entrada, info, 25, fatia);
+        anexarTranscricao(item);
+        if (item.segs.length) await resumirItem(item, estilo, fatia, 100);
+        else mostrarErro("Não encontramos fala neste áudio, então não há o que resumir.");
+      }
+    }
   } catch (e) {
-    if (!cancelado) mostrarErro(e.message || String(e), e.detalhe);
+    if (!cancelado && e.name !== "AbortError") mostrarErro(e.message || String(e), e.detalhe);
   } finally {
+    motorEmUso = false;
     if (!cancelado) {
       emAndamento(false);
       try { await ff?.unmount("/in"); } catch {}
@@ -757,13 +821,15 @@ $("iniciar").onclick = async () => {
   }
 };
 
-async function transcrever(ff, entrada, info, t0) {
+// Transcreve o arquivo montado e devolve o item (também salvo no histórico).
+async function transcrever(ff, entrada, info, de, ate) {
   if (!info.temAudio) throw new Error("Esse arquivo não tem áudio.");
+  const prep = de + (ate - de) * 0.12;
   etapa("Preparando o áudio", "Reduzindo no seu aparelho para enviar rápido");
   await rodarFF(ff, ["-i", entrada, "-vn", "-map", "0:a:0", "-ac", "1", "-ar", "16000",
                      "-c:a", "libopus", "-b:a", "24k", "-application", "voip",
                      "-f", "segment", "-segment_time", String(PEDACO_SEG), "-reset_timestamps", "1",
-                     "/parte%03d.ogg"], 0, 12);
+                     "/parte%03d.ogg"], de, prep);
   const partes = (await ff.listDir("/")).map(d => d.name).filter(n => /^parte\d{3}\.ogg$/.test(n)).sort();
   if (!partes.length) throw new Error("Não consegui extrair o áudio.");
 
@@ -772,20 +838,13 @@ async function transcrever(ff, entrada, info, t0) {
     for (let i = 0; i < partes.length; i++) {
       if (cancelado) throw new Error("cancelado");
       etapa("Transcrevendo", partes.length > 1 ? `Parte ${i + 1} de ${partes.length}` : "Convertendo fala em texto");
-      progresso(12 + (i / partes.length) * 88);
+      progresso(prep + (i / partes.length) * (ate - prep));
       const dados = await ff.readFile("/" + partes[i]);
       const fd = new FormData();
       fd.append("arquivo", new Blob([dados.buffer], { type: "audio/ogg" }), partes[i]);
       fd.append("modelo", val("modelo"));
       fd.append("idioma", val("idioma"));
-      let r, j;
-      for (let tent = 0; tent < 3; tent++) {        // rede instável no celular: tenta de novo
-        try { r = await fetch("/api/transcrever", { method: "POST", body: fd }); break; }
-        catch (e) { if (tent === 2) throw new Error("Conexão caiu durante o envio. Tente de novo."); await new Promise(s => setTimeout(s, 2000)); }
-      }
-      j = await r.json().catch(() => ({ erro: `Resposta inválida do servidor (${r.status})` }));
-      if (r.status === 401) { verificar(); throw new Error("Sua sessão expirou. Entre de novo."); }
-      if (!r.ok) throw new Error(j.erro || "Erro na transcrição");
+      const j = await pedir("/api/transcrever", { method: "POST", body: fd }, "Erro na transcrição");
       idioma = ({ portuguese: "português", english: "inglês", spanish: "espanhol" })[(j.idioma || "").toLowerCase()] || j.idioma || idioma;
       j.segmentos.forEach(s => segs.push({ inicio: s.inicio + desloc, fim: s.fim + desloc, texto: s.texto }));
       desloc += j.duracao || PEDACO_SEG;
@@ -795,37 +854,83 @@ async function transcrever(ff, entrada, info, t0) {
   } finally {
     for (const p of partes) try { await ff.deleteFile("/" + p); } catch {}
   }
-  progresso(100);
+  progresso(ate);
+  $("aoVivo").classList.add("oculto");
   const item = { id: Date.now().toString(36), nome: arquivo.name, quando: Date.now(), idioma, duracao: info.duracao,
                  segs: segs.filter(s => s.texto) };
   salvarHistorico(item);
-  mostrarTranscricao(item, decorrido(Date.now() - t0));
+  return item;
+}
+
+// fetch com nova tentativa se a rede cair, sessão expirada e cancelamento
+async function pedir(url, opcoes, erroPadrao) {
+  let r;
+  for (let tent = 0; tent < 3; tent++) {
+    abortador = new AbortController();
+    try { r = await fetch(url, { ...opcoes, signal: abortador.signal }); break; }
+    catch (e) {
+      if (e.name === "AbortError" || cancelado) throw e;
+      if (tent === 2) throw new Error("A conexão caiu. Confira a internet e tente de novo.");
+      await new Promise(s => setTimeout(s, 2000));
+    } finally { abortador = null; }
+  }
+  const j = await r.json().catch(() => ({ erro: `Resposta inválida do servidor (${r.status})` }));
+  if (r.status === 401) { verificar(); throw new Error("Sua sessão expirou. Entre de novo."); }
+  if (!r.ok) throw new Error(j.erro || erroPadrao);
+  return j;
 }
 
 function mostrarTranscricao(item, tempoGasto) {
-  segsAtuais = item.segs;
   limparResultado();
-  $("resTexto").classList.remove("oculto"); $("resMidia").classList.add("oculto"); $("vista").classList.remove("oculto");
+  $("resMidia").classList.add("oculto");
+  $("acoes").innerHTML = "";
+  $("resTitulo").textContent = item.segs.length ? "Transcrição pronta" : "Nenhuma fala encontrada";
+  preencherTranscricao(item, tempoGasto);
+  if (item.resumo) mostrarResumo(item);
+  $("resultado").classList.remove("oculto");
+  $("resultado").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+// "Extrair + resumir": a transcrição aparece abaixo do áudio extraído
+function anexarTranscricao(item) {
+  $("tituloTranscricao").classList.toggle("oculto", !item.segs.length);
+  $("resTitulo").textContent = "Áudio extraído e transcrito";
+  preencherTranscricao(item);
+}
+
+function preencherTranscricao(item, tempoGasto) {
+  itemAtual = item;
+  segsAtuais = item.segs;
+  $("resTexto").classList.remove("oculto");
   const palavras = segsAtuais.reduce((n, s) => n + s.texto.split(/\s+/).filter(Boolean).length, 0);
-  $("resTitulo").textContent = segsAtuais.length ? "Transcrição pronta" : "Nenhuma fala encontrada";
-  $("contagem").textContent = [palavras + " palavras", item.duracao ? dur(item.duracao) + " de áudio" : "",
-                               tempoGasto ? "feito em " + tempoGasto : "", item.idioma ? "idioma: " + item.idioma : ""].filter(Boolean).join(" · ");
+  $("contagem").textContent = segsAtuais.length ? [palavras + " palavras", item.duracao ? dur(item.duracao) + " de áudio" : "",
+    tempoGasto ? "feito em " + tempoGasto : "", item.idioma ? "idioma: " + item.idioma : ""].filter(Boolean).join(" · ") : "";
   trocarVista("texto");
   $("texto").placeholder = "Não encontramos fala neste arquivo. Ele pode estar em silêncio ou ter só música.";
   $("vista").classList.toggle("oculto", !segsAtuais.length);
+  if (!segsAtuais.length) return;
   const base = item.nome.replace(/\.[^.]+$/, "");
-  const acoes = $("acoes"); acoes.innerHTML = "";
-  if (!segsAtuais.length) { $("contagem").textContent = ""; $("resultado").classList.remove("oculto"); return; }
-  botao(acoes, "i-copiar", "Copiar", async () => {
+  const acoes = $("acoes");
+  const combinado = !$("resMidia").classList.contains("oculto");
+  botao(acoes, "i-copiar", combinado ? "Copiar texto" : "Copiar", async () => {
     try { await navigator.clipboard.writeText($("texto").value); toast("Texto copiado"); }
     catch { $("texto").select(); document.execCommand("copy"); toast("Texto copiado"); }
-  }, true);
-  if (navigator.share) botao(acoes, "i-whats", "Enviar", () => navigator.share({ text: $("texto").value }).catch(() => {}));
+  }, !combinado);
+  if (navigator.share && !combinado) botao(acoes, "i-whats", "Enviar", () => navigator.share({ text: $("texto").value }).catch(() => {}));
   botao(acoes, "i-baixar", ".txt", () => baixarArquivo(new Blob([$("texto").value], { type: "text/plain;charset=utf-8" }),
         base + (vista === "tempo" ? "_com_tempo" : "") + ".txt"));
   botao(acoes, "i-baixar", "Legenda .srt", () => baixarArquivo(new Blob([srt(segsAtuais)], { type: "application/x-subrip" }), base + ".srt"));
-  $("resultado").classList.remove("oculto");
-  $("resultado").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  if (!item.resumo) {
+    const b = botao(acoes, "i-brilho", "Criar resumo", async () => {
+      if (rodando) return;
+      const estilo = val("resumo") !== "nao" ? val("resumo") : "rapido";
+      cancelado = false; emAndamento(true);
+      try { await resumirItem(item, estilo, 0, 100); }
+      catch (e) { if (!cancelado && e.name !== "AbortError") mostrarErro(e.message || String(e)); }
+      finally { if (!cancelado) emAndamento(false); }
+    });
+    b.id = "btnCriarResumo";
+  }
 }
 const textoSimples = s => s.map(x => x.texto).join("\n");
 const textoTempo = s => s.map(x => `[${tempo(x.inicio)}] ${x.texto}`).join("\n");
@@ -835,9 +940,102 @@ function trocarVista(v) {
   document.querySelectorAll("#vista button").forEach(b => b.classList.toggle("on", b.dataset.v === v));
   $("texto").value = v === "tempo" ? textoTempo(segsAtuais) : textoSimples(segsAtuais);
 }
+
+// ============================================================ resumo com IA
+const NOME_ESTILO = { rapido: "rápido", detalhado: "detalhado", ata: "ata" };
+const MAX_ETAPA = 14000, TAM_PARTE = 11000;   // caracteres por pedido (cabe na cota gratuita por minuto)
+
+function dividirTexto(texto, tamanho) {
+  const partes = []; let atual = "";
+  for (const linha of texto.split("\n")) {
+    for (let i = 0; i < linha.length; i += tamanho) {   // linha gigante: corta no meio
+      const trecho = linha.slice(i, i + tamanho);
+      if (atual && (atual.length + trecho.length + 1) > tamanho) { partes.push(atual); atual = ""; }
+      atual += (atual ? "\n" : "") + trecho;
+    }
+  }
+  if (atual) partes.push(atual);
+  return partes;
+}
+
+async function resumirItem(item, estilo, de, ate) {
+  $("resResumo").classList.remove("oculto");
+  $("resumoEstilo").textContent = "· " + NOME_ESTILO[estilo];
+  $("resumoAcoes").innerHTML = "";
+  $("resumoCorpo").innerHTML = '<div class="resumo-carregando"><span class="giro"></span>A IA está lendo a transcrição…</div>';
+  $("resultado").classList.remove("oculto");
+  const pedirResumo = corpo => pedir("/api/resumir", { method: "POST", headers: { "Content-Type": "application/json" },
+                                                      body: JSON.stringify({ estilo, ...corpo }) }, "Erro ao gerar o resumo");
+  try {
+    let texto = textoSimples(item.segs), rodada = 0;
+    while (texto.length > MAX_ETAPA && rodada < 3) {       // texto longo: notas por parte, depois junta
+      const partes = dividirTexto(texto, TAM_PARTE), notas = [];
+      for (let i = 0; i < partes.length; i++) {
+        if (cancelado) throw new Error("cancelado");
+        etapa("Criando o resumo", `Lendo a parte ${i + 1} de ${partes.length}`);
+        progresso(de + (i / partes.length) * (ate - de) * 0.8);
+        notas.push((await pedirResumo({ fase: "notas", texto: partes[i], parte: i + 1, total: partes.length })).resumo);
+      }
+      texto = notas.join("\n\n"); rodada++;
+    }
+    etapa("Criando o resumo", "Escrevendo o resumo final");
+    progresso(de + (ate - de) * 0.85);
+    const j = await pedirResumo({ fase: rodada ? "final" : "direto", texto: texto.slice(0, MAX_ETAPA) });
+    item.resumo = { estilo, texto: j.resumo };
+    salvarHistorico(item);
+    progresso(ate);
+    mostrarResumo(item);
+    $("btnCriarResumo")?.remove();
+    $("resResumo").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (e) {
+    $("resResumo").classList.add("oculto");
+    throw e;
+  }
+}
+
+function mostrarResumo(item) {
+  const { estilo, texto } = item.resumo;
+  $("resResumo").classList.remove("oculto");
+  $("resumoEstilo").textContent = "· " + (NOME_ESTILO[estilo] || "");
+  $("resumoCorpo").innerHTML = markdownSeguro(texto);
+  const acoes = $("resumoAcoes"); acoes.innerHTML = "";
+  const paraWhats = textoParaWhatsApp(texto);
+  botao(acoes, "i-copiar", "Copiar", async () => {
+    try { await navigator.clipboard.writeText(paraWhats); toast("Resumo copiado"); }
+    catch { toast("Não consegui copiar"); }
+  });
+  if (navigator.share) botao(acoes, "i-whats", "Enviar", () => navigator.share({ text: paraWhats }).catch(() => {}));
+  botao(acoes, "i-baixar", ".txt", () => baixarArquivo(new Blob([paraWhats], { type: "text/plain;charset=utf-8" }),
+        item.nome.replace(/\.[^.]+$/, "") + "_resumo.txt"));
+}
+
+// Markdown simples -> HTML, escapando tudo antes (o texto vem da IA)
+function markdownSeguro(md) {
+  const inline = t => esc(t).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  let html = "", lista = false;
+  for (let linha of md.split("\n")) {
+    linha = linha.trim();
+    const item = linha.match(/^(?:[-*•]|\d+[.)])\s+(.*)$/);
+    if (item) { if (!lista) { html += "<ul>"; lista = true; } html += `<li>${inline(item[1])}</li>`; continue; }
+    if (lista) { html += "</ul>"; lista = false; }
+    if (!linha) continue;
+    const tit = linha.match(/^#{1,6}\s+(.*)$/);
+    html += tit ? `<h4>${inline(tit[1].replace(/\*\*/g, ""))}</h4>` : `<p>${inline(linha)}</p>`;
+  }
+  return html + (lista ? "</ul>" : "");
+}
+// Formato que fica bonito colado no WhatsApp (*negrito*, • tópicos)
+function textoParaWhatsApp(md) {
+  return md.split("\n").map(l => {
+    const t = l.trim();
+    const tit = t.match(/^#{1,6}\s+(.*)$/);
+    if (tit) return `\n*${tit[1].replace(/\*\*/g, "")}*`;
+    return t.replace(/^[-*]\s+/, "• ").replace(/\*\*(.+?)\*\*/g, "*$1*");
+  }).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
 document.querySelectorAll("#vista button").forEach(b => b.onclick = () => trocarVista(b.dataset.v));
 
-async function compactar(ff, m, entrada, info, t0) {
+async function compactar(ff, m, entrada, info, t0, ate = 100) {
   let args, nome, tipo, sub = "";
   const base = arquivo.name.replace(/\.[^.]+$/, "");
   if (m === "video") {
@@ -867,11 +1065,11 @@ async function compactar(ff, m, entrada, info, t0) {
     }
   }
   etapa(m === "extrair" ? "Extraindo o áudio" : "Compactando", sub + " · no seu aparelho");
-  await rodarFF(ff, args);
+  await rodarFF(ff, args, 0, ate);
   const saida = args[args.length - 1];
   const dados = await ff.readFile(saida);
   try { await ff.deleteFile(saida); } catch {}
-  progresso(100);
+  progresso(ate);
   mostrarMidia(new Blob([dados.buffer], { type: tipo }), nome, decorrido(Date.now() - t0), m);
 }
 
@@ -908,6 +1106,7 @@ function botao(onde, icone, rotulo, fn, destaque) {
   b.innerHTML = ico(icone) + `<span>${esc(rotulo)}</span>`;
   b.onclick = fn;
   onde.appendChild(b);
+  return b;
 }
 function baixarArquivo(blob, nome) {
   const u = URL.createObjectURL(blob);
@@ -934,7 +1133,7 @@ function desenharRecentes() {
     const data = new Date(it.quando).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
     b.innerHTML = `<div class="ic">${ico("i-texto")}</div>
       <div class="info"><div class="nome">${esc(it.nome)}</div>
-      <div class="prev">${esc(data)} · ${esc((it.segs.map(s => s.texto).join(" ")).slice(0, 120))}</div></div>
+      <div class="prev">${it.resumo ? "✨ " : ""}${esc(data)} · ${esc((it.segs.map(s => s.texto).join(" ")).slice(0, 120))}</div></div>
       <button class="del" aria-label="Apagar">${ico("i-lixo")}</button>`;
     const abrir = () => {
       if (rodando) return;
