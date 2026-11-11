@@ -465,8 +465,9 @@ function dur(s) {
   return h ? `${h}h${String(m).padStart(2, "0")}` : `${m}:${String(x).padStart(2, "0")}`;
 }
 function tempo(s, srt) {
-  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = Math.floor(s % 60), p = n => String(n).padStart(2, "0");
-  if (srt) return `${p(h)}:${p(m)}:${p(x)},${String(Math.floor((s % 1) * 1000)).padStart(3, "0")}`;
+  const ms = Math.round(s * 1000); s = Math.floor(ms / 1000);
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60, p = n => String(n).padStart(2, "0");
+  if (srt) return `${p(h)}:${p(m)}:${p(x)},${String(ms % 1000).padStart(3, "0")}`;
   return h ? `${p(h)}:${p(m)}:${p(x)}` : `${p(m)}:${p(x)}`;
 }
 const decorrido = ms => { const s = Math.round(ms / 1000); return s < 60 ? s + "s" : Math.floor(s / 60) + "min " + (s % 60) + "s"; };
@@ -541,11 +542,15 @@ const val = campo => document.querySelector(`.chips[data-campo="${campo}"] .chip
 const alvoMB = () => { const v = val("alvo"); return v === "custom" ? Math.max(1, parseFloat($("alvoCustom").value) || 50) : +v; };
 
 function planoVideo(d, bytes, alvo, res, temAudio = true) {
-  const audioK = temAudio ? (alvo <= 16 ? 64 : 96) : 0;
-  let videoK = Math.floor(alvo * 8 * 1024 * 0.95 / d - audioK);
   const origK = bytes * 8 / 1024 / d;
+  let audioK = temAudio ? (alvo <= 16 ? 64 : 96) : 0;
+  let videoK = Math.floor(alvo * 8 * 1024 * 0.95 / d - audioK);
   let jaPequeno = false;
-  if (videoK + audioK > origK * 0.85) { videoK = Math.floor(origK * 0.85 - audioK); jaPequeno = true; }
+  if (videoK + audioK > origK * 0.85) {          // o vídeo já cabe no alvo: só otimiza
+    jaPequeno = true;
+    audioK = temAudio ? Math.min(audioK, Math.max(32, Math.floor(origK * 0.2))) : 0;
+    videoK = Math.max(100, Math.floor(origK * 0.85 - audioK));
+  }
   const altura = res !== "auto" ? +res : videoK >= 1000 ? 720 : videoK >= 450 ? 480 : 360;
   return { audioK, videoK, altura, jaPequeno, finalMB: (videoK + audioK) * d / 8 / 1024 };
 }
@@ -554,11 +559,14 @@ function atualizarDica() {
   let t = "";
   if (modo === "transcrever") {
     t = "O áudio é reduzido no seu aparelho antes do envio, então até vídeos grandes sobem rápido. Você pode editar o texto depois.";
-    if (duracaoArq > 120) t = `${dur(duracaoArq)} de áudio: leva cerca de ${Math.max(1, Math.ceil(duracaoArq / 600))} min. Você pode editar o texto depois.`;
+    if (duracaoArq > 120) {
+      const seg = 10 + duracaoArq / 30;
+      t = `${dur(duracaoArq)} de áudio: leva ${seg < 60 ? "menos de 1 minuto" : "cerca de " + Math.ceil(seg / 60) + " min"}. Você pode editar o texto depois.`;
+    }
   } else if (modo === "video") {
     if (arquivo && duracaoArq) {
       const p = planoVideo(duracaoArq, arquivo.size, alvoMB(), val("resolucao"));
-      t = p.videoK < 80
+      t = p.videoK < 80 && !p.jaPequeno
         ? `⚠️ Vídeo longo demais para ${alvoMB()} MB. Escolha um tamanho maior.`
         : `Resultado estimado: ${p.altura}p, cerca de ${tam(p.finalMB * 1048576)}.` +
           (p.jaPequeno ? " Seu vídeo já é leve, então vamos só otimizar." : "") +
@@ -803,8 +811,11 @@ function mostrarTranscricao(item, tempoGasto) {
   $("contagem").textContent = [palavras + " palavras", item.duracao ? dur(item.duracao) + " de áudio" : "",
                                tempoGasto ? "feito em " + tempoGasto : "", item.idioma ? "idioma: " + item.idioma : ""].filter(Boolean).join(" · ");
   trocarVista("texto");
+  $("texto").placeholder = "Não encontramos fala neste arquivo. Ele pode estar em silêncio ou ter só música.";
+  $("vista").classList.toggle("oculto", !segsAtuais.length);
   const base = item.nome.replace(/\.[^.]+$/, "");
   const acoes = $("acoes"); acoes.innerHTML = "";
+  if (!segsAtuais.length) { $("contagem").textContent = ""; $("resultado").classList.remove("oculto"); return; }
   botao(acoes, "i-copiar", "Copiar", async () => {
     try { await navigator.clipboard.writeText($("texto").value); toast("Texto copiado"); }
     catch { $("texto").select(); document.execCommand("copy"); toast("Texto copiado"); }
@@ -833,7 +844,7 @@ async function compactar(ff, m, entrada, info, t0) {
     if (!info.temVideo) throw new Error("Esse arquivo não tem vídeo. Use “Compactar áudio”.");
     if (!info.duracao) throw new Error("Não consegui ler a duração do vídeo.");
     const p = planoVideo(info.duracao, arquivo.size, alvoMB(), val("resolucao"), info.temAudio);
-    if (p.videoK < 80) throw new Error(`Vídeo longo demais para ${alvoMB()} MB (${dur(info.duracao)}). Escolha um tamanho maior ou corte o vídeo.`);
+    if (p.videoK < 80 && !p.jaPequeno) throw new Error(`Vídeo longo demais para ${alvoMB()} MB (${dur(info.duracao)}). Escolha um tamanho maior ou corte o vídeo.`);
     const A = p.altura;
     sub = `${A}p · ${p.videoK} kbps`;
     nome = base + "_whatsapp.mp4"; tipo = "video/mp4";
@@ -870,8 +881,10 @@ function mostrarMidia(blob, nome, tempoGasto, m) {
   $("resTitulo").textContent = (m === "extrair" ? "Áudio extraído" : "Arquivo compactado") + " em " + tempoGasto;
   $("antes").textContent = tam(arquivo.size);
   $("depois").textContent = tam(blob.size);
-  const red = Math.round((1 - blob.size / arquivo.size) * 100);
-  $("economia").textContent = red > 0 ? `−${red}%` : "otimizado";
+  const red = Math.min(99, Math.round((1 - blob.size / arquivo.size) * 100));
+  const maior = blob.size >= arquivo.size * 0.98;
+  $("economia").textContent = maior ? "original já era menor" : `−${red}%`;
+  if (maior) $("resTitulo").textContent = "Pronto, mas o original já era leve";
   const url = URL.createObjectURL(blob); urls.push(url);
   $("previa").innerHTML = blob.type.startsWith("video")
     ? `<video class="previa" src="${url}" controls playsinline preload="metadata"></video>`
@@ -881,6 +894,10 @@ function mostrarMidia(blob, nome, tempoGasto, m) {
   if (navigator.canShare && navigator.canShare({ files: [file] }))
     botao(acoes, "i-whats", "Enviar no WhatsApp", () => navigator.share({ files: [file] }).catch(() => {}), true);
   botao(acoes, "i-baixar", "Baixar " + nome.split(".").pop().toUpperCase(), () => baixarArquivo(blob, nome), !navigator.canShare);
+  if (maior) {
+    const orig = arquivo;
+    botao(acoes, "i-baixar", `Baixar original (${tam(orig.size)})`, () => baixarArquivo(orig, orig.name));
+  }
   $("resultado").classList.remove("oculto");
   $("resultado").scrollIntoView({ behavior: "smooth", block: "nearest" });
 }

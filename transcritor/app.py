@@ -11,6 +11,7 @@ Variaveis de ambiente (no Render: painel > Environment; local: arquivo .env):
   APP_SENHA     senha para entrar no site
   SECRET_KEY    qualquer texto longo e aleatorio (assina o cookie de login)
 """
+import hashlib
 import hmac
 import os
 import time
@@ -44,10 +45,22 @@ app.config.update(
 )
 
 TENTATIVAS = {}   # ip -> [timestamps de senhas erradas], freio contra chute de senha
+ERROS_GERAIS = []  # todas as senhas erradas (o IP pode ser forjado, entao ha um limite global)
+LIMITE_IP, LIMITE_GERAL, JANELA = 5, 30, 600
+
+
+def versao_senha():
+    """Muda quando a APP_SENHA muda: trocar a senha desconecta todo mundo."""
+    return hashlib.sha256(("v1:" + os.environ.get("APP_SENHA", "")).encode()).hexdigest()[:16]
 
 
 def logado():
-    return session.get("ok") is True
+    return session.get("ok") is True and session.get("v") == versao_senha()
+
+
+@app.errorhandler(413)
+def grande_demais(_e):
+    return jsonify(erro="Arquivo grande demais para enviar (limite de 25 MB por parte)."), 413
 
 
 @app.after_request
@@ -78,20 +91,25 @@ def eu():
 def login():
     ip = request.headers.get("X-Forwarded-For", request.remote_addr or "").split(",")[0].strip()
     agora = time.time()
-    recentes = [t for t in TENTATIVAS.get(ip, []) if agora - t < 600]
-    if len(recentes) >= 5:
+    recentes = [t for t in TENTATIVAS.get(ip, []) if agora - t < JANELA]
+    ERROS_GERAIS[:] = [t for t in ERROS_GERAIS if agora - t < JANELA]
+    if len(recentes) >= LIMITE_IP or len(ERROS_GERAIS) >= LIMITE_GERAL:
         return jsonify(erro="Muitas tentativas. Espere 10 minutos."), 429
     senha_certa = os.environ.get("APP_SENHA", "")
-    senha = (request.get_json(silent=True) or {}).get("senha", "")
+    senha = str((request.get_json(silent=True) or {}).get("senha", ""))
     if not senha_certa:
-        return jsonify(erro="APP_SENHA nao configurada no servidor."), 500
+        return jsonify(erro="APP_SENHA não configurada no servidor."), 500
     if not hmac.compare_digest(senha.encode(), senha_certa.encode()):
         recentes.append(agora)
         TENTATIVAS[ip] = recentes
-        return jsonify(erro="Senha incorreta."), 401
+        ERROS_GERAIS.append(agora)
+        restantes = LIMITE_IP - len(recentes)
+        msg = "Senha incorreta." + (f" Mais {restantes} tentativa(s) antes do bloqueio." if restantes <= 2 else "")
+        return jsonify(erro=msg), 401
     TENTATIVAS.pop(ip, None)
     session.permanent = True
     session["ok"] = True
+    session["v"] = versao_senha()
     return jsonify(ok=True)
 
 
@@ -105,17 +123,17 @@ def sair():
 def transcrever():
     """Recebe UM pedaco de audio ja compactado pelo navegador e devolve os segmentos."""
     if not logado():
-        return jsonify(erro="Faca login."), 401
+        return jsonify(erro="Faça login."), 401
     chave = os.environ.get("GROQ_API_KEY")
     if not chave:
-        return jsonify(erro="GROQ_API_KEY nao configurada no servidor."), 500
+        return jsonify(erro="GROQ_API_KEY não configurada no servidor."), 500
     f = request.files.get("arquivo")
     if not f:
-        return jsonify(erro="Envie o audio."), 400
+        return jsonify(erro="Envie o áudio."), 400
     modelo = request.form.get("modelo", "whisper-large-v3")
     idioma = request.form.get("idioma", "pt")
     if modelo not in MODELOS or idioma not in IDIOMAS:
-        return jsonify(erro="Parametros invalidos."), 400
+        return jsonify(erro="Parâmetros inválidos."), 400
 
     dados = {"model": modelo, "response_format": "verbose_json", "temperature": "0"}
     if idioma != "auto":
@@ -126,13 +144,17 @@ def transcrever():
                               data=dados, timeout=300,
                               files={"file": (f.filename or "audio.ogg", f.stream,
                                               f.mimetype or "audio/ogg")})
-        except requests.RequestException as e:
-            return jsonify(erro=f"Falha ao falar com a Groq: {e}"), 502
+        except requests.RequestException:
+            return jsonify(erro="Não consegui falar com o serviço de transcrição. Tente de novo."), 502
         if r.status_code == 429 and tentativa < 2:      # limite por minuto: espera e tenta de novo
             time.sleep(min(float(r.headers.get("retry-after", 10)), 30))
             f.stream.seek(0)
             continue
         break
+    if r.status_code == 429:
+        return jsonify(erro="Limite gratuito de transcrição atingido por agora. Tente de novo em alguns minutos."), 429
+    if r.status_code in (401, 403):
+        return jsonify(erro="A chave da Groq foi recusada. Confira a GROQ_API_KEY no Render."), 502
     if r.status_code != 200:
         try:
             msg = r.json().get("error", {}).get("message", r.text)
