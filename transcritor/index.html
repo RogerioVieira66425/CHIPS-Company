@@ -363,8 +363,8 @@ audio.previa{background:transparent;height:48px}
           <button class="chip" data-v="whisper-large-v3-turbo">⚡ Rápida <small>turbo</small></button>
         </div>
       </div>
-      <div class="grupo" data-de="transcrever">
-        <span class="rotulo">Idioma</span>
+      <div class="grupo" data-de="transcrever extrair">
+        <span class="rotulo">Idioma da fala</span>
         <div class="chips" data-campo="idioma">
           <button class="chip on" data-v="pt">Português</button>
           <button class="chip" data-v="auto">Detectar automático</button>
@@ -773,10 +773,11 @@ $("cancelar").onclick = async () => {
   cancelado = true;
   abortador?.abort();
   if (!motorEmUso) { emAndamento(false); toast("Cancelado"); return; }   // só resumo: não precisa reiniciar o motor
-  try { (await motorP)?.terminate(); } catch {}
+  const motorAntigo = motorP;
   motorP = null; motorRecebido = 0;
   emAndamento(false);
   toast("Cancelado");
+  motorAntigo?.then(f => f.terminate()).catch(() => {});   // encerra em segundo plano
 };
 
 let motorEmUso = false;
@@ -811,6 +812,9 @@ $("iniciar").onclick = async () => {
       }
     }
   } catch (e) {
+    if (e.parcial) {
+      if (m === "extrair") anexarTranscricao(e.parcial); else mostrarTranscricao(e.parcial);
+    }
     if (!cancelado && e.name !== "AbortError") mostrarErro(e.message || String(e), e.detalhe);
   } finally {
     motorEmUso = false;
@@ -832,34 +836,66 @@ async function transcrever(ff, entrada, info, de, ate) {
                      "/parte%03d.ogg"], de, prep);
   const partes = (await ff.listDir("/")).map(d => d.name).filter(n => /^parte\d{3}\.ogg$/.test(n)).sort();
   if (!partes.length) throw new Error("Não consegui extrair o áudio.");
+  // último pedaço com menos de 1 s (áudio de 10:00,3 por ex.): o Whisper inventa frases nele
+  const usar = partes.length > 1 && info.duracao && info.duracao - (partes.length - 1) * PEDACO_SEG < 1
+    ? partes.slice(0, -1) : partes;
 
-  const segs = []; let desloc = 0, idioma = "";
+  const segs = []; let desloc = 0, idioma = "", i = 0;
+  const montarItem = parcial => ({ id: Date.now().toString(36), nome: arquivo.name + (parcial ? " (incompleta)" : ""),
+    quando: Date.now(), idioma, duracao: parcial ? desloc : info.duracao, segs: segs.filter(s => s.texto), parcial });
   try {
-    for (let i = 0; i < partes.length; i++) {
+    for (i = 0; i < usar.length; i++) {
       if (cancelado) throw new Error("cancelado");
-      etapa("Transcrevendo", partes.length > 1 ? `Parte ${i + 1} de ${partes.length}` : "Convertendo fala em texto");
-      progresso(prep + (i / partes.length) * (ate - prep));
-      const dados = await ff.readFile("/" + partes[i]);
+      const sub = usar.length > 1 ? `Parte ${i + 1} de ${usar.length}` : "Convertendo fala em texto";
+      etapa("Transcrevendo", sub);
+      progresso(prep + (i / usar.length) * (ate - prep));
+      const dados = await ff.readFile("/" + usar[i]);
       const fd = new FormData();
-      fd.append("arquivo", new Blob([dados.buffer], { type: "audio/ogg" }), partes[i]);
+      fd.append("arquivo", new Blob([dados.buffer], { type: "audio/ogg" }), usar[i]);
       fd.append("modelo", val("modelo"));
       fd.append("idioma", val("idioma"));
-      const j = await pedir("/api/transcrever", { method: "POST", body: fd }, "Erro na transcrição");
+      let j, esperou = 0;
+      for (;;) {                                        // cota da Groq esgotada: espera e continua
+        try { j = await pedir("/api/transcrever", { method: "POST", body: fd }, "Erro na transcrição"); break; }
+        catch (e) {
+          if (e.status !== 429 || esperou >= 900) throw e;
+          const seg = Math.min(Math.max(e.espera || 60, 15), 300);
+          await contagemRegressiva(seg, "Cota gratuita da Groq esgotada por agora · tentando de novo em");
+          esperou += seg;
+          etapa("Transcrevendo", sub);
+        }
+      }
       idioma = ({ portuguese: "português", english: "inglês", spanish: "espanhol" })[(j.idioma || "").toLowerCase()] || j.idioma || idioma;
       j.segmentos.forEach(s => segs.push({ inicio: s.inicio + desloc, fim: s.fim + desloc, texto: s.texto }));
       desloc += j.duracao || PEDACO_SEG;
       const ult = segs.slice(-3).map(s => s.texto).join(" ");
       if (ult) { $("aoVivo").textContent = "“…" + ult.slice(-220) + "”"; $("aoVivo").classList.remove("oculto"); }
     }
+  } catch (e) {
+    // não joga fora o que já foi transcrito
+    if (!cancelado && e.name !== "AbortError" && segs.some(s => s.texto)) {
+      const parcial = montarItem(true);
+      salvarHistorico(parcial);
+      throw Object.assign(new Error(`Transcrição incompleta: parou na parte ${i + 1} de ${usar.length}. ${e.message} ` +
+        "O que já tinha sido transcrito está abaixo e foi salvo no histórico."), { parcial });
+    }
+    throw e;
   } finally {
     for (const p of partes) try { await ff.deleteFile("/" + p); } catch {}
+    $("aoVivo").classList.add("oculto");
   }
   progresso(ate);
-  $("aoVivo").classList.add("oculto");
-  const item = { id: Date.now().toString(36), nome: arquivo.name, quando: Date.now(), idioma, duracao: info.duracao,
-                 segs: segs.filter(s => s.texto) };
+  const item = montarItem(false);
   salvarHistorico(item);
   return item;
+}
+
+async function contagemRegressiva(segundos, texto) {
+  for (let s = Math.round(segundos); s > 0; s--) {
+    if (cancelado) throw new Error("cancelado");
+    etapa("Aguardando", `${texto} ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`);
+    await new Promise(r => setTimeout(r, 1000));
+  }
 }
 
 // fetch com nova tentativa se a rede cair, sessão expirada e cancelamento
@@ -876,7 +912,7 @@ async function pedir(url, opcoes, erroPadrao) {
   }
   const j = await r.json().catch(() => ({ erro: `Resposta inválida do servidor (${r.status})` }));
   if (r.status === 401) { verificar(); throw new Error("Sua sessão expirou. Entre de novo."); }
-  if (!r.ok) throw new Error(j.erro || erroPadrao);
+  if (!r.ok) throw Object.assign(new Error(j.erro || erroPadrao), { status: r.status, espera: j.espera });
   return j;
 }
 
@@ -967,7 +1003,8 @@ async function resumirItem(item, estilo, de, ate) {
   const pedirResumo = corpo => pedir("/api/resumir", { method: "POST", headers: { "Content-Type": "application/json" },
                                                       body: JSON.stringify({ estilo, ...corpo }) }, "Erro ao gerar o resumo");
   try {
-    let texto = textoSimples(item.segs), rodada = 0;
+    const editado = item === itemAtual && vista === "texto" && $("texto").value.trim();
+    let texto = editado || textoSimples(item.segs), rodada = 0;
     while (texto.length > MAX_ETAPA && rodada < 3) {       // texto longo: notas por parte, depois junta
       const partes = dividirTexto(texto, TAM_PARTE), notas = [];
       for (let i = 0; i < partes.length; i++) {

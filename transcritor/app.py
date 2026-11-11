@@ -49,7 +49,7 @@ SISTEMA_RESUMO = (
     "Você resume transcrições de áudio para um usuário brasileiro. A transcrição foi gerada "
     "automaticamente e pode ter erros de reconhecimento (palavras trocadas, nomes escritos errado): "
     "corrija pelo contexto quando for óbvio, mas nunca invente fatos, nomes, números ou datas que não "
-    "estejam no texto, nem atribua cargos, papéis ou intenções que não foram ditos.Escreva sempre em português do Brasil, mesmo que o áudio esteja em outro idioma. "
+    "estejam no texto, nem atribua cargos, papéis ou intenções que não foram ditos. Escreva sempre em português do Brasil, mesmo que o áudio esteja em outro idioma. "
     "Responda só com o resumo, sem frases de introdução como 'Aqui está o resumo'. "
     "Formato: títulos com '## ', tópicos com '- ', **negrito** só para o que for essencial. "
     "Se o conteúdo for curto, o resumo também deve ser curto."
@@ -69,6 +69,22 @@ ESTILOS = {
 }
 
 
+PRAZO_REQUISICAO = 240   # s: fica abaixo do timeout do gunicorn (330 s) mesmo com novas tentativas
+
+
+def espera_sugerida(r, padrao):
+    """Segundos do cabecalho Retry-After; aceita numero ou data HTTP."""
+    valor = r.headers.get("retry-after", "")
+    try:
+        return max(0.0, float(valor))
+    except ValueError:
+        try:
+            from email.utils import parsedate_to_datetime
+            return max(0.0, parsedate_to_datetime(valor).timestamp() - time.time())
+        except (TypeError, ValueError, IndexError):
+            return padrao
+
+
 def limpar_raciocinio(txt):
     import re
     return re.sub(r"<think>.*?</think>", "", txt or "", flags=re.S).strip()
@@ -80,16 +96,20 @@ def chamar_llm(modelo, sistema, usuario, max_tokens):
              else {"reasoning_effort": "none"})
     corpo = {"model": modelo, "max_tokens": max_tokens, "temperature": 0.3, **extra,
              "messages": [{"role": "system", "content": sistema}, {"role": "user", "content": usuario}]}
+    inicio = time.time()
     for tentativa in range(4):
+        restante = PRAZO_REQUISICAO - (time.time() - inicio)
         try:
-            r = requests.post(CHAT_URL, headers={"Authorization": f"Bearer {chave}"}, json=corpo, timeout=120)
+            r = requests.post(CHAT_URL, headers={"Authorization": f"Bearer {chave}"}, json=corpo,
+                              timeout=max(10, min(120, restante)))
         except requests.RequestException:
-            if tentativa == 3:
+            if tentativa == 3 or restante < 20:
                 raise RuntimeError("Não consegui falar com o serviço de resumo. Tente de novo.")
             time.sleep(3)
             continue
-        if r.status_code == 429 and tentativa < 3:          # cota por minuto: espera e tenta de novo
-            time.sleep(min(float(r.headers.get("retry-after", 15)) + 1, 40))
+        espera = min(espera_sugerida(r, 15) + 1, 40)
+        if r.status_code == 429 and tentativa < 3 and (time.time() - inicio) + espera < PRAZO_REQUISICAO - 30:
+            time.sleep(espera)                                # cota por minuto: espera e tenta de novo
             continue
         break
     if r.status_code == 429:
@@ -98,9 +118,11 @@ def chamar_llm(modelo, sistema, usuario, max_tokens):
         raise RuntimeError("A chave da Groq foi recusada. Confira a GROQ_API_KEY no Render.")
     if r.status_code != 200:
         raise RuntimeError(f"Falha ao gerar o resumo (Groq {r.status_code}).")
-    j = r.json()
-    escolha = j["choices"][0]
-    texto = limpar_raciocinio(escolha["message"].get("content"))
+    try:
+        escolha = r.json()["choices"][0]
+        texto = limpar_raciocinio(escolha["message"].get("content"))
+    except (ValueError, KeyError, IndexError, TypeError, AttributeError):
+        raise RuntimeError("O serviço de resumo respondeu de um jeito inesperado. Tente de novo.")
     if not texto:
         raise RuntimeError("O resumo veio vazio. Tente de novo.")
     return texto, escolha.get("finish_reason") == "length"
@@ -138,6 +160,8 @@ def grande_demais(_e):
 def cabecalhos(resp):
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["Referrer-Policy"] = "same-origin"
+    resp.headers["X-Frame-Options"] = "DENY"
+    resp.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
     return resp
 
 
@@ -209,21 +233,24 @@ def transcrever():
     dados = {"model": modelo, "response_format": "verbose_json", "temperature": "0"}
     if idioma != "auto":
         dados["language"] = idioma
+    inicio = time.time()
     for tentativa in range(3):
         try:
             r = requests.post(GROQ_URL, headers={"Authorization": f"Bearer {chave}"},
-                              data=dados, timeout=300,
+                              data=dados, timeout=max(10, PRAZO_REQUISICAO - (time.time() - inicio)),
                               files={"file": (f.filename or "audio.ogg", f.stream,
                                               f.mimetype or "audio/ogg")})
         except requests.RequestException:
             return jsonify(erro="Não consegui falar com o serviço de transcrição. Tente de novo."), 502
-        if r.status_code == 429 and tentativa < 2:      # limite por minuto: espera e tenta de novo
-            time.sleep(min(float(r.headers.get("retry-after", 10)), 30))
+        espera = espera_sugerida(r, 10)
+        if r.status_code == 429 and tentativa < 2 and espera <= 30 and (time.time() - inicio) + espera < PRAZO_REQUISICAO - 60:
+            time.sleep(espera)                          # limite por minuto: espera e tenta de novo
             f.stream.seek(0)
             continue
         break
-    if r.status_code == 429:
-        return jsonify(erro="Limite gratuito de transcrição atingido por agora. Tente de novo em alguns minutos."), 429
+    if r.status_code == 429:                            # cota maior (por hora/dia): o navegador espera e tenta
+        return jsonify(erro="Limite gratuito de transcrição atingido por agora.",
+                       espera=round(espera_sugerida(r, 60))), 429
     if r.status_code in (401, 403):
         return jsonify(erro="A chave da Groq foi recusada. Confira a GROQ_API_KEY no Render."), 502
     if r.status_code != 200:
@@ -232,16 +259,23 @@ def transcrever():
         except ValueError:
             msg = r.text
         return jsonify(erro=f"Groq ({r.status_code}): {msg[:300]}"), 502
-    j = r.json()
-    segs = j.get("segments")
-    if segs is None:
-        segs = [{"start": 0, "end": j.get("duration") or 0, "text": j.get("text", "")}]
-    return jsonify(
-        idioma=(j.get("language") or "").capitalize(),
-        duracao=j.get("duration"),
-        segmentos=[{"inicio": s["start"], "fim": s["end"], "texto": s["text"].strip()}
-                   for s in segs if not alucinacao(s)],
-    )
+    try:
+        j = r.json()
+        duracao = float(j.get("duration") or 0)
+        segs = j.get("segments")
+        if segs is None:
+            segs = [{"start": 0, "end": duracao, "text": j.get("text", "")}]
+        segmentos = []
+        for s in segs:
+            ini, fim = float(s.get("start") or 0), float(s.get("end") or 0)
+            # tempo impossivel (alem do fim do audio) = frase inventada pelo Whisper
+            if alucinacao(s) or (duracao and ini >= duracao) or (duracao and fim > duracao + 1.5):
+                continue
+            segmentos.append({"inicio": ini, "fim": min(fim, duracao) if duracao else fim,
+                              "texto": str(s.get("text") or "").strip()})
+    except (ValueError, TypeError, AttributeError):
+        return jsonify(erro="O serviço de transcrição respondeu de um jeito inesperado. Tente de novo."), 502
+    return jsonify(idioma=(j.get("language") or "").capitalize(), duracao=duracao or None, segmentos=segmentos)
 
 
 @app.post("/api/resumir")
@@ -287,7 +321,8 @@ def resumir():
 
 
 # Frases que o Whisper costuma "inventar" em trechos de silencio ou musica
-ALUCINACOES = ("amara.org", "legendas pela comunidade", "legendado por", "legenda adriana",
+ALUCINACOES = ("amara.org", "legendas pela comunidade", "legendado por", "legenda por", "legendas por",
+               "legenda adriana", "transcrição e legendas", "tradução e legendas", "legendas: ",
                "obrigado por assistir", "inscreva-se no canal", "e deixe seu like",
                "thanks for watching", "subtitles by")
 
