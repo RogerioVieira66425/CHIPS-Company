@@ -313,9 +313,13 @@ def resumir():
             pedido = ("Abaixo estão notas, em ordem, de todas as partes de uma transcrição longa. "
                       f"Com base apenas nelas: {ESTILOS[estilo]}\n\nNotas:\n\"\"\"\n{texto}\n\"\"\"")
             resumo, cortado = chamar_llm(MODELO_RESUMO, SISTEMA_RESUMO, pedido, 3000)
+            if cortado:                                   # passou do limite: tenta uma vez com mais espaço
+                resumo, cortado = chamar_llm(MODELO_RESUMO, SISTEMA_RESUMO, pedido, 6000)
         else:
             pedido = f"{ESTILOS[estilo]}\n\nTranscrição:\n\"\"\"\n{texto}\n\"\"\""
             resumo, cortado = chamar_llm(MODELO_RESUMO, SISTEMA_RESUMO, pedido, 3000)
+            if cortado:
+                resumo, cortado = chamar_llm(MODELO_RESUMO, SISTEMA_RESUMO, pedido, 6000)
     except RuntimeError as e:
         return jsonify(erro=str(e)), 502
     return jsonify(resumo=resumo, cortado=cortado)

@@ -8,7 +8,8 @@
 <meta name="theme-color" content="#f5f7fb" media="(prefers-color-scheme: light)">
 <title>Transcritor</title>
 <link rel="icon" href="/static/img/logo.svg?v=2" type="image/svg+xml">
-<link rel="apple-touch-icon" href="/static/img/logo.svg?v=2">
+<link rel="icon" href="/static/img/icone-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/static/img/icone-180.png">
 <link rel="manifest" href="/static/manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -464,7 +465,8 @@ audio.previa{background:transparent;height:48px}
   </main>
 
   <section class="recentes oculto" id="recentes">
-    <h3><svg class="ico" style="width:17px;height:17px"><use href="#i-relogio"/></svg>Transcrições recentes <small style="font-weight:400;color:var(--fraco)">(salvas só neste aparelho)</small></h3>
+    <h3><svg class="ico" style="width:17px;height:17px"><use href="#i-relogio"/></svg>Transcrições recentes <small style="font-weight:400;color:var(--fraco)">(salvas só neste aparelho)</small>
+      <button class="link" id="apagarTudo" style="margin-left:auto;font-size:12.5px">Apagar tudo</button></h3>
     <div class="lista" id="lista"></div>
   </section>
 
@@ -553,6 +555,10 @@ $("formLogin").onsubmit = async e => {
 };
 $("sair").onclick = async () => {
   if (rodando && !confirm("Há um processamento em andamento. Sair mesmo assim?")) return;
+  if (lerJSON(HIST, []).length && confirm("Apagar também as transcrições salvas neste aparelho?\n\n" +
+      "Recomendado se este computador ou celular é usado por outras pessoas. (Cancelar = manter)")) {
+    try { localStorage.removeItem(HIST); } catch {}
+  }
   await fetch("/api/sair", { method: "POST" }).catch(() => {});
   location.reload();
 };
@@ -732,7 +738,11 @@ function motor() {
     ]);
     await f.load({ coreURL, wasmURL });
     return f;
-  })().catch(e => { motorP = null; motorRecebido = 0; throw e; });
+  })().catch(e => {
+    motorP = null; motorRecebido = 0;
+    throw new Error("Não consegui baixar o motor de vídeo (≈ 30 MB). Confira a internet; em rede de empresa " +
+                    "ou escola, o endereço cdn.jsdelivr.net pode estar bloqueado.");
+  });
   return motorP;
 }
 async function esperarMotor() {
@@ -985,8 +995,21 @@ const srt = s => s.map((x, i) => `${i + 1}\n${tempo(x.inicio, true)} --> ${tempo
 function trocarVista(v) {
   vista = v;
   document.querySelectorAll("#vista button").forEach(b => b.classList.toggle("on", b.dataset.v === v));
-  $("texto").value = v === "tempo" ? textoTempo(segsAtuais) : textoSimples(segsAtuais);
+  const t = $("texto");
+  t.readOnly = v === "tempo";               // edite no modo "Texto"; "Com tempo" é só para ver/baixar
+  t.title = v === "tempo" ? "Para corrigir o texto, volte para a visão “Texto”." : "";
+  t.value = v === "tempo" ? textoTempo(segsAtuais) : (itemAtual?.textoEditado ?? textoSimples(segsAtuais));
 }
+let salvarEdicaoT;
+$("texto").addEventListener("input", () => {
+  if (vista !== "texto" || !itemAtual) return;
+  itemAtual.textoEditado = $("texto").value;
+  clearTimeout(salvarEdicaoT);
+  salvarEdicaoT = setTimeout(() => {           // guarda a correção no histórico, sem mudar a ordem
+    const alvo = itemAtual, h = lerJSON(HIST, []), k = h.findIndex(x => x.id === alvo.id);
+    if (k >= 0) { h[k].textoEditado = alvo.textoEditado; gravarJSON(HIST, h); }
+  }, 600);
+});
 
 // ============================================================ resumo com IA
 const NOME_ESTILO = { rapido: "rápido", detalhado: "detalhado", ata: "ata" };
@@ -1014,7 +1037,7 @@ async function resumirItem(item, estilo, de, ate, tk) {
   const pedirResumo = corpo => pedir("/api/resumir", { method: "POST", headers: { "Content-Type": "application/json" },
                                                       body: JSON.stringify({ estilo, ...corpo }) }, "Erro ao gerar o resumo");
   try {
-    const editado = item === itemAtual && vista === "texto" && $("texto").value.trim();
+    const editado = (item.textoEditado || "").trim();
     let texto = editado || textoSimples(item.segs), rodada = 0;
     while (texto.length > MAX_ETAPA && rodada < 3) {       // texto longo: notas por parte, depois junta
       const partes = dividirTexto(texto, TAM_PARTE), notas = [];
@@ -1031,7 +1054,7 @@ async function resumirItem(item, estilo, de, ate, tk) {
     if (parou(tk)) throw new Error("cancelado");
     const j = await pedirResumo({ fase: rodada ? "final" : "direto", texto: texto.slice(0, MAX_ETAPA) });
     if (parou(tk)) throw new Error("cancelado");
-    item.resumo = { estilo, texto: j.resumo };
+    item.resumo = { estilo, texto: j.resumo + (j.cortado ? "\n\n⚠️ O resumo ficou longo demais e foi cortado no final. Tente o estilo Rápido." : "") };
     salvarHistorico(item);
     progresso(ate);
     mostrarResumo(item);
@@ -1201,6 +1224,12 @@ function desenharRecentes() {
     $("lista").appendChild(b);
   }
 }
+
+$("apagarTudo").onclick = () => {
+  if (!confirm("Apagar todas as transcrições salvas neste aparelho? Isso não pode ser desfeito.")) return;
+  try { localStorage.removeItem(HIST); } catch {}
+  desenharRecentes(); toast("Histórico apagado");
+};
 
 atualizarDica();
 verificar();
