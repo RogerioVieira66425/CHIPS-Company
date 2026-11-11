@@ -65,7 +65,7 @@ def index():
 @app.get("/static/<path:arq>")
 def estaticos(arq):
     resp = send_from_directory(BASE / "static", arq)
-    resp.headers["Cache-Control"] = "public, max-age=86400"
+    resp.headers["Cache-Control"] = "public, max-age=3600"
     return resp
 
 
@@ -140,13 +140,31 @@ def transcrever():
             msg = r.text
         return jsonify(erro=f"Groq ({r.status_code}): {msg[:300]}"), 502
     j = r.json()
+    segs = j.get("segments")
+    if segs is None:
+        segs = [{"start": 0, "end": j.get("duration") or 0, "text": j.get("text", "")}]
     return jsonify(
-        idioma=j.get("language"),
+        idioma=(j.get("language") or "").capitalize(),
         duracao=j.get("duration"),
         segmentos=[{"inicio": s["start"], "fim": s["end"], "texto": s["text"].strip()}
-                   for s in j.get("segments", [])] or
-                  [{"inicio": 0, "fim": j.get("duration") or 0, "texto": j.get("text", "").strip()}],
+                   for s in segs if not alucinacao(s)],
     )
+
+
+# Frases que o Whisper costuma "inventar" em trechos de silencio ou musica
+ALUCINACOES = ("amara.org", "legendas pela comunidade", "legendado por", "legenda adriana",
+               "obrigado por assistir", "inscreva-se no canal", "e deixe seu like",
+               "thanks for watching", "subtitles by")
+
+
+def alucinacao(s):
+    texto = (s.get("text") or "").strip().lower()
+    if not texto:
+        return True
+    sem_fala = s.get("no_speech_prob", 0) or 0
+    if sem_fala > 0.85 and (s.get("avg_logprob", 0) or 0) < -0.6:
+        return True
+    return sem_fala > 0.3 and any(a in texto for a in ALUCINACOES)
 
 
 if __name__ == "__main__":
