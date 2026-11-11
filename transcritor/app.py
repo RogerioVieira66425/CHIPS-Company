@@ -194,7 +194,8 @@ def login():
     senha = str((request.get_json(silent=True) or {}).get("senha", ""))
     if not senha_certa:
         return jsonify(erro="APP_SENHA não configurada no servidor."), 500
-    if not hmac.compare_digest(senha.encode(), senha_certa.encode()):
+    # compara resumos de tamanho fixo: o tempo de resposta não revela o tamanho da senha
+    if not hmac.compare_digest(hashlib.sha256(senha.encode()).digest(), hashlib.sha256(senha_certa.encode()).digest()):
         recentes.append(agora)
         TENTATIVAS[ip] = recentes
         ERROS_GERAIS.append(agora)

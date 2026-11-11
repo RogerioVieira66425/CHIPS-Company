@@ -346,7 +346,7 @@ audio.previa{background:transparent;height:48px}
       <small>ou arraste e solte aqui</small>
       <div class="formatos"><span>MP3</span><span>OGG</span><span>OPUS</span><span>M4A</span><span>WAV</span><span>MP4</span><span>MOV</span><span>MKV</span></div>
     </div>
-    <input type="file" id="arquivo" class="sr" accept="audio/*,video/*,.opus,.ogg,.mkv,.m4a" tabindex="-1">
+    <input type="file" id="arquivo" class="sr" accept="audio/*,video/*,.opus,.ogg,.mkv,.m4a,.m4v,.amr,.3gp,.3gpp,.caf,.mts,.wmv" tabindex="-1">
 
     <div class="arq oculto" id="arq">
       <div class="ic" id="arqIc"><svg class="ico"><use href="#i-video"/></svg></div>
@@ -480,7 +480,7 @@ audio.previa{background:transparent;height:48px}
 import { FFmpeg } from "/static/ffmpeg/index.js";
 
 const CORE = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm";
-const TAM_MOTOR = 32 * 1024 * 1024;   // ~ tamanho do ffmpeg-core.wasm
+const TAM_MOTOR = 32129114;           // bytes do ffmpeg-core.wasm 0.12.6
 const PEDACO_SEG = 600;                // transcreve em partes de 10 min
 const HIST = "transcritor.historico";
 const $ = id => document.getElementById(id);
@@ -488,6 +488,8 @@ const BOTAO = { transcrever: "Transcrever", video: "Compactar vídeo", audio: "C
 const ICONE = { transcrever: "i-texto", video: "i-video", audio: "i-mic", extrair: "i-musica" };
 
 let modo = "transcrever", arquivo = null, duracaoArq = 0, rodando = false, cancelado = false;
+let bilhete = 0;                       // muda a cada execução: tarefas antigas param sozinhas
+const parou = tk => cancelado || tk !== bilhete;
 let segsAtuais = [], vista = "texto", urls = [], relogio = null, travaTela = null, itemAtual = null, abortador = null;
 
 // ============================================================ utilidades
@@ -609,7 +611,8 @@ function atualizarDica() {
         : `Resultado estimado: ${p.altura}p, cerca de ${tam(p.finalMB * 1048576)}.` +
           (p.jaPequeno ? " Seu vídeo já é leve, então vamos só otimizar." : "") +
           " Envie no WhatsApp como Documento para não perder qualidade.";
-    } else t = "A compactação roda no seu aparelho (nada é enviado). Envie no WhatsApp como Documento para não perder qualidade.";
+    } else if (arquivo) t = "Não consegui ler a duração deste vídeo (comum em gravações de tela). Ele será compactado por qualidade, sem garantir o tamanho exato.";
+    else t = "A compactação roda no seu aparelho (nada é enviado). Envie no WhatsApp como Documento para não perder qualidade.";
   } else if (modo === "audio") {
     t = val("formato") === "ogg" ? "OGG/Opus 32 kbps mono, o mesmo formato das mensagens de voz. 1 minuto ≈ 240 KB." : "MP3 64 kbps mono. 1 minuto ≈ 480 KB, abre em qualquer aparelho.";
     if (duracaoArq) t += ` Estimado: ~${tam(duracaoArq * (val("formato") === "ogg" ? 32 : 64) * 128)}.`;
@@ -651,7 +654,7 @@ function lerDuracao(f) {
 
 async function escolher(f) {
   if (!f || rodando) return;
-  if (!/^(audio|video)\//.test(f.type) && !/\.(opus|ogg|mkv|m4a|mp3|wav|mp4|mov|webm|aac|flac|3gp|avi|wma)$/i.test(f.name)) {
+  if (!/^(audio|video)\//.test(f.type) && !/\.(opus|ogg|oga|mkv|m4a|m4v|mp3|wav|mp4|mov|webm|weba|aac|flac|3gp|3gpp|3g2|amr|avi|wma|wmv|mpeg|mpg|ts|mts|m2ts|aif|aiff|caf)$/i.test(f.name)) {
     mostrarErro("Esse arquivo não parece ser áudio ou vídeo."); return;
   }
   arquivo = f; duracaoArq = 0;
@@ -770,9 +773,10 @@ async function rodarFF(ff, args, de = 0, ate = 100) {
 // ============================================================ executar
 $("cancelar").onclick = async () => {
   if (!rodando) return;
-  cancelado = true;
+  cancelado = true; bilhete++;
   abortador?.abort();
   if (!motorEmUso) { emAndamento(false); toast("Cancelado"); return; }   // só resumo: não precisa reiniciar o motor
+  motorEmUso = false;
   const motorAntigo = motorP;
   motorP = null; motorRecebido = 0;
   emAndamento(false);
@@ -786,39 +790,44 @@ $("iniciar").onclick = async () => {
   const m = modo;                                     // congela as escolhas do início
   const estilo = (m === "transcrever" || m === "extrair") ? val("resumo") : "nao";
   limparResultado();
+  const tk = ++bilhete;
   cancelado = false; motorEmUso = true;
   emAndamento(true);
   const t0 = Date.now();
   let ff;
   try {
     ff = await esperarMotor();
-    if (cancelado) return;
+    if (parou(tk)) return;
     etapa("Lendo o arquivo…"); progresso(0);
     const entrada = await montar(ff);
     const info = await sondar(ff, entrada);
     if (!info.temAudio && !info.temVideo) throw new Error("Não reconheci esse arquivo como áudio ou vídeo.");
     const fatia = estilo !== "nao" ? 80 : 100;      // reserva o fim da barra para o resumo
     if (m === "transcrever") {
-      const item = await transcrever(ff, entrada, info, 0, fatia);
+      const item = await transcrever(ff, entrada, info, 0, fatia, tk);
+      if (parou(tk)) return;
       mostrarTranscricao(item, decorrido(Date.now() - t0));
-      if (estilo !== "nao" && item.segs.length) await resumirItem(item, estilo, fatia, 100);
+      if (estilo !== "nao" && item.segs.length) await resumirItem(item, estilo, fatia, 100, tk);
     } else {
       await compactar(ff, m, entrada, info, t0, estilo !== "nao" ? 25 : 100);
       if (m === "extrair" && estilo !== "nao") {
-        const item = await transcrever(ff, entrada, info, 25, fatia);
+        if (parou(tk)) return;
+        const item = await transcrever(ff, entrada, info, 25, fatia, tk);
+        if (parou(tk)) return;
         anexarTranscricao(item);
-        if (item.segs.length) await resumirItem(item, estilo, fatia, 100);
+        if (item.segs.length) await resumirItem(item, estilo, fatia, 100, tk);
         else mostrarErro("Não encontramos fala neste áudio, então não há o que resumir.");
       }
     }
   } catch (e) {
+    if (parou(tk)) return;                              // tarefa cancelada/substituída: não mexe na tela
     if (e.parcial) {
       if (m === "extrair") anexarTranscricao(e.parcial); else mostrarTranscricao(e.parcial);
     }
-    if (!cancelado && e.name !== "AbortError") mostrarErro(e.message || String(e), e.detalhe);
+    if (e.name !== "AbortError") mostrarErro(e.message || String(e), e.detalhe);
   } finally {
-    motorEmUso = false;
-    if (!cancelado) {
+    if (!parou(tk)) {
+      motorEmUso = false;
       emAndamento(false);
       try { await ff?.unmount("/in"); } catch {}
     }
@@ -826,7 +835,7 @@ $("iniciar").onclick = async () => {
 };
 
 // Transcreve o arquivo montado e devolve o item (também salvo no histórico).
-async function transcrever(ff, entrada, info, de, ate) {
+async function transcrever(ff, entrada, info, de, ate, tk) {
   if (!info.temAudio) throw new Error("Esse arquivo não tem áudio.");
   const prep = de + (ate - de) * 0.12;
   etapa("Preparando o áudio", "Reduzindo no seu aparelho para enviar rápido");
@@ -845,7 +854,7 @@ async function transcrever(ff, entrada, info, de, ate) {
     quando: Date.now(), idioma, duracao: parcial ? desloc : info.duracao, segs: segs.filter(s => s.texto), parcial });
   try {
     for (i = 0; i < usar.length; i++) {
-      if (cancelado) throw new Error("cancelado");
+      if (parou(tk)) throw new Error("cancelado");
       const sub = usar.length > 1 ? `Parte ${i + 1} de ${usar.length}` : "Convertendo fala em texto";
       etapa("Transcrevendo", sub);
       progresso(prep + (i / usar.length) * (ate - prep));
@@ -860,11 +869,12 @@ async function transcrever(ff, entrada, info, de, ate) {
         catch (e) {
           if (e.status !== 429 || esperou >= 900) throw e;
           const seg = Math.min(Math.max(e.espera || 60, 15), 300);
-          await contagemRegressiva(seg, "Cota gratuita da Groq esgotada por agora · tentando de novo em");
+          await contagemRegressiva(seg, "Cota gratuita da Groq esgotada por agora · tentando de novo em", tk);
           esperou += seg;
           etapa("Transcrevendo", sub);
         }
       }
+      if (parou(tk)) throw new Error("cancelado");
       idioma = ({ portuguese: "português", english: "inglês", spanish: "espanhol" })[(j.idioma || "").toLowerCase()] || j.idioma || idioma;
       j.segmentos.forEach(s => segs.push({ inicio: s.inicio + desloc, fim: s.fim + desloc, texto: s.texto }));
       desloc += j.duracao || PEDACO_SEG;
@@ -873,7 +883,7 @@ async function transcrever(ff, entrada, info, de, ate) {
     }
   } catch (e) {
     // não joga fora o que já foi transcrito
-    if (!cancelado && e.name !== "AbortError" && segs.some(s => s.texto)) {
+    if (!parou(tk) && e.name !== "AbortError" && segs.some(s => s.texto)) {
       const parcial = montarItem(true);
       salvarHistorico(parcial);
       throw Object.assign(new Error(`Transcrição incompleta: parou na parte ${i + 1} de ${usar.length}. ${e.message} ` +
@@ -882,7 +892,7 @@ async function transcrever(ff, entrada, info, de, ate) {
     throw e;
   } finally {
     for (const p of partes) try { await ff.deleteFile("/" + p); } catch {}
-    $("aoVivo").classList.add("oculto");
+    if (!parou(tk)) $("aoVivo").classList.add("oculto");
   }
   progresso(ate);
   const item = montarItem(false);
@@ -890,9 +900,9 @@ async function transcrever(ff, entrada, info, de, ate) {
   return item;
 }
 
-async function contagemRegressiva(segundos, texto) {
+async function contagemRegressiva(segundos, texto, tk) {
   for (let s = Math.round(segundos); s > 0; s--) {
-    if (cancelado) throw new Error("cancelado");
+    if (parou(tk)) throw new Error("cancelado");
     etapa("Aguardando", `${texto} ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`);
     await new Promise(r => setTimeout(r, 1000));
   }
@@ -960,10 +970,11 @@ function preencherTranscricao(item, tempoGasto) {
     const b = botao(acoes, "i-brilho", "Criar resumo", async () => {
       if (rodando) return;
       const estilo = val("resumo") !== "nao" ? val("resumo") : "rapido";
+      const tk = ++bilhete;
       cancelado = false; emAndamento(true);
-      try { await resumirItem(item, estilo, 0, 100); }
-      catch (e) { if (!cancelado && e.name !== "AbortError") mostrarErro(e.message || String(e)); }
-      finally { if (!cancelado) emAndamento(false); }
+      try { await resumirItem(item, estilo, 0, 100, tk); }
+      catch (e) { if (!parou(tk) && e.name !== "AbortError") mostrarErro(e.message || String(e)); }
+      finally { if (!parou(tk)) emAndamento(false); }
     });
     b.id = "btnCriarResumo";
   }
@@ -994,7 +1005,7 @@ function dividirTexto(texto, tamanho) {
   return partes;
 }
 
-async function resumirItem(item, estilo, de, ate) {
+async function resumirItem(item, estilo, de, ate, tk) {
   $("resResumo").classList.remove("oculto");
   $("resumoEstilo").textContent = "· " + NOME_ESTILO[estilo];
   $("resumoAcoes").innerHTML = "";
@@ -1008,7 +1019,7 @@ async function resumirItem(item, estilo, de, ate) {
     while (texto.length > MAX_ETAPA && rodada < 3) {       // texto longo: notas por parte, depois junta
       const partes = dividirTexto(texto, TAM_PARTE), notas = [];
       for (let i = 0; i < partes.length; i++) {
-        if (cancelado) throw new Error("cancelado");
+        if (parou(tk)) throw new Error("cancelado");
         etapa("Criando o resumo", `Lendo a parte ${i + 1} de ${partes.length}`);
         progresso(de + (i / partes.length) * (ate - de) * 0.8);
         notas.push((await pedirResumo({ fase: "notas", texto: partes[i], parte: i + 1, total: partes.length })).resumo);
@@ -1017,7 +1028,9 @@ async function resumirItem(item, estilo, de, ate) {
     }
     etapa("Criando o resumo", "Escrevendo o resumo final");
     progresso(de + (ate - de) * 0.85);
+    if (parou(tk)) throw new Error("cancelado");
     const j = await pedirResumo({ fase: rodada ? "final" : "direto", texto: texto.slice(0, MAX_ETAPA) });
+    if (parou(tk)) throw new Error("cancelado");
     item.resumo = { estilo, texto: j.resumo };
     salvarHistorico(item);
     progresso(ate);
@@ -1077,17 +1090,19 @@ async function compactar(ff, m, entrada, info, t0, ate = 100) {
   const base = arquivo.name.replace(/\.[^.]+$/, "");
   if (m === "video") {
     if (!info.temVideo) throw new Error("Esse arquivo não tem vídeo. Use “Compactar áudio”.");
-    if (!info.duracao) throw new Error("Não consegui ler a duração do vídeo.");
-    const p = planoVideo(info.duracao, arquivo.size, alvoMB(), val("resolucao"), info.temAudio);
-    if (p.videoK < 80 && !p.jaPequeno) throw new Error(`Vídeo longo demais para ${alvoMB()} MB (${dur(info.duracao)}). Escolha um tamanho maior ou corte o vídeo.`);
+    // sem duração no arquivo (gravação de tela/navegador): compacta por qualidade, sem alvo exato
+    const p = info.duracao ? planoVideo(info.duracao, arquivo.size, alvoMB(), val("resolucao"), info.temAudio)
+      : { semDuracao: true, audioK: 96, videoK: 0, altura: val("resolucao") === "auto" ? 720 : +val("resolucao") };
+    if (!p.semDuracao && p.videoK < 80 && !p.jaPequeno) throw new Error(`Vídeo longo demais para ${alvoMB()} MB (${dur(info.duracao)}). Escolha um tamanho maior ou corte o vídeo.`);
     const A = p.altura;
-    sub = `${A}p · ${p.videoK} kbps`;
+    sub = p.semDuracao ? `${A}p · por qualidade (duração desconhecida)` : `${A}p · ${p.videoK} kbps`;
     nome = base + "_whatsapp.mp4"; tipo = "video/mp4";
     // limita o LADO MENOR (funciona com vídeo em pé e deitado) e no máximo 30 fps
     const escala = `scale=w='if(gt(iw,ih),-2,trunc(min(${A},iw)/2)*2)':h='if(gt(iw,ih),trunc(min(${A},ih)/2)*2,-2)'`;
     args = ["-i", entrada, "-vf", escala, "-fpsmax", "30",
             "-c:v", "libx264", "-preset", "veryfast", "-profile:v", "high", "-pix_fmt", "yuv420p",
-            "-b:v", p.videoK + "k", "-maxrate", Math.floor(p.videoK * 1.3) + "k", "-bufsize", p.videoK * 2 + "k",
+            ...(p.semDuracao ? ["-crf", "28"] :
+                ["-b:v", p.videoK + "k", "-maxrate", Math.floor(p.videoK * 1.3) + "k", "-bufsize", p.videoK * 2 + "k"]),
             ...(info.temAudio ? ["-c:a", "aac", "-b:a", p.audioK + "k", "-ac", "2"] : ["-an"]),
             "-movflags", "+faststart", "/saida.mp4"];
   } else {
