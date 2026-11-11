@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Transcritor</title>
+<style>
+  :root { --bg:#f4f5f7; --card:#fff; --txt:#1d2330; --sub:#667085; --borda:#dde1e7;
+          --cor:#128c7e; --cor2:#0e6f64; --erro:#c0392b; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171c; --card:#1d2128; --txt:#e8eaed; --sub:#9aa3af; --borda:#323843; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--txt); }
+  main { max-width:820px; margin:0 auto; padding:24px 16px 60px; }
+  header { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+  h1 { font-size:24px; margin:0 0 4px; }
+  .sub { color:var(--sub); margin:0 0 20px; }
+  .link { background:none; border:0; color:var(--sub); cursor:pointer; text-decoration:underline; font-size:13px; padding:6px 0; }
+  .abas { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+  .aba { border:1px solid var(--borda); background:var(--card); color:var(--txt); padding:10px 16px;
+         border-radius:999px; cursor:pointer; font-size:15px; }
+  .aba.ativa { background:var(--cor); border-color:var(--cor); color:#fff; }
+  .card { background:var(--card); border:1px solid var(--borda); border-radius:14px; padding:20px; }
+  .drop { border:2px dashed var(--borda); border-radius:12px; padding:30px 16px; text-align:center;
+          cursor:pointer; color:var(--sub); transition:.15s; }
+  .drop.sobre, .drop:hover { border-color:var(--cor); color:var(--txt); }
+  .drop strong { color:var(--txt); display:block; font-size:16px; margin-bottom:4px; word-break:break-all; }
+  .linha { display:flex; gap:12px; flex-wrap:wrap; margin:16px 0; }
+  label { display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--sub); flex:1; min-width:170px; }
+  select, input { padding:10px; border-radius:8px; border:1px solid var(--borda);
+          background:var(--bg); color:var(--txt); font-size:15px; }
+  .principal { width:100%; padding:13px; border:0; border-radius:10px; background:var(--cor);
+          color:#fff; font-size:16px; cursor:pointer; }
+  .principal:hover { background:var(--cor2); }
+  .principal:disabled { opacity:.5; cursor:default; }
+  .barra { height:10px; background:var(--borda); border-radius:99px; overflow:hidden; margin:14px 0 6px; }
+  .barra div { height:100%; width:0; background:var(--cor); transition:width .3s; }
+  .status { font-size:14px; color:var(--sub); min-height:20px; white-space:pre-line; }
+  .status.erro { color:var(--erro); }
+  .resultado { margin-top:16px; display:none; }
+  textarea { width:100%; min-height:260px; padding:12px; border-radius:10px; border:1px solid var(--borda);
+          background:var(--bg); color:var(--txt); font-size:14px; line-height:1.5; resize:vertical; }
+  .botoes { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .botoes a, .botoes button { padding:9px 14px; border-radius:8px; border:1px solid var(--cor);
+          color:var(--cor); background:transparent; text-decoration:none; font-size:14px; cursor:pointer; }
+  .dica { font-size:13px; color:var(--sub); margin-top:12px; line-height:1.5; }
+  .oculto { display:none !important; }
+  #login { max-width:360px; margin:12vh auto 0; }
+  #login form { display:flex; flex-direction:column; gap:12px; }
+</style>
+</head>
+<body>
+<main>
+  <section id="login" class="card oculto">
+    <h1>Transcritor</h1>
+    <p class="sub">Digite a senha para entrar.</p>
+    <form id="formLogin">
+      <input type="password" id="senha" placeholder="Senha" autocomplete="current-password" required>
+      <button class="principal" type="submit">Entrar</button>
+      <div class="status erro" id="erroLogin"></div>
+    </form>
+  </section>
+
+  <section id="app" class="oculto">
+    <header>
+      <div>
+        <h1>Transcritor de áudio e vídeo</h1>
+        <p class="sub">Transcreva e compacte arquivos para mandar no WhatsApp.</p>
+      </div>
+      <button class="link" id="sair">Sair</button>
+    </header>
+
+    <div class="abas">
+      <button class="aba ativa" data-aba="transcrever">📝 Transcrever</button>
+      <button class="aba" data-aba="video">🎬 Compactar vídeo</button>
+      <button class="aba" data-aba="audio">🎙️ Compactar áudio</button>
+      <button class="aba" data-aba="extrair">🎵 Extrair áudio do vídeo</button>
+    </div>
+
+    <div class="card">
+      <div class="drop" id="drop">
+        <strong id="nomeArq">Toque para escolher o arquivo (ou arraste aqui)</strong>
+        <span id="infoArq">MP3, OGG, OPUS (áudio do WhatsApp), M4A, WAV, MP4, MOV, MKV...</span>
+        <input type="file" id="arquivo" class="oculto" accept="audio/*,video/*,.opus,.ogg,.mkv,.m4a">
+      </div>
+
+      <div class="linha" data-de="transcrever">
+        <label>Qualidade
+          <select id="modelo">
+            <option value="whisper-large-v3" selected>Máxima (large-v3)</option>
+            <option value="whisper-large-v3-turbo">Rápida (large-v3-turbo)</option>
+          </select>
+        </label>
+        <label>Idioma
+          <select id="idioma">
+            <option value="pt" selected>Português</option>
+            <option value="auto">Detectar automaticamente</option>
+            <option value="en">Inglês</option>
+            <option value="es">Espanhol</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="linha oculto" data-de="video">
+        <label>Tamanho final
+          <select id="alvo">
+            <option value="15">Até 15 MB (leve, envio rápido)</option>
+            <option value="30" selected>Até 30 MB (bom equilíbrio)</option>
+            <option value="60">Até 60 MB (mais qualidade)</option>
+            <option value="custom">Outro valor...</option>
+          </select>
+        </label>
+        <label class="oculto" id="alvoCustomBox">MB
+          <input type="number" id="alvoCustom" min="1" value="50">
+        </label>
+        <label>Resolução
+          <select id="resolucao">
+            <option value="auto" selected>Automática</option>
+            <option value="1080">1080p</option>
+            <option value="720">720p</option>
+            <option value="480">480p</option>
+            <option value="360">360p</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="linha oculto" data-de="audio">
+        <label>Formato
+          <select id="formatoAudio">
+            <option value="ogg" selected>OGG/Opus — formato do áudio do WhatsApp (menor)</option>
+            <option value="mp3">MP3 — abre em qualquer lugar</option>
+          </select>
+        </label>
+      </div>
+
+      <button class="principal" id="iniciar" disabled>Transcrever</button>
+
+      <div class="barra"><div id="barra"></div></div>
+      <div class="status" id="status"></div>
+      <div class="botoes oculto" id="cancelarBox"><button id="cancelar">Cancelar</button></div>
+
+      <div class="resultado" id="resultado">
+        <div data-de="transcrever">
+          <div class="botoes" style="margin:0 0 8px">
+            <button id="verSimples">Só texto</button>
+            <button id="verTempo">Com tempo</button>
+          </div>
+          <textarea id="texto" readonly></textarea>
+        </div>
+        <div class="botoes" id="downloads"></div>
+      </div>
+
+      <p class="dica" data-de="transcrever">O áudio é reduzido no seu aparelho antes do envio, então
+        até vídeos grandes sobem rápido. Arquivos longos são transcritos em partes de 10 minutos.</p>
+      <p class="dica oculto" data-de="video">A compactação roda no seu próprio aparelho (nada é enviado).
+        Pode levar alguns minutos, ainda mais no celular. O vídeo sai em MP4 (H.264 + AAC). Para não
+        perder qualidade no envio, mande no WhatsApp como <b>Documento</b>.</p>
+      <p class="dica oculto" data-de="audio">Roda no seu aparelho. OGG/Opus a 32 kbps: 1 minuto ≈ 240 KB.</p>
+      <p class="dica oculto" data-de="extrair">Roda no seu aparelho. Sai em MP3 de 128 kbps.</p>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+import { FFmpeg } from "/static/ffmpeg/index.js";
+import { toBlobURL } from "/static/util/index.js";
+
+const CORE = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm";
+const PEDACO_SEG = 600;   // transcreve em partes de 10 min
+const $ = id => document.getElementById(id);
+const rotulos = { transcrever:"Transcrever", video:"Compactar vídeo", audio:"Compactar áudio", extrair:"Extrair áudio" };
+let aba = "transcrever", arquivo = null, textoSimples = "", textoTempo = "";
+let ff = null, logs = [], aoProgresso = null, cancelado = false, urls = [];
+
+// ------------------------------------------------------------------ login
+async function verificar() {
+  const r = await (await fetch("/api/eu")).json();
+  $("login").classList.toggle("oculto", r.logado);
+  $("app").classList.toggle("oculto", !r.logado);
+  if (!r.logado) $("senha").focus();
+}
+$("formLogin").onsubmit = async e => {
+  e.preventDefault();
+  const r = await fetch("/api/login", { method:"POST", headers:{ "Content-Type":"application/json" },
+                                        body: JSON.stringify({ senha: $("senha").value }) });
+  if (r.ok) { $("senha").value = ""; $("erroLogin").textContent = ""; verificar(); }
+  else $("erroLogin").textContent = (await r.json()).erro || "Erro";
+};
+$("sair").onclick = async () => { await fetch("/api/sair", { method:"POST" }); verificar(); };
+verificar();
+
+// ------------------------------------------------------------------ interface
+document.querySelectorAll(".aba").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".aba").forEach(x => x.classList.toggle("ativa", x === b));
+  aba = b.dataset.aba;
+  document.querySelectorAll("[data-de]").forEach(el => el.classList.toggle("oculto", el.dataset.de !== aba));
+  $("iniciar").textContent = rotulos[aba];
+  limpar();
+});
+$("alvo").onchange = () => $("alvoCustomBox").classList.toggle("oculto", $("alvo").value !== "custom");
+
+const drop = $("drop");
+drop.onclick = () => $("arquivo").click();
+$("arquivo").onchange = e => escolher(e.target.files[0]);
+["dragenter","dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("sobre"); }));
+["dragleave","drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("sobre"); }));
+drop.addEventListener("drop", e => escolher(e.dataTransfer.files[0]));
+
+function escolher(f) {
+  if (!f) return;
+  arquivo = f;
+  $("nomeArq").textContent = f.name;
+  $("infoArq").textContent = mb(f.size) + " MB";
+  $("iniciar").disabled = false;
+  limpar();
+}
+function limpar() {
+  $("resultado").style.display = "none";
+  barra(0); status("");
+  urls.forEach(u => URL.revokeObjectURL(u)); urls = [];
+}
+const mb = b => (b / 1048576).toFixed(1);
+const barra = p => $("barra").style.width = Math.max(0, Math.min(100, p)) + "%";
+function status(msg, erro) { $("status").textContent = msg; $("status").classList.toggle("erro", !!erro); }
+const base = () => arquivo.name.replace(/\.[^.]+$/, "");
+
+// ------------------------------------------------------------------ ffmpeg.wasm
+async function motor() {
+  if (ff) return ff;
+  status("Carregando o motor de vídeo (≈ 30 MB, só na primeira vez)...");
+  const f = new FFmpeg();
+  f.on("log", ({ message }) => { logs.push(message); if (logs.length > 300) logs.shift(); });
+  f.on("progress", ({ progress }) => aoProgresso && progress >= 0 && progress <= 1 && aoProgresso(progress));
+  await f.load({
+    coreURL: await toBlobURL(`${CORE}/ffmpeg-core.js`, "text/javascript"),
+    wasmURL: await toBlobURL(`${CORE}/ffmpeg-core.wasm`, "application/wasm"),
+  });
+  ff = f;
+  return ff;
+}
+
+// monta o arquivo sem copiar para a memória (aguenta vídeos grandes)
+async function montar() {
+  try { await ff.unmount("/in"); } catch {}
+  try { await ff.createDir("/in"); } catch {}
+  await ff.mount("WORKERFS", { files: [arquivo] }, "/in");
+  return "/in/" + arquivo.name;
+}
+
+async function sondar(entrada) {
+  logs = [];
+  await ff.exec(["-hide_banner", "-i", entrada]);   // "falha" de propósito: só lê as informações
+  const txt = logs.join("\n");
+  const m = txt.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
+  return {
+    duracao: m ? (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]) : 0,
+    temVideo: txt.split("\n").some(l => l.includes("Video:") && !l.includes("attached pic")),
+    temAudio: /Audio:/.test(txt),
+  };
+}
+
+async function rodar(args, inicio = 0, fim = 100) {
+  logs = [];
+  aoProgresso = p => barra(inicio + p * (fim - inicio));
+  const ret = await ff.exec(args);
+  aoProgresso = null;
+  if (cancelado) throw new Error("Cancelado.");
+  if (ret !== 0) throw new Error("O ffmpeg não conseguiu processar o arquivo.\n" + logs.slice(-4).join("\n"));
+}
+
+async function lerSaida(nome) {
+  const dados = await ff.readFile(nome);
+  try { await ff.deleteFile(nome); } catch {}
+  return dados;
+}
+
+// ------------------------------------------------------------------ ações
+$("cancelar").onclick = () => {
+  cancelado = true;
+  if (ff) { ff.terminate(); ff = null; }
+  status("Cancelado.", true);
+};
+
+$("iniciar").onclick = async () => {
+  if (!arquivo) return;
+  limpar();
+  cancelado = false;
+  $("iniciar").disabled = true;
+  $("cancelarBox").classList.remove("oculto");
+  const t0 = Date.now();
+  try {
+    await motor();
+    const entrada = await montar();
+    const info = await sondar(entrada);
+    if (!info.temAudio && !info.temVideo) throw new Error("Não reconheci esse arquivo como áudio ou vídeo.");
+    if (aba === "transcrever") await transcrever(entrada, info, t0);
+    else await compactar(entrada, info, t0);
+  } catch (e) {
+    if (!cancelado) status(e.message || String(e), true);
+  } finally {
+    $("iniciar").disabled = false;
+    $("cancelarBox").classList.add("oculto");
+    if (ff) try { await ff.unmount("/in"); } catch {}
+  }
+};
+
+async function transcrever(entrada, info, t0) {
+  if (!info.temAudio) throw new Error("Esse arquivo não tem áudio.");
+  status("Preparando o áudio no seu aparelho...");
+  // mono, 16 kHz, Opus 24 kbps (10 min ≈ 1,8 MB), cortado em partes de 10 min
+  await rodar(["-i", entrada, "-vn", "-map", "0:a:0", "-ac", "1", "-ar", "16000",
+               "-c:a", "libopus", "-b:a", "24k", "-application", "voip",
+               "-f", "segment", "-segment_time", String(PEDACO_SEG), "-reset_timestamps", "1",
+               "/parte%03d.ogg"], 0, 15);
+  const partes = (await ff.listDir("/")).map(d => d.name).filter(n => /^parte\d{3}\.ogg$/.test(n)).sort();
+  if (!partes.length) throw new Error("Não consegui extrair o áudio.");
+
+  const segs = [];
+  let deslocamento = 0, idioma = "";
+  for (let i = 0; i < partes.length; i++) {
+    if (cancelado) throw new Error("Cancelado.");
+    status(`Transcrevendo parte ${i + 1} de ${partes.length}...`);
+    barra(15 + (i / partes.length) * 85);
+    const dados = await lerSaida("/" + partes[i]);
+    const fd = new FormData();
+    fd.append("arquivo", new Blob([dados.buffer], { type: "audio/ogg" }), partes[i]);
+    fd.append("modelo", $("modelo").value);
+    fd.append("idioma", $("idioma").value);
+    const r = await fetch("/api/transcrever", { method: "POST", body: fd });
+    const j = await r.json().catch(() => ({ erro: "Resposta inválida do servidor (" + r.status + ")" }));
+    if (r.status === 401) { verificar(); throw new Error("Sua sessão expirou. Entre de novo."); }
+    if (!r.ok) throw new Error(j.erro || "Erro na transcrição");
+    idioma = j.idioma || idioma;
+    j.segmentos.forEach(s => segs.push({ inicio: s.inicio + deslocamento, fim: s.fim + deslocamento, texto: s.texto }));
+    deslocamento += j.duracao || PEDACO_SEG;
+    $("texto").value = segs.map(s => s.texto).join("\n");
+    $("resultado").style.display = "block";
+  }
+  for (const p of partes) try { await ff.deleteFile("/" + p); } catch {}
+
+  textoSimples = segs.map(s => s.texto).filter(Boolean).join("\n");
+  textoTempo = segs.filter(s => s.texto).map(s => `[${tempo(s.inicio)}] ${s.texto}`).join("\n");
+  const srt = segs.filter(s => s.texto).map((s, i) =>
+    `${i + 1}\n${tempo(s.inicio, true)} --> ${tempo(s.fim, true)}\n${s.texto}\n`).join("\n");
+  $("texto").value = textoSimples || "(Nenhuma fala encontrada no arquivo)";
+  barra(100);
+  status(`Pronto em ${seg(t0)}${idioma ? " · idioma: " + idioma : ""}`);
+
+  const d = $("downloads"); d.innerHTML = "";
+  const c = document.createElement("button");
+  c.textContent = "📋 Copiar texto";
+  c.onclick = async () => { await navigator.clipboard.writeText($("texto").value); c.textContent = "✔ Copiado"; setTimeout(() => c.textContent = "📋 Copiar texto", 1500); };
+  d.appendChild(c);
+  botaoArquivo(new Blob([textoSimples], { type: "text/plain" }), base() + ".txt", "Texto (.txt)");
+  botaoArquivo(new Blob([textoTempo], { type: "text/plain" }), base() + "_com_tempo.txt", "Texto com tempo (.txt)");
+  botaoArquivo(new Blob([srt], { type: "application/x-subrip" }), base() + ".srt", "Legenda (.srt)");
+}
+
+async function compactar(entrada, info, t0) {
+  let args, nome, tipo, extra = "";
+  const dur = info.duracao;
+  if (aba === "video") {
+    if (!info.temVideo) throw new Error("Esse arquivo não tem vídeo. Use a aba 'Compactar áudio'.");
+    if (!dur) throw new Error("Não consegui ler a duração do vídeo.");
+    const alvo = parseFloat($("alvo").value === "custom" ? $("alvoCustom").value : $("alvo").value) || 30;
+    const audioK = info.temAudio ? (alvo <= 16 ? 64 : 96) : 0;
+    const videoK = Math.floor(alvo * 8 * 1024 * 0.95 / dur - audioK);   // 5% de folga
+    if (videoK < 80) throw new Error(`Vídeo longo demais para ${alvo} MB (${(dur / 60).toFixed(1)} min). Aumente o tamanho ou corte o vídeo.`);
+    const res = $("resolucao").value;
+    const altura = res !== "auto" ? +res : videoK >= 1200 ? 720 : videoK >= 500 ? 480 : 360;
+    extra = ` · ${altura}p, ${videoK} kbps`;
+    nome = base() + "_whatsapp.mp4"; tipo = "video/mp4";
+    args = ["-i", entrada, "-vf", `scale=-2:'min(${altura},ih)'`,
+            "-c:v", "libx264", "-preset", "veryfast", "-profile:v", "high", "-pix_fmt", "yuv420p",
+            "-b:v", videoK + "k", "-maxrate", Math.floor(videoK * 1.3) + "k", "-bufsize", videoK * 2 + "k",
+            ...(info.temAudio ? ["-c:a", "aac", "-b:a", audioK + "k", "-ac", "2"] : ["-an"]),
+            "-movflags", "+faststart", "/saida.mp4"];
+  } else {
+    if (!info.temAudio) throw new Error("Esse arquivo não tem áudio.");
+    if (aba === "audio" && $("formatoAudio").value === "ogg") {
+      nome = base() + "_whatsapp.ogg"; tipo = "audio/ogg";
+      args = ["-i", entrada, "-vn", "-c:a", "libopus", "-b:a", "32k", "-ac", "1", "-application", "voip", "/saida.ogg"];
+    } else {
+      const kbps = aba === "extrair" ? "128k" : "64k";
+      nome = base() + (aba === "extrair" ? "_audio.mp3" : ".mp3"); tipo = "audio/mpeg";
+      args = ["-i", entrada, "-vn", "-c:a", "libmp3lame", "-b:a", kbps, ...(aba === "audio" ? ["-ac", "1"] : []), "/saida.mp3"];
+    }
+  }
+  status("Compactando no seu aparelho... (pode levar alguns minutos)" + extra);
+  await rodar(args);
+  const saida = args[args.length - 1];
+  const dados = await lerSaida(saida);
+  barra(100);
+  status(`${mb(arquivo.size)} MB → ${mb(dados.byteLength)} MB em ${seg(t0)}${extra}`);
+  $("resultado").style.display = "block";
+  $("downloads").innerHTML = "";
+  botaoArquivo(new Blob([dados.buffer], { type: tipo }), nome, "Baixar " + nome.split(".").pop().toUpperCase(), true);
+}
+
+function botaoArquivo(blob, nome, rotulo, compartilhar) {
+  const url = URL.createObjectURL(blob); urls.push(url);
+  const a = document.createElement("a");
+  a.href = url; a.download = nome; a.textContent = "⬇ " + rotulo;
+  $("downloads").appendChild(a);
+  // no celular: botão para mandar direto (WhatsApp aparece na lista)
+  const file = new File([blob], nome, { type: blob.type });
+  if (compartilhar && navigator.canShare && navigator.canShare({ files: [file] })) {
+    const b = document.createElement("button");
+    b.textContent = "📤 Enviar (WhatsApp...)";
+    b.onclick = () => navigator.share({ files: [file] }).catch(() => {});
+    $("downloads").appendChild(b);
+  }
+}
+
+function tempo(s, srt) {
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = Math.floor(s % 60);
+  const p = n => String(n).padStart(2, "0");
+  if (srt) return `${p(h)}:${p(m)}:${p(x)},${String(Math.floor((s % 1) * 1000)).padStart(3, "0")}`;
+  return h ? `${p(h)}:${p(m)}:${p(x)}` : `${p(m)}:${p(x)}`;
+}
+const seg = t0 => { const s = Math.round((Date.now() - t0) / 1000); return s < 60 ? s + "s" : Math.floor(s / 60) + "min " + (s % 60) + "s"; };
+
+$("verSimples").onclick = () => $("texto").value = textoSimples;
+$("verTempo").onclick = () => $("texto").value = textoTempo;
+</script>
+</body>
+</html>

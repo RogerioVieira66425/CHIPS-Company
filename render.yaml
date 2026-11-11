@@ -21,6 +21,27 @@ services:
       # Preencha o valor no painel do Render (Environment), nao aqui no repositorio.
       - key: COLETOR_TOKEN
         sync: false
+
+  # Transcritor de audio/video + compactador para WhatsApp (pasta transcritor/).
+  # A compactacao roda no navegador (ffmpeg.wasm); o servidor so faz login e chama a Groq.
+  - type: web
+    name: transcritor
+    runtime: python
+    plan: free
+    rootDir: transcritor
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --workers 1 --threads 8 --timeout 330
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      # Chave criada em https://console.groq.com/keys (preencha no painel do Render)
+      - key: GROQ_API_KEY
+        sync: false
+      # Senha para entrar no site (preencha no painel do Render)
+      - key: APP_SENHA
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
 # Para o historico de precos sobreviver a deploys e reinicios, troque para:
 #   plan: starter
 #   e acrescente:
