@@ -186,6 +186,27 @@ def logado():
     return session.get("ok") is True and session.get("v") == versao_senha()
 
 
+def corpo_json():
+    """Corpo JSON como dicionario (lista, texto ou JSON invalido viram {})."""
+    d = request.get_json(silent=True)
+    return d if isinstance(d, dict) else {}
+
+
+@app.errorhandler(Exception)
+def erro_inesperado(e):
+    """Rede de seguranca: na API, qualquer erro vira JSON com mensagem clara (nunca pagina HTML)."""
+    from werkzeug.exceptions import HTTPException
+    codigo = e.code if isinstance(e, HTTPException) else 500
+    if not request.path.startswith("/api/"):
+        return e if isinstance(e, HTTPException) else ("Erro interno", 500)
+    if codigo == 500:
+        app.logger.exception("Erro inesperado em %s", request.path)
+    mensagens = {404: "Endereço não encontrado.", 405: "Método não permitido.",
+                 413: "Arquivo grande demais para enviar (limite de 25 MB por parte).",
+                 500: "Erro inesperado no servidor. Tente de novo."}
+    return jsonify(erro=mensagens.get(codigo, "Requisição inválida.")), codigo
+
+
 @app.errorhandler(413)
 def grande_demais(_e):
     return jsonify(erro="Arquivo grande demais para enviar (limite de 25 MB por parte)."), 413
@@ -226,7 +247,7 @@ def login():
     if len(recentes) >= LIMITE_IP or len(ERROS_GERAIS) >= LIMITE_GERAL:
         return jsonify(erro="Muitas tentativas. Espere 10 minutos."), 429
     senha_certa = os.environ.get("APP_SENHA", "")
-    senha = str((request.get_json(silent=True) or {}).get("senha", ""))
+    senha = str(corpo_json().get("senha", ""))
     if not senha_certa:
         return jsonify(erro="APP_SENHA não configurada no servidor."), 500
     # compara resumos de tamanho fixo: o tempo de resposta não revela o tamanho da senha
@@ -336,7 +357,7 @@ def resumir():
         return jsonify(erro="Faça login."), 401
     if not os.environ.get("GROQ_API_KEY"):
         return jsonify(erro="GROQ_API_KEY não configurada no servidor."), 500
-    d = request.get_json(silent=True) or {}
+    d = corpo_json()
     fase, estilo = d.get("fase", "direto"), d.get("estilo", "rapido")
     texto = str(d.get("texto", "")).strip()
     if fase not in ("direto", "notas", "final") or estilo not in ESTILOS:

@@ -1028,7 +1028,7 @@ $("texto").addEventListener("input", () => {
   clearTimeout(salvarEdicaoT);
   salvarEdicaoT = setTimeout(() => {           // guarda a correção no histórico, sem mudar a ordem
     const alvo = itemAtual, h = lerJSON(HIST, []), k = h.findIndex(x => x.id === alvo.id);
-    if (k >= 0) { h[k].textoEditado = alvo.textoEditado; gravarJSON(HIST, h); }
+    if (k >= 0) { h[k].textoEditado = alvo.textoEditado; gravarJSON(HIST, h); desenharRecentes(); }
   }, 600);
 });
 
@@ -1230,7 +1230,7 @@ function desenharRecentes() {
     const data = new Date(it.quando).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
     b.innerHTML = `<div class="ic">${ico("i-texto")}</div>
       <div class="info"><div class="nome">${esc(it.nome)}</div>
-      <div class="prev">${it.resumo ? "✨ " : ""}${esc(data)} · ${esc((it.segs.map(s => s.texto).join(" ")).slice(0, 120))}</div></div>
+      <div class="prev">${it.resumo ? "✨ " : ""}${esc(data)} · ${esc((it.textoEditado ?? it.segs.map(s => s.texto).join(" ")).replace(/\s+/g, " ").slice(0, 120))}</div></div>
       <button class="del" aria-label="Apagar">${ico("i-lixo")}</button>`;
     const abrir = () => {
       if (rodando) return;
