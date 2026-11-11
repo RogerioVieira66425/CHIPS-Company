@@ -17,7 +17,7 @@
 <style>
 :root{
   --bg:#f5f7fb; --bg2:#eef1f8; --card:rgba(255,255,255,.78); --card-solid:#fff; --borda:rgba(15,23,42,.09);
-  --txt:#0f172a; --sub:#5b6478; --fraco:#8a93a6; --campo:#f1f4f9;
+  --txt:#0f172a; --sub:#525b6f; --fraco:#626b7e; --campo:#f1f4f9; --verde-txt:#047857;
   --verde:#10b981; --ciano:#06b6d4; --roxo:#6366f1; --erro:#e11d48; --erro-bg:rgba(225,29,72,.08);
   --grad:linear-gradient(135deg,#10b981 0%,#0ea5a4 45%,#6366f1 100%);
   --sombra:0 1px 2px rgba(15,23,42,.04),0 12px 32px -12px rgba(15,23,42,.18);
@@ -26,7 +26,7 @@
 @media (prefers-color-scheme: dark){
   :root{
     --bg:#0b1020; --bg2:#0f1629; --card:rgba(20,27,48,.72); --card-solid:#141b30; --borda:rgba(148,163,184,.14);
-    --txt:#e8ecf5; --sub:#9aa4ba; --fraco:#6b7590; --campo:rgba(148,163,184,.08);
+    --txt:#e8ecf5; --sub:#a3adc2; --fraco:#8d97ae; --campo:rgba(148,163,184,.08); --verde-txt:#34d399;
     --erro:#fb7185; --erro-bg:rgba(251,113,133,.1);
     --sombra:0 1px 2px rgba(0,0,0,.3),0 20px 50px -20px rgba(0,0,0,.6);
   }
@@ -143,7 +143,7 @@ button{cursor:pointer}
 .chip small{color:var(--fraco);font-weight:500}
 .chip:hover{border-color:color-mix(in srgb,var(--verde) 50%,var(--borda))}
 .chip.on{background:color-mix(in srgb,var(--verde) 14%,var(--card-solid));border-color:var(--verde);color:var(--txt);font-weight:600}
-.chip.on small{color:var(--verde)}
+.chip.on small{color:var(--verde-txt)}
 .mini{width:90px;padding:9px 12px;border-radius:999px;border:1px solid var(--borda);background:var(--card-solid)}
 .dica-linha{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;color:var(--sub);line-height:1.5;background:var(--campo);
   border-radius:12px;padding:11px 13px;margin-top:-4px}
@@ -200,10 +200,10 @@ audio.previa{background:transparent;height:48px}
 .resumo-acoes{display:flex;gap:6px;flex-wrap:wrap}
 .resumo-acoes .btn{padding:7px 11px;font-size:13px}
 .resumo-corpo{font-size:15px;line-height:1.65}
-.resumo-corpo h4{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--verde);margin:16px 0 6px}
+.resumo-corpo h4{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--verde-txt);margin:16px 0 6px}
 .resumo-corpo h4:first-child{margin-top:4px}
 .resumo-corpo p{margin:6px 0}
-.resumo-corpo ul{margin:4px 0;padding-left:20px}
+.resumo-corpo ul,.resumo-corpo ol{margin:4px 0;padding-left:22px}
 .resumo-corpo li{margin:4px 0}
 .resumo-corpo li::marker{color:var(--verde)}
 .resumo-carregando{display:flex;gap:10px;align-items:center;color:var(--sub);font-size:14px;padding:6px 0}
@@ -213,8 +213,11 @@ audio.previa{background:transparent;height:48px}
 /* recentes */
 .recentes{margin-top:28px}
 .recentes h3{font-size:15px;margin:0 0 12px;display:flex;align-items:center;gap:8px;color:var(--sub);font-weight:650}
-.lista{display:grid;gap:8px}
-.item{display:flex;align-items:center;gap:12px;padding:12px 14px;text-align:left;width:100%}
+.lista{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
+.item{display:flex;align-items:center;gap:12px;padding:12px 14px;text-align:left;width:100%;min-width:0;cursor:pointer}
+.recentes h3{flex-wrap:wrap}
+.link{background:none;border:0;padding:6px 8px;border-radius:8px;color:var(--sub);font-weight:600;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.link:hover{color:var(--erro);background:var(--erro-bg)}
 .item:hover{border-color:color-mix(in srgb,var(--verde) 45%,var(--borda))}
 .item .ic{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:var(--campo);color:var(--verde);flex:none}
 .item .info{flex:1;min-width:0}
@@ -476,7 +479,7 @@ audio.previa{background:transparent;height:48px}
   </footer>
 </section>
 
-<div class="toast" id="toast"><svg class="ico"><use href="#i-check"/></svg><span id="toastTxt"></span></div>
+<div class="toast" id="toast" role="status" aria-live="polite"><svg class="ico"><use href="#i-check"/></svg><span id="toastTxt"></span></div>
 
 <script type="module">
 import { FFmpeg } from "/static/ffmpeg/index.js";
@@ -512,6 +515,16 @@ function tempo(s, srt) {
   return h ? `${p(h)}:${p(m)}:${p(x)}` : `${p(m)}:${p(x)}`;
 }
 const decorrido = ms => { const s = Math.round(ms / 1000); return s < 60 ? s + "s" : Math.floor(s / 60) + "min " + (s % 60) + "s"; };
+async function copiarTexto(txt, aviso) {
+  try { await navigator.clipboard.writeText(txt); }
+  catch {
+    const ta = Object.assign(document.createElement("textarea"), { value: txt });
+    ta.style.cssText = "position:fixed;opacity:0"; document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand("copy"); ta.remove();
+    if (!ok) { toast("Não consegui copiar. Selecione o texto e copie manualmente."); return; }
+  }
+  toast(aviso);
+}
 let toastT;
 function toast(msg) {
   $("toastTxt").textContent = msg; $("toast").classList.add("on");
@@ -968,14 +981,11 @@ function preencherTranscricao(item, tempoGasto) {
   const base = item.nome.replace(/\.[^.]+$/, "");
   const acoes = $("acoes");
   const combinado = !$("resMidia").classList.contains("oculto");
-  botao(acoes, "i-copiar", combinado ? "Copiar texto" : "Copiar", async () => {
-    try { await navigator.clipboard.writeText($("texto").value); toast("Texto copiado"); }
-    catch { $("texto").select(); document.execCommand("copy"); toast("Texto copiado"); }
-  }, !combinado);
+  botao(acoes, "i-copiar", combinado ? "Copiar texto" : "Copiar", () => copiarTexto($("texto").value, "Texto copiado"), !combinado);
   if (navigator.share && !combinado) botao(acoes, "i-whats", "Enviar", () => navigator.share({ text: $("texto").value }).catch(() => {}));
-  botao(acoes, "i-baixar", ".txt", () => baixarArquivo(new Blob([$("texto").value], { type: "text/plain;charset=utf-8" }),
-        base + (vista === "tempo" ? "_com_tempo" : "") + ".txt"));
-  botao(acoes, "i-baixar", "Legenda .srt", () => baixarArquivo(new Blob([srt(segsAtuais)], { type: "application/x-subrip" }), base + ".srt"));
+  botao(acoes, "i-baixar", ".txt", () => baixarArquivo(new Blob([vista === "tempo" ? textoTempo(segsCorrigidos(item).segs) : $("texto").value],
+        { type: "text/plain;charset=utf-8" }), base + (vista === "tempo" ? "_com_tempo" : "") + ".txt"));
+  botao(acoes, "i-baixar", "Legenda .srt", () => baixarArquivo(new Blob([srt(segsCorrigidos(item).segs)], { type: "application/x-subrip" }), base + ".srt"));
   if (!item.resumo) {
     const b = botao(acoes, "i-brilho", "Criar resumo", async () => {
       if (rodando) return;
@@ -990,6 +1000,13 @@ function preencherTranscricao(item, tempoGasto) {
   }
 }
 const textoSimples = s => s.map(x => x.texto).join("\n");
+// Aplica as correções do usuário aos trechos com tempo, quando ele manteve uma linha por trecho
+function segsCorrigidos(item) {
+  if (!item?.textoEditado) return { segs: item?.segs || [], aplicou: true };
+  const linhas = item.textoEditado.replace(/\r/g, "").split("\n");
+  if (linhas.length !== item.segs.length) return { segs: item.segs, aplicou: false };
+  return { segs: item.segs.map((s, k) => ({ ...s, texto: linhas[k].trim() })).filter(s => s.texto), aplicou: true };
+}
 const textoTempo = s => s.map(x => `[${tempo(x.inicio)}] ${x.texto}`).join("\n");
 const srt = s => s.map((x, i) => `${i + 1}\n${tempo(x.inicio, true)} --> ${tempo(x.fim, true)}\n${x.texto}\n`).join("\n");
 function trocarVista(v) {
@@ -998,7 +1015,11 @@ function trocarVista(v) {
   const t = $("texto");
   t.readOnly = v === "tempo";               // edite no modo "Texto"; "Com tempo" é só para ver/baixar
   t.title = v === "tempo" ? "Para corrigir o texto, volte para a visão “Texto”." : "";
-  t.value = v === "tempo" ? textoTempo(segsAtuais) : (itemAtual?.textoEditado ?? textoSimples(segsAtuais));
+  if (v === "tempo") {
+    const { segs, aplicou } = segsCorrigidos(itemAtual);
+    t.value = (aplicou ? "" : "⚠️ Suas correções não aparecem aqui porque o número de linhas mudou " +
+      "(cada linha corresponde a um trecho com tempo). Elas continuam valendo no .txt e no resumo.\n\n") + textoTempo(segs);
+  } else t.value = itemAtual?.textoEditado ?? textoSimples(segsAtuais);
 }
 let salvarEdicaoT;
 $("texto").addEventListener("input", () => {
@@ -1073,10 +1094,7 @@ function mostrarResumo(item) {
   $("resumoCorpo").innerHTML = markdownSeguro(texto);
   const acoes = $("resumoAcoes"); acoes.innerHTML = "";
   const paraWhats = textoParaWhatsApp(texto);
-  botao(acoes, "i-copiar", "Copiar", async () => {
-    try { await navigator.clipboard.writeText(paraWhats); toast("Resumo copiado"); }
-    catch { toast("Não consegui copiar"); }
-  });
+  botao(acoes, "i-copiar", "Copiar", () => copiarTexto(paraWhats, "Resumo copiado"));
   if (navigator.share) botao(acoes, "i-whats", "Enviar", () => navigator.share({ text: paraWhats }).catch(() => {}));
   botao(acoes, "i-baixar", ".txt", () => baixarArquivo(new Blob([paraWhats], { type: "text/plain;charset=utf-8" }),
         item.nome.replace(/\.[^.]+$/, "") + "_resumo.txt"));
@@ -1085,17 +1103,21 @@ function mostrarResumo(item) {
 // Markdown simples -> HTML, escapando tudo antes (o texto vem da IA)
 function markdownSeguro(md) {
   const inline = t => esc(t).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-  let html = "", lista = false;
+  let html = "", lista = "";
   for (let linha of md.split("\n")) {
     linha = linha.trim();
-    const item = linha.match(/^(?:[-*•]|\d+[.)])\s+(.*)$/);
-    if (item) { if (!lista) { html += "<ul>"; lista = true; } html += `<li>${inline(item[1])}</li>`; continue; }
-    if (lista) { html += "</ul>"; lista = false; }
+    const item = linha.match(/^([-*•]|\d+[.)])\s+(.*)$/);
+    if (item) {
+      const tipo = /\d/.test(item[1]) ? "ol" : "ul";
+      if (lista !== tipo) { if (lista) html += `</${lista}>`; html += `<${tipo}>`; lista = tipo; }
+      html += `<li>${inline(item[2])}</li>`; continue;
+    }
+    if (lista) { html += `</${lista}>`; lista = ""; }
     if (!linha) continue;
     const tit = linha.match(/^#{1,6}\s+(.*)$/);
     html += tit ? `<h4>${inline(tit[1].replace(/\*\*/g, ""))}</h4>` : `<p>${inline(linha)}</p>`;
   }
-  return html + (lista ? "</ul>" : "");
+  return html + (lista ? `</${lista}>` : "");
 }
 // Formato que fica bonito colado no WhatsApp (*negrito*, • tópicos)
 function textoParaWhatsApp(md) {

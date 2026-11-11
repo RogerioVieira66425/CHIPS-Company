@@ -90,6 +90,39 @@ def limpar_raciocinio(txt):
     return re.sub(r"<think>.*?</think>", "", txt or "", flags=re.S).strip()
 
 
+class ModeloIndisponivel(RuntimeError):
+    """A Groq aposentou ou nao reconhece o modelo pedido."""
+
+
+MODELOS_FORA = set()   # modelos que a Groq recusou nesta execucao do servidor
+
+
+def modelo_sumiu(r):
+    if r.status_code not in (400, 404):
+        return False
+    try:
+        e = r.json().get("error", {}) or {}
+    except ValueError:
+        return False
+    txt = f"{e.get('code', '')} {e.get('message', '')}".lower()
+    return any(k in txt for k in ("model_not_found", "decommissioned", "does not exist", "no longer supported"))
+
+
+def chamar_llm_com_reserva(preferido, sistema, usuario, max_tokens):
+    """Usa o modelo preferido; se a Groq o tiver aposentado, passa para o proximo disponivel."""
+    todos = [preferido] + [m for m in dict.fromkeys([MODELO_RESUMO] + MODELOS_NOTAS) if m != preferido]
+    for modelo in todos:
+        if modelo in MODELOS_FORA:
+            continue
+        try:
+            return chamar_llm(modelo, sistema, usuario, max_tokens)
+        except ModeloIndisponivel:
+            MODELOS_FORA.add(modelo)
+            app.logger.warning("Modelo indisponivel na Groq: %s (usando outro)", modelo)
+    raise RuntimeError("Nenhum modelo de resumo está disponível na Groq agora. "
+                       "Os nomes dos modelos precisam ser atualizados no app.py.")
+
+
 def chamar_llm(modelo, sistema, usuario, max_tokens):
     chave = os.environ.get("GROQ_API_KEY")
     extra = ({"reasoning_effort": "low", "include_reasoning": False} if modelo.startswith("openai/gpt-oss")
@@ -112,6 +145,8 @@ def chamar_llm(modelo, sistema, usuario, max_tokens):
             time.sleep(espera)                                # cota por minuto: espera e tenta de novo
             continue
         break
+    if modelo_sumiu(r):
+        raise ModeloIndisponivel(modelo)
     if r.status_code == 429:
         raise RuntimeError("Limite gratuito de resumos atingido por agora. Tente de novo em alguns minutos.")
     if r.status_code in (401, 403):
@@ -249,6 +284,20 @@ def transcrever():
             f.stream.seek(0)
             continue
         break
+    if modelo_sumiu(r):                                 # modelo aposentado: tenta o outro Whisper
+        app.logger.warning("Whisper indisponivel na Groq: %s", dados["model"])
+        outros = [m for m in sorted(MODELOS) if m != dados["model"]]
+        if outros:
+            dados["model"] = outros[0]
+            f.stream.seek(0)
+            try:
+                r = requests.post(GROQ_URL, headers={"Authorization": f"Bearer {chave}"}, data=dados, timeout=120,
+                                  files={"file": (f.filename or "audio.ogg", f.stream, f.mimetype or "audio/ogg")})
+            except requests.RequestException:
+                return jsonify(erro="Não consegui falar com o serviço de transcrição. Tente de novo."), 502
+        if modelo_sumiu(r):
+            return jsonify(erro="O modelo de transcrição foi desativado pela Groq. "
+                                "Os nomes dos modelos precisam ser atualizados no app.py."), 502
     if r.status_code == 429:                            # cota maior (por hora/dia): o navegador espera e tenta
         return jsonify(erro="Limite gratuito de transcrição atingido por agora.",
                        espera=round(espera_sugerida(r, 60))), 429
@@ -307,19 +356,19 @@ def resumir():
                       "e completas desta parte: assuntos, fatos, nomes, números, datas, decisões e tarefas, "
                       "em tópicos curtos, na ordem em que aparecem. Sem introdução.\n\n"
                       f"Transcrição (parte {parte}/{total}):\n\"\"\"\n{texto}\n\"\"\"")
-            resumo, cortado = chamar_llm(MODELOS_NOTAS[(parte - 1) % len(MODELOS_NOTAS)],
+            resumo, cortado = chamar_llm_com_reserva(MODELOS_NOTAS[(parte - 1) % len(MODELOS_NOTAS)],
                                          SISTEMA_RESUMO, pedido, 1500)
         elif fase == "final":
             pedido = ("Abaixo estão notas, em ordem, de todas as partes de uma transcrição longa. "
                       f"Com base apenas nelas: {ESTILOS[estilo]}\n\nNotas:\n\"\"\"\n{texto}\n\"\"\"")
-            resumo, cortado = chamar_llm(MODELO_RESUMO, SISTEMA_RESUMO, pedido, 3000)
+            resumo, cortado = chamar_llm_com_reserva(MODELO_RESUMO, SISTEMA_RESUMO, pedido, 3000)
             if cortado:                                   # passou do limite: tenta uma vez com mais espaço
-                resumo, cortado = chamar_llm(MODELO_RESUMO, SISTEMA_RESUMO, pedido, 6000)
+                resumo, cortado = chamar_llm_com_reserva(MODELO_RESUMO, SISTEMA_RESUMO, pedido, 6000)
         else:
             pedido = f"{ESTILOS[estilo]}\n\nTranscrição:\n\"\"\"\n{texto}\n\"\"\""
-            resumo, cortado = chamar_llm(MODELO_RESUMO, SISTEMA_RESUMO, pedido, 3000)
+            resumo, cortado = chamar_llm_com_reserva(MODELO_RESUMO, SISTEMA_RESUMO, pedido, 3000)
             if cortado:
-                resumo, cortado = chamar_llm(MODELO_RESUMO, SISTEMA_RESUMO, pedido, 6000)
+                resumo, cortado = chamar_llm_com_reserva(MODELO_RESUMO, SISTEMA_RESUMO, pedido, 6000)
     except RuntimeError as e:
         return jsonify(erro=str(e)), 502
     return jsonify(resumo=resumo, cortado=cortado)
